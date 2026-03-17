@@ -11,6 +11,10 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: gold-fetch-main
+  cancel-in-progress: true
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -63,5 +67,6 @@ jobs:
 
           git commit -m "Update gold prices"
 
+          git fetch origin main
           git pull --rebase origin main
-          git push origin main
+          git push origin HEAD:main
