@@ -18,6 +18,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -29,6 +30,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install Tesseract
         run: |
@@ -40,29 +42,44 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Show source URL exists
+      - name: Show config
         env:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
+          GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
         run: |
           python - <<'PY'
           import os
-          url = os.getenv("GOLD_SOURCE_URL", "")
-          print("GOLD_SOURCE_URL is set:", bool(url))
-          print("Starts with http:", url.startswith("http"))
+          source = os.getenv("GOLD_SOURCE_URL", "")
+          mode = os.getenv("GOLD_OCR_MODE", "")
+          print("GOLD_SOURCE_URL is set:", bool(source))
+          print("Starts with http:", source.startswith("http"))
+          print("GOLD_OCR_MODE:", mode or "(empty -> script default)")
           PY
+
+      - name: Ensure data files exist
+        run: |
+          mkdir -p data
+          test -f data/latest.json || echo '{"ok": false, "source": "", "date": "0000/00/00", "time": "00:00", "k21_ss": 0, "k21_sb": 0, "k21_us": 0, "k21_ub": 0, "k18_ss": 0, "k18_sb": 0, "k18_us": 0, "k18_ub": 0, "updated_at_utc": ""}' > data/latest.json
+          test -f data/history.json || echo '[]' > data/history.json
 
       - name: Run fetch script
         env:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
+          GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
         run: |
           python scripts/fetch_gold.py
+
+      - name: Show latest result
+        run: |
+          echo "----- data/latest.json -----"
+          cat data/latest.json
 
       - name: Commit updated JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/latest.json data/history.json
+          git add data/latest.json data/history.json data/blueprint.json
           git diff --cached --quiet && exit 0
 
           git commit -m "Update gold prices"
