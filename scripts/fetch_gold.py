@@ -7,7 +7,7 @@ from io import BytesIO
 
 import requests
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,113 +38,6 @@ def normalize_digits(text: str) -> str:
     )
 
 
-def extract_time(raw: str) -> str:
-    m = re.search(r"(\d{1,2})\s*[:;]\s*(\d{2})", raw)
-    if not m:
-        return "00:00"
-
-    hh = int(m.group(1))
-    mm = int(m.group(2))
-    if 0 <= hh <= 23 and 0 <= mm <= 59:
-        return f"{hh:02d}:{mm:02d}"
-    return "00:00"
-
-
-def extract_date(raw: str) -> str:
-    now = datetime.now()
-    years = [str(y) for y in range(now.year - 1, now.year + 4)]
-    year_alt = "|".join(years)
-
-    cleaned = normalize_digits(raw)
-
-    direct = re.search(
-        rf"({year_alt})\s*[/\.-]\s*(\d{{1,2}})\s*[/\.-]\s*(\d{{1,2}})|(\d{{1,2}})\s*[/\.-]\s*(\d{{1,2}})\s*[/\.-]\s*({year_alt})",
-        cleaned,
-    )
-
-    if direct:
-        if direct.group(1):
-            y = int(direct.group(1))
-            m = int(direct.group(2))
-            d = int(direct.group(3))
-        else:
-            d = int(direct.group(4))
-            m = int(direct.group(5))
-            y = int(direct.group(6))
-
-        try:
-            dt = datetime(y, m, d)
-            if dt.date() <= datetime.now().date():
-                return f"{y:04d}/{m:02d}/{d:02d}"
-        except ValueError:
-            pass
-
-    return "0000/00/00"
-
-
-def ocr_image_bytes(image_bytes: bytes) -> str:
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    return pytesseract.image_to_string(img)
-
-
-def classify_numbers(raw: str):
-    nums = []
-    for token in re.findall(r"\d[\dOolISsZG\\|]*", normalize_digits(raw)):
-        digits = re.sub(r"[^0-9]", "", token)
-        if not digits:
-            continue
-        value = int(digits)
-        nums.append(value)
-
-    syp = sorted({n for n in nums if MIN_SYP <= n <= MAX_SYP}, reverse=True)
-    usd = sorted({n for n in nums if MIN_USD <= n <= MAX_USD}, reverse=True)
-    return syp, usd
-
-
-def build_snapshot(raw_text: str, source: str):
-    date = extract_date(raw_text)
-    time = extract_time(raw_text)
-    syp, usd = classify_numbers(raw_text)
-
-    if len(syp) < 2 or len(usd) < 2:
-        raise ValueError("Could not extract enough price values")
-
-    k21_ss = syp[0]
-    k21_sb = syp[1]
-    k21_us = usd[0]
-    k21_ub = usd[1]
-
-    if len(syp) >= 4:
-        k18_ss = syp[2]
-        k18_sb = syp[3]
-    else:
-        k18_ss = round(k21_ss * 18 / 21)
-        k18_sb = round(k21_sb * 18 / 21)
-
-    if len(usd) >= 4:
-        k18_us = usd[2]
-        k18_ub = usd[3]
-    else:
-        k18_us = round(k21_us * 18 / 21)
-        k18_ub = round(k21_ub * 18 / 21)
-
-    return {
-        "ok": True,
-        "source": source,
-        "date": date,
-        "time": time,
-        "k21_ss": k21_ss,
-        "k21_sb": k21_sb,
-        "k21_us": k21_us,
-        "k21_ub": k21_ub,
-        "k18_ss": k18_ss,
-        "k18_sb": k18_sb,
-        "k18_us": k18_us,
-        "k18_ub": k18_ub,
-        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
-    }
-
-
 def load_json(path: Path, fallback):
     if not path.exists():
         return fallback
@@ -162,6 +55,215 @@ def save_json(path: Path, data):
     )
 
 
+def preprocess_image(image_bytes: bytes) -> Image.Image:
+    img = Image.open(BytesIO(image_bytes)).convert("L")
+    img = ImageOps.autocontrast(img)
+    img = img.filter(ImageFilter.SHARPEN)
+    img = img.resize((img.width * 2, img.height * 2))
+    return img
+
+
+def ocr_words(img: Image.Image):
+    data = pytesseract.image_to_data(
+        img,
+        output_type=pytesseract.Output.DICT,
+        config="--oem 3 --psm 6"
+    )
+
+    words = []
+    n = len(data["text"])
+    for i in range(n):
+        raw = (data["text"][i] or "").strip()
+        if not raw:
+            continue
+
+        conf_raw = str(data["conf"][i]).strip()
+        try:
+            conf = float(conf_raw)
+        except Exception:
+            conf = -1
+
+        words.append({
+            "text": raw,
+            "norm": normalize_digits(raw),
+            "left": int(data["left"][i]),
+            "top": int(data["top"][i]),
+            "width": int(data["width"][i]),
+            "height": int(data["height"][i]),
+            "conf": conf,
+            "cx": int(data["left"][i]) + int(data["width"][i]) / 2,
+            "cy": int(data["top"][i]) + int(data["height"][i]) / 2,
+        })
+    return words
+
+
+def extract_date_and_time(words):
+    date = "0000/00/00"
+    time = "00:00"
+
+    joined = " ".join(w["text"] for w in words)
+    joined = normalize_digits(joined)
+
+    date_match = re.search(r"(20\d{2})\D+(\d{1,2})\D+(\d{1,2})", joined)
+    if date_match:
+        y = int(date_match.group(1))
+        m = int(date_match.group(2))
+        d = int(date_match.group(3))
+        try:
+            dt = datetime(y, m, d)
+            if dt.date() <= datetime.now().date():
+                date = f"{y:04d}/{m:02d}/{d:02d}"
+        except ValueError:
+            pass
+
+    time_match = re.search(r"(\d{1,2})\s*[:;]\s*(\d{2})", joined)
+    if time_match:
+        hh = int(time_match.group(1))
+        mm = int(time_match.group(2))
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            time = f"{hh:02d}:{mm:02d}"
+
+    return date, time
+
+
+def classify_numeric_words(words):
+    numeric = []
+
+    for w in words:
+        digits = re.sub(r"[^0-9]", "", w["norm"])
+        if not digits:
+            continue
+
+        try:
+            value = int(digits)
+        except Exception:
+            continue
+
+        kind = None
+        if MIN_USD <= value <= MAX_USD:
+            kind = "usd"
+        elif MIN_SYP <= value <= MAX_SYP:
+            kind = "syp"
+
+        if kind is None:
+            continue
+
+        numeric.append({
+            **w,
+            "value": value,
+            "kind": kind,
+        })
+
+    return numeric
+
+
+def find_anchor_rows(words):
+    anchors = []
+    for w in words:
+        digits = re.sub(r"[^0-9]", "", w["norm"])
+        if digits in {"21", "18"}:
+            anchors.append({
+                "label": digits,
+                "cx": w["cx"],
+                "cy": w["cy"],
+                "left": w["left"],
+                "top": w["top"],
+                "width": w["width"],
+                "height": w["height"],
+            })
+    return anchors
+
+
+def nearest_row_numbers(numeric_words, target_y, row_tolerance=45):
+    row = [w for w in numeric_words if abs(w["cy"] - target_y) <= row_tolerance]
+    row.sort(key=lambda x: x["cx"])
+    return row
+
+
+def extract_table(words):
+    numeric_words = classify_numeric_words(words)
+    anchors = find_anchor_rows(words)
+
+    anchor21 = None
+    anchor18 = None
+
+    for a in anchors:
+        if a["label"] == "21":
+            if anchor21 is None or a["cx"] > anchor21["cx"]:
+                anchor21 = a
+        elif a["label"] == "18":
+            if anchor18 is None or a["cx"] > anchor18["cx"]:
+                anchor18 = a
+
+    if anchor21 is None or anchor18 is None:
+        raise ValueError("Could not find 21/18 row anchors")
+
+    row21 = nearest_row_numbers(numeric_words, anchor21["cy"])
+    row18 = nearest_row_numbers(numeric_words, anchor18["cy"])
+
+    def parse_row(row):
+        usd = [w for w in row if w["kind"] == "usd"]
+        syp = [w for w in row if w["kind"] == "syp"]
+
+        usd.sort(key=lambda x: x["cx"])
+        syp.sort(key=lambda x: x["cx"])
+
+        if len(usd) < 2 or len(syp) < 2:
+            raise ValueError("Missing row values")
+
+        # In this poster, left-to-right is:
+        # USD buy, USD sell, SYP buy, SYP sell
+        usd_buy = usd[0]["value"]
+        usd_sell = usd[-1]["value"]
+        syp_buy = syp[0]["value"]
+        syp_sell = syp[-1]["value"]
+
+        return {
+            "usd_buy": usd_buy,
+            "usd_sell": usd_sell,
+            "syp_buy": syp_buy,
+            "syp_sell": syp_sell,
+        }
+
+    parsed21 = parse_row(row21)
+    parsed18 = parse_row(row18)
+
+    return {
+        "k21_ss": parsed21["syp_sell"],
+        "k21_sb": parsed21["syp_buy"],
+        "k21_us": parsed21["usd_sell"],
+        "k21_ub": parsed21["usd_buy"],
+        "k18_ss": parsed18["syp_sell"],
+        "k18_sb": parsed18["syp_buy"],
+        "k18_us": parsed18["usd_sell"],
+        "k18_ub": parsed18["usd_buy"],
+    }
+
+
+def build_snapshot(image_bytes: bytes, source: str):
+    img = preprocess_image(image_bytes)
+    words = ocr_words(img)
+
+    date, time = extract_date_and_time(words)
+    table = extract_table(words)
+
+    return {
+        "ok": True,
+        "source": source,
+        "date": date,
+        "time": time,
+        "k21_ss": table["k21_ss"],
+        "k21_sb": table["k21_sb"],
+        "k21_us": table["k21_us"],
+        "k21_ub": table["k21_ub"],
+        "k18_ss": table["k18_ss"],
+        "k18_sb": table["k18_sb"],
+        "k18_us": table["k18_us"],
+        "k18_ub": table["k18_ub"],
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def main():
     source_url = os.getenv("GOLD_SOURCE_URL", "").strip()
     if not source_url:
@@ -170,8 +272,7 @@ def main():
     response = requests.get(source_url, timeout=30)
     response.raise_for_status()
 
-    raw_text = ocr_image_bytes(response.content)
-    snapshot = build_snapshot(raw_text, source_url)
+    snapshot = build_snapshot(response.content, source_url)
 
     latest = load_json(LATEST_FILE, {})
     history = load_json(HISTORY_FILE, [])
@@ -193,6 +294,7 @@ def main():
         save_json(HISTORY_FILE, history)
 
     print("Updated latest.json successfully")
+    print(json.dumps(snapshot, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
