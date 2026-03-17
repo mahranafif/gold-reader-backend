@@ -1,15 +1,15 @@
 {
-  "ok": false,
-  "source": "",
+  "ok": true,
+  "source": "https://scontent.fdxb3-2.fna.fbcdn.net/v/t39.30808-6/653911472_1259365289659925_3528865706317355782_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=e06c5d&_nc_ohc=SZO07VcpOmkQ7kNvwEgWCW2&_nc_oc=AdkSXjkMNQ4rDRHzQkTwztGi91gb09vS87T2xYHadO2Ds7nWjNSPAMKNhBNJpFnC5eeZ1kKkeuykejeTmqF_qSbK&_nc_zt=23&_nc_ht=scontent.fdxb3-2.fna&_nc_gid=lbuvtBpPMkG4XrH3Cbq1TA&_nc_ss=8&oh=00_Afwe9Wqp3WYaVfF-8q6jNIQX-e8mW4l2igqIcNoWJzHw6Q&oe=69BF3256",
   "date": "0000/00/00",
-  "time": "00:00",
-  "k21_ss": 0,
-  "k21_sb": 0,
-  "k21_us": 0,
-  "k21_ub": 0,
-  "k18_ss": 0,
-  "k18_sb": 0,
-  "k18_us": 0,
-  "k18_ub": 0,
-  "updated_at_utc": ""
+  "time": "00:27",
+  "k21_ss": 41398,
+  "k21_sb": 16700,
+  "k21_us": 141,
+  "k21_ub": 121,
+  "k18_ss": 16350,
+  "k18_sb": 14300,
+  "k18_us": 118,
+  "k18_ub": 51,
+  "updated_at_utc": "2026-03-17T13:13:53.978406+00:00"
 }
