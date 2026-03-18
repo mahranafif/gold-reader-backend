@@ -18,7 +18,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -32,10 +32,10 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Tesseract
+      - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr
+          sudo apt-get install -y tesseract-ocr libgl1
 
       - name: Install Python dependencies
         run: |
@@ -49,11 +49,8 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          source = os.getenv("GOLD_SOURCE_URL", "")
-          mode = os.getenv("GOLD_OCR_MODE", "")
-          print("GOLD_SOURCE_URL is set:", bool(source))
-          print("Starts with http:", source.startswith("http"))
-          print("GOLD_OCR_MODE:", mode or "(empty -> script default)")
+          print("GOLD_SOURCE_URL is set:", bool(os.getenv("GOLD_SOURCE_URL", "")))
+          print("GOLD_OCR_MODE:", os.getenv("GOLD_OCR_MODE", "prefer_blueprint"))
           PY
 
       - name: Ensure data files exist
@@ -83,7 +80,6 @@ jobs:
           git diff --cached --quiet && exit 0
 
           git commit -m "Update gold prices"
-
           git fetch origin main
           git pull --rebase origin main
           git push origin HEAD:main
