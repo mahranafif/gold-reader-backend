@@ -1007,6 +1007,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "ocr_mode": DEFAULT_OCR_MODE,
         "ocr_engine": ocr_engine,
         "has_blueprint": blueprint is not None,
+        "ocr_word_count": len(words),
     }
 
 
