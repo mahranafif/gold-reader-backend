@@ -377,12 +377,15 @@ def tesseract_ocr_words(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], 
 def run_ocr_with_fallback(img: Image.Image) -> tuple[list[OcrWord], str, str]:
     try:
         words, raw = paddle_ocr_words(img)
+        print(f"PaddleOCR words: {len(words)}")
         if words:
             return words, raw, "paddleocr"
+        print("PaddleOCR returned 0 words, falling back to Tesseract")
     except Exception as e:
-        print(f"PaddleOCR failed: {e}")
+        print(f"PaddleOCR failed hard: {repr(e)}")
 
     words, raw = tesseract_ocr_words(img, psm=6)
+    print(f"Tesseract words: {len(words)}")
     return words, raw, "tesseract"
 
 
