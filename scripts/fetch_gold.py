@@ -7,9 +7,13 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 
+import numpy as np
 import pytesseract
 import requests
+from bs4 import BeautifulSoup
+from paddleocr import PaddleOCR
 from PIL import Image, ImageFilter, ImageOps
 
 
@@ -29,6 +33,24 @@ MAX_SYP_PRICE = 200000
 MIN_18K_TO_21K_RATIO = 0.84
 MAX_18K_TO_21K_RATIO = 0.87
 OCR_SANITY_THRESHOLD = 5000
+
+MIN_CANDIDATE_WIDTH = 250
+MIN_CANDIDATE_HEIGHT = 250
+PREFERRED_CANDIDATE_WIDTH = 400
+PREFERRED_CANDIDATE_HEIGHT = 400
+
+REQUEST_TIMEOUT = 35
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+}
+
+_PADDLE_OCR = None
 
 
 @dataclass
@@ -65,6 +87,21 @@ class OcrWord:
     @property
     def center_y(self) -> float:
         return self.top + self.height / 2.0
+
+
+@dataclass
+class ImageCandidate:
+    url: str
+    width: int
+    height: int
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
+    @property
+    def aspect_ratio(self) -> float:
+        return self.width / self.height if self.height else 0.0
 
 
 def app_now() -> datetime:
@@ -193,11 +230,10 @@ def extract_date_from_raw(raw: str) -> str:
             mm = int(m.group(2))
             dd = int(m.group(3))
             return _apply_date_checksum(y, mm, dd, raw)
-        else:
-            dd = int(m.group(4))
-            mm = int(m.group(5))
-            y = int(m.group(6))
-            return _apply_date_checksum(y, mm, dd, raw)
+        dd = int(m.group(4))
+        mm = int(m.group(5))
+        y = int(m.group(6))
+        return _apply_date_checksum(y, mm, dd, raw)
 
     t_match = re.search(r"(\d{1,2})\s*[:;]\s*(\d{2})", normalized)
     text_without_time = normalized.replace(t_match.group(0), "") if t_match else normalized
@@ -241,11 +277,72 @@ def preprocess_image(image_bytes: bytes) -> Image.Image:
     return img
 
 
-def ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
+def get_paddle_ocr():
+    global _PADDLE_OCR
+    if _PADDLE_OCR is None:
+        _PADDLE_OCR = PaddleOCR(
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
+    return _PADDLE_OCR
+
+
+def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
+    ocr = get_paddle_ocr()
+    rgb = img.convert("RGB")
+    arr = np.array(rgb)
+
+    result = ocr.predict(arr)
+    words: list[OcrWord] = []
+    texts: list[str] = []
+
+    if not result:
+        return [], ""
+
+    for page in result:
+        rec_texts = getattr(page, "rec_texts", []) or []
+        rec_scores = getattr(page, "rec_scores", []) or []
+        rec_polys = getattr(page, "rec_polys", []) or []
+
+        for idx, text in enumerate(rec_texts):
+            if not text:
+                continue
+
+            poly = rec_polys[idx] if idx < len(rec_polys) else None
+            score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+
+            if poly is None or len(poly) < 4:
+                continue
+
+            xs = [float(p[0]) for p in poly]
+            ys = [float(p[1]) for p in poly]
+
+            left = int(min(xs))
+            top = int(min(ys))
+            width = int(max(xs) - min(xs))
+            height = int(max(ys) - min(ys))
+
+            word = OcrWord(
+                text=str(text).strip(),
+                norm=normalize_digits(str(text).strip()),
+                left=left,
+                top=top,
+                width=max(width, 1),
+                height=max(height, 1),
+                conf=score,
+            )
+            words.append(word)
+            texts.append(word.text)
+
+    return words, " ".join(texts)
+
+
+def tesseract_ocr_words(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], str]:
     data = pytesseract.image_to_data(
         img,
         output_type=pytesseract.Output.DICT,
-        config="--oem 3 --psm 6",
+        config=f"--oem 3 --psm {psm}",
     )
 
     words: list[OcrWord] = []
@@ -274,8 +371,43 @@ def ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
         words.append(word)
         texts.append(raw)
 
-    raw_text = " ".join(texts)
-    return words, raw_text
+    return words, " ".join(texts)
+
+
+def run_ocr_with_fallback(img: Image.Image) -> tuple[list[OcrWord], str, str]:
+    try:
+        words, raw = paddle_ocr_words(img)
+        if words:
+            return words, raw, "paddleocr"
+    except Exception as e:
+        print(f"PaddleOCR failed: {e}")
+
+    words, raw = tesseract_ocr_words(img, psm=6)
+    return words, raw, "tesseract"
+
+
+def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
+    w, h = img.size
+    return img.crop((
+        max(0, int(x1 * w)),
+        max(0, int(y1 * h)),
+        min(w, int(x2 * w)),
+        min(h, int(y2 * h)),
+    ))
+
+
+def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
+    header_crop = crop_box(img, 0.02, 0.48, 0.98, 0.58)
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.26, 1.00)
+    date_crop = crop_box(header_crop, 0.28, 0.00, 0.58, 1.00)
+
+    _, raw_time, _ = run_ocr_with_fallback(time_crop)
+    _, raw_date, _ = run_ocr_with_fallback(date_crop)
+
+    time_value = extract_time_from_raw(raw_time)
+    date_value = extract_date_from_raw(raw_date)
+
+    return date_value, time_value
 
 
 def quality_score(snapshot: dict) -> int:
@@ -318,6 +450,22 @@ def has_meaningful_value_difference(a: dict, b: dict) -> bool:
     return any(int(a.get(k, 0)) != int(b.get(k, 0)) for k in keys)
 
 
+def parse_to_datetime(date_str: str, time_str: str) -> datetime:
+    if date_str == "0000/00/00":
+        return datetime(2000, 1, 1)
+
+    try:
+        d = date_str.split("/")
+        t = time_str.split(":")
+        hh = int(re.sub(r"[^0-9]", "", t[0]))
+        mm = int(re.sub(r"[^0-9]", "", t[1]))
+        if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+            return datetime(2000, 1, 1)
+        return datetime(int(d[0]), int(d[1]), int(d[2]), hh, mm)
+    except Exception:
+        return datetime(2000, 1, 1)
+
+
 def save_snapshot_into_history(snapshot: dict):
     history = load_json(HISTORY_FILE, [])
     if not isinstance(history, list):
@@ -343,10 +491,7 @@ def save_snapshot_into_history(snapshot: dict):
             for idx in same_moment
         )
         if not conflict:
-            best_idx = max(
-                same_moment,
-                key=lambda idx: quality_score(history[idx]),
-            )
+            best_idx = max(same_moment, key=lambda idx: quality_score(history[idx]))
             if quality_score(snapshot) > quality_score(history[best_idx]):
                 history[best_idx] = snapshot
         else:
@@ -365,22 +510,6 @@ def save_snapshot_into_history(snapshot: dict):
     history = history[:500]
     save_json(HISTORY_FILE, history)
     save_json(LATEST_FILE, snapshot)
-
-
-def parse_to_datetime(date_str: str, time_str: str) -> datetime:
-    if date_str == "0000/00/00":
-        return datetime(2000, 1, 1)
-
-    try:
-        d = date_str.split("/")
-        t = time_str.split(":")
-        hh = int(re.sub(r"[^0-9]", "", t[0]))
-        mm = int(re.sub(r"[^0-9]", "", t[1]))
-        if hh < 0 or hh > 23 or mm < 0 or mm > 59:
-            return datetime(2000, 1, 1)
-        return datetime(int(d[0]), int(d[1]), int(d[2]), hh, mm)
-    except Exception:
-        return datetime(2000, 1, 1)
 
 
 def words_to_numeric_tokens(words: list[OcrWord]) -> list[NumericToken]:
@@ -457,7 +586,6 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
     syp_prices = []
     usd_prices = []
-
     now = app_now()
 
     for w in words:
@@ -576,18 +704,19 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
     if anchor21 is None:
         return None
 
-    def get_closest(ratios: dict, anchor: OcrWord, expected_kind: str) -> int:
+    used_ids: set[int] = set()
+
+    def get_candidates(ratios: dict, anchor: OcrWord, expected_kind: str) -> list[tuple[float, OcrWord, int]]:
         expected_x = anchor.center_x + (float(ratios.get("dx", 0.0)) * max(anchor.width, 1.0))
         expected_y = anchor.center_y + (float(ratios.get("dy", 0.0)) * max(anchor.height, 1.0))
 
-        closest = None
-        min_dist = float("inf")
-        max_allowed_distance = max(anchor.width, anchor.height) * 8.0
+        max_dx = max(anchor.width * 10.0, 180.0)
+        max_dy = max(anchor.height * 3.0, 90.0)
 
-        for w in words:
-            if anchor21 is not None and w is anchor21:
-                continue
-            if anchor18 is not None and w is anchor18:
+        candidates = []
+
+        for idx, w in enumerate(words):
+            if id(w) == id(anchor21) or (anchor18 is not None and id(w) == id(anchor18)):
                 continue
             if ":" in w.text or "/" in w.text:
                 continue
@@ -612,30 +741,40 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
 
             dx = w.center_x - expected_x
             dy = w.center_y - expected_y
-            dist = math.sqrt(dx * dx + dy * dy)
 
-            if dist < min_dist and dist <= max_allowed_distance:
-                min_dist = dist
-                closest = w
+            if abs(dx) > max_dx or abs(dy) > max_dy:
+                continue
 
-        if closest is None:
+            reuse_penalty = 100000 if idx in used_ids else 0
+            dist = math.sqrt(dx * dx + dy * dy) + reuse_penalty
+            candidates.append((dist, w, idx))
+
+        candidates.sort(key=lambda x: x[0])
+        return candidates
+
+    def get_closest_unique(ratios: dict, anchor: OcrWord, expected_kind: str) -> int:
+        candidates = get_candidates(ratios, anchor, expected_kind)
+        if not candidates:
             return 0
 
+        _, chosen, idx = candidates[0]
+        used_ids.add(idx)
+
         try:
-            return int(re.sub(r"[^0-9]", "", closest.norm))
+            return int(re.sub(r"[^0-9]", "", chosen.norm))
         except Exception:
             return 0
 
-    s21ss = get_closest(blueprint["21_SYP_Sell"], anchor21, "syp")
-    s21sb = get_closest(blueprint["21_SYP_Buy"], anchor21, "syp")
-    u21ss = get_closest(blueprint["21_USD_Sell"], anchor21, "usd")
-    u21sb = get_closest(blueprint["21_USD_Buy"], anchor21, "usd")
+    s21ss = get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp")
+    s21sb = get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp")
+    u21ss = get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd")
+    u21sb = get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd")
 
     if anchor18 is not None and "18_SYP_Sell" in blueprint:
-        s18ss = get_closest(blueprint["18_SYP_Sell"], anchor18, "syp")
-        s18sb = get_closest(blueprint["18_SYP_Buy"], anchor18, "syp")
-        u18ss = get_closest(blueprint["18_USD_Sell"], anchor18, "usd")
-        u18sb = get_closest(blueprint["18_USD_Buy"], anchor18, "usd")
+        s18ss = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
+        s18sb = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
+        u18ss = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
+        u18sb = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
     else:
         s18ss = round(s21ss * 18 / 21)
         s18sb = round(s21sb * 18 / 21)
@@ -724,15 +863,115 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     if result is None:
         return None
 
-    return apply_price_sanity_check(result[0], result[1])
+    fixed = apply_price_sanity_check(result[0], result[1])
+    k21, k18 = fixed
+
+    if (
+        k21.ss == k21.sb or
+        k21.us == k21.ub or
+        k18.ss == k18.sb or
+        k18.us == k18.ub
+    ):
+        alt = extract_smart_fallback(words)
+        if alt is not None:
+            return apply_price_sanity_check(alt[0], alt[1])
+
+    return fixed
 
 
-def build_snapshot(image_bytes: bytes, source_url: str) -> dict:
+def looks_like_direct_image_url(url: str) -> bool:
+    path = urlparse(url).path.lower()
+    return any(path.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"])
+
+
+def candidate_score(c: ImageCandidate) -> float:
+    area_score = float(c.area)
+    ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
+    size_bonus = 50000.0 if (
+        c.width >= PREFERRED_CANDIDATE_WIDTH and c.height >= PREFERRED_CANDIDATE_HEIGHT
+    ) else 0.0
+    return area_score + size_bonus - ratio_penalty
+
+
+def rank_candidates(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
+    unique: dict[str, ImageCandidate] = {}
+
+    for c in candidates:
+        if not c.url:
+            continue
+        w = c.width or 0
+        h = c.height or 0
+        if w and h and (w < MIN_CANDIDATE_WIDTH or h < MIN_CANDIDATE_HEIGHT):
+            continue
+        existing = unique.get(c.url)
+        if existing is None or c.area > existing.area:
+            unique[c.url] = c
+
+    ranked = list(unique.values())
+    ranked.sort(key=candidate_score, reverse=True)
+    return ranked
+
+
+def extract_image_candidates_from_html(page_url: str, html: str) -> list[ImageCandidate]:
+    soup = BeautifulSoup(html, "html.parser")
+    candidates: list[ImageCandidate] = []
+
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src") or ""
+        if not src:
+            continue
+
+        src = urljoin(page_url, src)
+
+        lower = src.lower()
+        if "profile" in lower or "emoji" in lower or "static" in lower:
+            continue
+
+        try:
+            width = int(img.get("width") or 0)
+        except Exception:
+            width = 0
+        try:
+            height = int(img.get("height") or 0)
+        except Exception:
+            height = 0
+
+        candidates.append(ImageCandidate(url=src, width=width, height=height))
+
+    extra_urls = set(
+        re.findall(r'https://[^"\']+?(?:jpg|jpeg|png|webp)[^"\']*', html, flags=re.IGNORECASE)
+    )
+    for src in extra_urls:
+        lower = src.lower()
+        if "profile" in lower or "emoji" in lower or "static" in lower:
+            continue
+        candidates.append(ImageCandidate(url=src, width=0, height=0))
+
+    return candidates
+
+
+def fetch_page_image_candidates(source_url: str) -> list[ImageCandidate]:
+    response = requests.get(source_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    html = response.text
+    return extract_image_candidates_from_html(source_url, html)
+
+
+def fetch_image_bytes(url: str) -> tuple[bytes, str]:
+    response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return response.content, response.url
+
+
+def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     img = preprocess_image(image_bytes)
-    words, raw_text = ocr_words(img)
+    words, raw_text, ocr_engine = run_ocr_with_fallback(img)
 
-    date = extract_date_from_raw(raw_text)
-    time = extract_time_from_raw(raw_text)
+    date, time = extract_date_time_from_header(img)
+    if date == "0000/00/00":
+        date = extract_date_from_raw(raw_text)
+    if time == "00:00":
+        time = extract_time_from_raw(raw_text)
 
     blueprint = load_json(BLUEPRINT_FILE, None)
     if blueprint is not None and not isinstance(blueprint, dict):
@@ -763,8 +1002,37 @@ def build_snapshot(image_bytes: bytes, source_url: str) -> dict:
         "byte_length": len(image_bytes),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
         "ocr_mode": DEFAULT_OCR_MODE,
+        "ocr_engine": ocr_engine,
         "has_blueprint": blueprint is not None,
     }
+
+
+def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
+    if looks_like_direct_image_url(source_url):
+        content, final_url = fetch_image_bytes(source_url)
+        return content, final_url
+
+    candidates = fetch_page_image_candidates(source_url)
+    ranked = rank_candidates(candidates)
+
+    if not ranked:
+        raise RuntimeError("No usable image candidates found on source page")
+
+    last_error = None
+
+    for candidate in ranked[:8]:
+        try:
+            content, final_url = fetch_image_bytes(candidate.url)
+            img = Image.open(BytesIO(content))
+            w, h = img.size
+            if w < MIN_CANDIDATE_WIDTH or h < MIN_CANDIDATE_HEIGHT:
+                continue
+            return content, final_url
+        except Exception as e:
+            last_error = e
+            continue
+
+    raise RuntimeError(f"Failed to download/process ranked image candidates: {last_error}")
 
 
 def main():
@@ -772,10 +1040,8 @@ def main():
     if not source_url:
         raise RuntimeError("GOLD_SOURCE_URL is empty")
 
-    response = requests.get(source_url, timeout=30)
-    response.raise_for_status()
-
-    snapshot = build_snapshot(response.content, source_url)
+    image_bytes, final_image_url = resolve_best_image_source(source_url)
+    snapshot = build_snapshot_from_image(image_bytes, final_image_url)
 
     latest = load_json(LATEST_FILE, {})
     changed = (
