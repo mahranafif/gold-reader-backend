@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -88,16 +87,3 @@ jobs:
           git fetch origin main
           git pull --rebase origin main
           git push origin HEAD:main
-
-      - name: Wait before next run
-        if: success()
-        run: sleep 120
-
-      - name: Trigger next run
-        if: success()
-        run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/gold-fetch.yml/dispatches \
-            -d '{"ref":"main"}'
