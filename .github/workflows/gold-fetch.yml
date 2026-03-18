@@ -42,6 +42,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verify PaddleOCR
+        run: |
+          python - <<'PY'
+          import paddle
+          from paddleocr import PaddleOCR
+          print("Paddle version:", paddle.__version__)
+          ocr = PaddleOCR(
+              use_doc_orientation_classify=False,
+              use_doc_unwarping=False,
+              use_textline_orientation=False,
+          )
+          print("PaddleOCR init: OK")
+          PY
+
       - name: Show config
         env:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
