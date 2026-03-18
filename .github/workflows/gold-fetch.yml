@@ -43,6 +43,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Verify PaddleOCR
+        env:
+          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
           python - <<'PY'
           import paddle
