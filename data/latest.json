@@ -15,8 +15,9 @@
   "source_w": 2048,
   "source_h": 2048,
   "byte_length": 154110,
-  "updated_at_utc": "2026-03-18T22:47:43.332775+00:00",
+  "updated_at_utc": "2026-03-19T12:09:54.371238+00:00",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "tesseract",
-  "has_blueprint": true
+  "has_blueprint": true,
+  "ocr_word_count": 69
 }
