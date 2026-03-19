@@ -16,7 +16,7 @@
   "source_w": 2048,
   "source_h": 2048,
   "byte_length": 154110,
-  "updated_at_utc": "2026-03-19T21:54:42.353069+00:00",
+  "updated_at_utc": "2026-03-19T22:25:06.218181+00:00",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "paddleocr",
   "has_blueprint": true,
