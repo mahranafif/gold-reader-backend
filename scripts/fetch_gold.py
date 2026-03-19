@@ -281,6 +281,7 @@ def get_paddle_ocr():
     global _PADDLE_OCR
     if _PADDLE_OCR is None:
         _PADDLE_OCR = PaddleOCR(
+            lang="ar",
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
@@ -300,40 +301,101 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
     if not result:
         return [], ""
 
+    print(f"[OCR] Paddle result pages: {len(result)}")
+    try:
+        first = result[0]
+        if hasattr(first, "json"):
+            first_json = first.json
+            if isinstance(first_json, dict):
+                print("[OCR] First page json keys:", list(first_json.keys()))
+    except Exception as e:
+        print(f"[OCR] Could not inspect first.json: {repr(e)}")
+
     for page in result:
-        rec_texts = getattr(page, "rec_texts", []) or []
-        rec_scores = getattr(page, "rec_scores", []) or []
-        rec_polys = getattr(page, "rec_polys", []) or []
+        payload = None
 
-        for idx, text in enumerate(rec_texts):
-            if not text:
-                continue
+        if hasattr(page, "json"):
+            try:
+                payload = page.json
+            except Exception:
+                payload = None
 
-            poly = rec_polys[idx] if idx < len(rec_polys) else None
-            score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+        if payload is None and hasattr(page, "res"):
+            try:
+                payload = {"res": page.res}
+            except Exception:
+                payload = None
 
-            if poly is None or len(poly) < 4:
-                continue
+        if payload is None:
+            try:
+                payload = dict(page)
+            except Exception:
+                payload = None
 
-            xs = [float(p[0]) for p in poly]
-            ys = [float(p[1]) for p in poly]
+        if not payload:
+            continue
 
-            left = int(min(xs))
-            top = int(min(ys))
-            width = int(max(xs) - min(xs))
-            height = int(max(ys) - min(ys))
+        res = payload.get("res", payload)
 
-            word = OcrWord(
-                text=str(text).strip(),
-                norm=normalize_digits(str(text).strip()),
-                left=left,
-                top=top,
-                width=max(width, 1),
-                height=max(height, 1),
-                conf=score,
-            )
-            words.append(word)
-            texts.append(word.text)
+        rec_texts = res.get("rec_texts", []) or []
+        rec_scores = res.get("rec_scores", []) or []
+        rec_polys = res.get("rec_polys", []) or []
+        rec_boxes = res.get("rec_boxes", []) or []
+
+        if len(rec_boxes) == len(rec_texts) and len(rec_boxes) > 0:
+            for idx, text in enumerate(rec_texts):
+                text = str(text).strip()
+                if not text:
+                    continue
+
+                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                box = rec_boxes[idx]
+
+                left = int(box[0])
+                top = int(box[1])
+                right = int(box[2])
+                bottom = int(box[3])
+
+                word = OcrWord(
+                    text=text,
+                    norm=normalize_digits(text),
+                    left=left,
+                    top=top,
+                    width=max(right - left, 1),
+                    height=max(bottom - top, 1),
+                    conf=score,
+                )
+                words.append(word)
+                texts.append(word.text)
+
+        elif len(rec_polys) == len(rec_texts) and len(rec_polys) > 0:
+            for idx, text in enumerate(rec_texts):
+                text = str(text).strip()
+                if not text:
+                    continue
+
+                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                poly = rec_polys[idx]
+
+                xs = [float(p[0]) for p in poly]
+                ys = [float(p[1]) for p in poly]
+
+                left = int(min(xs))
+                top = int(min(ys))
+                width = int(max(xs) - min(xs))
+                height = int(max(ys) - min(ys))
+
+                word = OcrWord(
+                    text=text,
+                    norm=normalize_digits(text),
+                    left=left,
+                    top=top,
+                    width=max(width, 1),
+                    height=max(height, 1),
+                    conf=score,
+                )
+                words.append(word)
+                texts.append(word.text)
 
     return words, " ".join(texts)
 
@@ -377,15 +439,15 @@ def tesseract_ocr_words(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], 
 def run_ocr_with_fallback(img: Image.Image) -> tuple[list[OcrWord], str, str]:
     try:
         words, raw = paddle_ocr_words(img)
-        print(f"PaddleOCR words: {len(words)}")
+        print(f"[OCR] PaddleOCR words: {len(words)}")
         if words:
             return words, raw, "paddleocr"
-        print("PaddleOCR returned 0 words, falling back to Tesseract")
+        print("[OCR] PaddleOCR returned 0 words, falling back to Tesseract")
     except Exception as e:
-        print(f"PaddleOCR failed hard: {repr(e)}")
+        print(f"[OCR] PaddleOCR failed: {repr(e)}")
 
     words, raw = tesseract_ocr_words(img, psm=6)
-    print(f"Tesseract words: {len(words)}")
+    print(f"[OCR] Tesseract words: {len(words)}")
     return words, raw, "tesseract"
 
 
@@ -925,7 +987,6 @@ def extract_image_candidates_from_html(page_url: str, html: str) -> list[ImageCa
             continue
 
         src = urljoin(page_url, src)
-
         lower = src.lower()
         if "profile" in lower or "emoji" in lower or "static" in lower:
             continue
@@ -1000,6 +1061,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "k18_us": k18.us,
         "k18_ub": k18.ub,
         "raw_ocr": raw_text,
+        "raw_ocr_preview": raw_text[:500],
         "source_w": img.width,
         "source_h": img.height,
         "byte_length": len(image_bytes),
