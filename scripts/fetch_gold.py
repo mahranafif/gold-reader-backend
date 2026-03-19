@@ -187,7 +187,6 @@ def _apply_date_checksum(y: int, m: int, d: int, raw: str) -> str:
             return False
         if dd < 1 or dd > 31:
             return False
-
         try:
             dt = datetime(yy, mm, dd)
             if dt.year != yy or dt.month != mm or dt.day != dd:
@@ -720,6 +719,32 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
     }
 
 
+def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
+    if min(k21.ss, k21.sb, k21.us, k21.ub, k18.ss, k18.sb, k18.us, k18.ub) <= 0:
+        return False
+
+    if not (k21.sb < k21.ss and k18.sb < k18.ss):
+        return False
+    if not (k21.ub < k21.us and k18.ub < k18.us):
+        return False
+
+    if not (k21.ss > k18.ss and k21.sb > k18.sb):
+        return False
+    if not (k21.us > k18.us and k21.ub > k18.ub):
+        return False
+
+    s_sell_ratio = k18.ss / k21.ss
+    s_buy_ratio = k18.sb / k21.sb
+    u_sell_ratio = k18.us / k21.us
+    u_buy_ratio = k18.ub / k21.ub
+
+    for ratio in [s_sell_ratio, s_buy_ratio, u_sell_ratio, u_buy_ratio]:
+        if not (MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO):
+            return False
+
+    return True
+
+
 def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
     anchor21 = find_anchor_word(words, "21")
     anchor18 = find_anchor_word(words, "18")
@@ -733,7 +758,7 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     if row21 is None or row18 is None:
         return None
 
-    return (
+    result = (
         GoldRate(
             ub=row21["usd_buy"],
             us=row21["usd_sell"],
@@ -747,6 +772,13 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
             ss=row18["syp_sell"],
         ),
     )
+
+    fixed = apply_price_sanity_check(result[0], result[1])
+
+    if not is_reasonable_extraction(fixed[0], fixed[1]):
+        return None
+
+    return fixed
 
 
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
@@ -876,8 +908,8 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         expected_x = anchor.center_x + (float(ratios.get("dx", 0.0)) * max(anchor.width, 1.0))
         expected_y = anchor.center_y + (float(ratios.get("dy", 0.0)) * max(anchor.height, 1.0))
 
-        max_dx = max(anchor.width * 10.0, 180.0)
-        max_dy = max(anchor.height * 3.0, 90.0)
+        max_dx = max(anchor.width * 6.0, 120.0)
+        max_dy = max(anchor.height * 1.8, 45.0)
 
         candidates = []
 
@@ -950,10 +982,17 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
     if any(v == 0 for v in [s21ss, s21sb, u21ss, u21sb]):
         return None
 
-    return (
+    result = (
         GoldRate(ub=u21sb, us=u21ss, sb=s21sb, ss=s21ss),
         GoldRate(ub=u18sb, us=u18ss, sb=s18sb, ss=s18ss),
     )
+
+    fixed = apply_price_sanity_check(result[0], result[1])
+
+    if not is_reasonable_extraction(fixed[0], fixed[1]):
+        return None
+
+    return fixed
 
 
 def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, GoldRate]:
@@ -1005,37 +1044,51 @@ def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, Go
 def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str) -> Optional[tuple[GoldRate, GoldRate]]:
     result = None
 
-    if ocr_mode == "prefer_blueprint" and blueprint is not None:
-        result = extract_with_blueprint(words, blueprint)
-        if result is None:
-            result = extract_anchor_rows(words)
+    if ocr_mode == "prefer_blueprint":
+        result = extract_anchor_rows(words)
+
+        if result is None and blueprint is not None:
+            result = extract_with_blueprint(words, blueprint)
+
         if result is None:
             result = extract_smart_fallback(words)
+
         if result is None:
             result = extract_legacy_fallback(words)
 
     elif ocr_mode == "smart_fallback":
         result = extract_anchor_rows(words)
+
         if result is None:
             result = extract_smart_fallback(words)
+
         if result is None and blueprint is not None:
             result = extract_with_blueprint(words, blueprint)
+
         if result is None:
             result = extract_legacy_fallback(words)
 
     else:
         result = extract_legacy_fallback(words)
+
         if result is None:
             result = extract_anchor_rows(words)
+
         if result is None:
             result = extract_smart_fallback(words)
+
         if result is None and blueprint is not None:
             result = extract_with_blueprint(words, blueprint)
 
     if result is None:
         return None
 
-    return apply_price_sanity_check(result[0], result[1])
+    fixed = apply_price_sanity_check(result[0], result[1])
+
+    if not is_reasonable_extraction(fixed[0], fixed[1]):
+        return None
+
+    return fixed
 
 
 def looks_like_direct_image_url(url: str) -> bool:
