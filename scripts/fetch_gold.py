@@ -64,7 +64,7 @@ class GoldRate:
 @dataclass
 class NumericToken:
     value: int
-    kind: str  # "usd" | "syp"
+    kind: str
     x: float
     y: float
     height: float
@@ -462,9 +462,9 @@ def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Im
 
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    header_crop = crop_box(img, 0.02, 0.48, 0.98, 0.58)
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.26, 1.00)
-    date_crop = crop_box(header_crop, 0.28, 0.00, 0.58, 1.00)
+    header_crop = crop_box(img, 0.02, 0.46, 0.98, 0.58)
+    time_crop = crop_box(header_crop, 0.00, 0.02, 0.24, 0.90)
+    date_crop = crop_box(header_crop, 0.30, 0.02, 0.52, 0.90)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
@@ -646,6 +646,107 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
         row.sort(key=lambda t: t.x)
 
     return rows
+
+
+def find_numeric_word_value(w: OcrWord) -> Optional[int]:
+    digits = re.sub(r"[^0-9]", "", w.norm)
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except Exception:
+        return None
+
+
+def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
+    candidates = []
+    for w in words:
+        v = re.sub(r"[^0-9]", "", w.norm)
+        if v == target:
+            candidates.append(w)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda w: w.center_x, reverse=True)
+    return candidates[0]
+
+
+def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
+    row_band = max(anchor.height * 1.4, 55.0)
+
+    row_words = []
+    for w in words:
+        if w is anchor:
+            continue
+
+        value = find_numeric_word_value(w)
+        if value is None:
+            continue
+
+        if abs(w.center_y - anchor.center_y) > row_band:
+            continue
+
+        if w.center_x >= anchor.center_x:
+            continue
+
+        row_words.append((w, value))
+
+    usd_words = []
+    syp_words = []
+
+    for w, value in row_words:
+        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
+            usd_words.append((w, value))
+        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
+            syp_words.append((w, value))
+
+    if len(usd_words) < 2 or len(syp_words) < 2:
+        return None
+
+    usd_words.sort(key=lambda item: item[0].center_x)
+    syp_words.sort(key=lambda item: item[0].center_x)
+
+    usd_buy = usd_words[0][1]
+    usd_sell = usd_words[-1][1]
+    syp_buy = syp_words[0][1]
+    syp_sell = syp_words[-1][1]
+
+    return {
+        "usd_buy": usd_buy,
+        "usd_sell": usd_sell,
+        "syp_buy": syp_buy,
+        "syp_sell": syp_sell,
+    }
+
+
+def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
+    anchor21 = find_anchor_word(words, "21")
+    anchor18 = find_anchor_word(words, "18")
+
+    if anchor21 is None or anchor18 is None:
+        return None
+
+    row21 = extract_row_values_for_anchor(words, anchor21)
+    row18 = extract_row_values_for_anchor(words, anchor18)
+
+    if row21 is None or row18 is None:
+        return None
+
+    return (
+        GoldRate(
+            ub=row21["usd_buy"],
+            us=row21["usd_sell"],
+            sb=row21["syp_buy"],
+            ss=row21["syp_sell"],
+        ),
+        GoldRate(
+            ub=row18["usd_buy"],
+            us=row18["usd_sell"],
+            sb=row18["syp_buy"],
+            ss=row18["syp_sell"],
+        ),
+    )
 
 
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
@@ -907,12 +1008,16 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     if ocr_mode == "prefer_blueprint" and blueprint is not None:
         result = extract_with_blueprint(words, blueprint)
         if result is None:
+            result = extract_anchor_rows(words)
+        if result is None:
             result = extract_smart_fallback(words)
         if result is None:
             result = extract_legacy_fallback(words)
 
     elif ocr_mode == "smart_fallback":
-        result = extract_smart_fallback(words)
+        result = extract_anchor_rows(words)
+        if result is None:
+            result = extract_smart_fallback(words)
         if result is None and blueprint is not None:
             result = extract_with_blueprint(words, blueprint)
         if result is None:
@@ -921,6 +1026,8 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     else:
         result = extract_legacy_fallback(words)
         if result is None:
+            result = extract_anchor_rows(words)
+        if result is None:
             result = extract_smart_fallback(words)
         if result is None and blueprint is not None:
             result = extract_with_blueprint(words, blueprint)
@@ -928,20 +1035,7 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     if result is None:
         return None
 
-    fixed = apply_price_sanity_check(result[0], result[1])
-    k21, k18 = fixed
-
-    if (
-        k21.ss == k21.sb or
-        k21.us == k21.ub or
-        k18.ss == k18.sb or
-        k18.us == k18.ub
-    ):
-        alt = extract_smart_fallback(words)
-        if alt is not None:
-            return apply_price_sanity_check(alt[0], alt[1])
-
-    return fixed
+    return apply_price_sanity_check(result[0], result[1])
 
 
 def looks_like_direct_image_url(url: str) -> bool:
