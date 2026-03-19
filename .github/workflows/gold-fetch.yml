@@ -10,6 +10,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
 
 concurrency:
   group: gold-fetch-main
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -37,24 +38,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr libgl1
 
-      - name: Install Python dependencies
+      - name: Install base Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install PaddlePaddle CPU
+        run: |
+          python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+      - name: Install PaddleOCR
+        run: |
+          python -m pip install paddleocr
+
       - name: Verify PaddleOCR
-        env:
-          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
           python - <<'PY'
           import paddle
           from paddleocr import PaddleOCR
+
           print("Paddle version:", paddle.__version__)
+
           ocr = PaddleOCR(
               use_doc_orientation_classify=False,
               use_doc_unwarping=False,
               use_textline_orientation=False,
           )
+
           print("PaddleOCR init: OK")
           PY
 
@@ -65,8 +75,13 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          print("GOLD_SOURCE_URL is set:", bool(os.getenv("GOLD_SOURCE_URL", "")))
-          print("GOLD_OCR_MODE:", os.getenv("GOLD_OCR_MODE", "prefer_blueprint"))
+
+          source = os.getenv("GOLD_SOURCE_URL", "")
+          mode = os.getenv("GOLD_OCR_MODE", "")
+
+          print("GOLD_SOURCE_URL is set:", bool(source))
+          print("Starts with http:", source.startswith("http"))
+          print("GOLD_OCR_MODE:", mode or "(empty -> script default)")
           PY
 
       - name: Ensure data files exist
@@ -79,6 +94,7 @@ jobs:
         env:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
           GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
+          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
           python scripts/fetch_gold.py
 
