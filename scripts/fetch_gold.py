@@ -875,31 +875,26 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
 
         row_words.append((w, value))
 
-    usd_words = []
-    syp_words = []
+    usd_values = []
+    syp_values = []
 
-    for w, value in row_words:
+    for _, value in row_words:
         if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            usd_words.append((w, value))
+            usd_values.append(value)
         elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            syp_words.append((w, value))
+            syp_values.append(value)
 
-    if len(usd_words) < 2 or len(syp_words) < 2:
+    usd_values = sorted(set(usd_values))
+    syp_values = sorted(set(syp_values))
+
+    if len(usd_values) < 2 or len(syp_values) < 2:
         return None
 
-    usd_words.sort(key=lambda item: item[0].center_x)
-    syp_words.sort(key=lambda item: item[0].center_x)
-
-    usd_buy = usd_words[0][1]
-    usd_sell = usd_words[-1][1]
-    syp_buy = syp_words[0][1]
-    syp_sell = syp_words[-1][1]
-
     return {
-        "usd_buy": usd_buy,
-        "usd_sell": usd_sell,
-        "syp_buy": syp_buy,
-        "syp_sell": syp_sell,
+        "usd_buy": usd_values[0],
+        "usd_sell": usd_values[-1],
+        "syp_buy": syp_values[0],
+        "syp_sell": syp_values[-1],
     }
 
 
@@ -985,6 +980,9 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
 
     row21 = extract_row_values_for_anchor(words, anchor21)
     row18 = extract_row_values_for_anchor(words, anchor18)
+
+    logger.info("anchor21 row=%s", row21)
+    logger.info("anchor18 row=%s", row18)
 
     if row21 is None or row18 is None:
         return None
@@ -1258,9 +1256,9 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
 
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    header_crop = crop_box(img, 0.02, 0.35, 0.98, 0.52)
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.28, 1.00)
-    date_crop = crop_box(header_crop, 0.28, 0.00, 0.58, 1.00)
+    header_crop = crop_box(img, 0.01, 0.30, 0.99, 0.50)
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.35, 1.00)
+    date_crop = crop_box(header_crop, 0.20, 0.00, 0.65, 1.00)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
@@ -1293,12 +1291,18 @@ def compute_confidence(
 
     if len(words) >= 20:
         score += 0.10
+
     if date != "0000/00/00":
         score += 0.08
+    else:
+        score -= 0.10
+
     if time != "00:00":
         score += 0.05
+    else:
+        score -= 0.08
 
-    score -= min(len(warnings) * 0.05, 0.20)
+    score -= min(len(warnings) * 0.05, 0.25)
     return max(0.0, min(score, 1.0))
 
 
