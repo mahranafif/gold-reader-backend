@@ -377,8 +377,20 @@ def extract_date_from_raw(raw: str) -> str:
 
 def extract_time_from_raw(raw: str) -> str:
     raw = normalize_date_text(raw)
+
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
     if not match:
+        compact = re.search(r"\b(\d{3,4})\b", raw)
+        if compact:
+            digits = compact.group(1)
+            if len(digits) == 3:
+                hh = int(digits[0])
+                mm = int(digits[1:])
+            else:
+                hh = int(digits[:2])
+                mm = int(digits[2:])
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return f"{hh:02d}:{mm:02d}"
         return "00:00"
 
     hh = int(match.group(1))
@@ -1341,9 +1353,14 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
 
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    header_crop = crop_box(img, 0.01, 0.28, 0.99, 0.50)
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.42, 1.00)
-    date_crop = crop_box(header_crop, 0.18, 0.00, 0.70, 1.00)
+    # Slightly larger header band
+    header_crop = crop_box(img, 0.01, 0.26, 0.99, 0.52)
+
+    # Time is usually further left in this layout
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.48, 1.00)
+
+    # Date usually sits more central
+    date_crop = crop_box(header_crop, 0.18, 0.00, 0.72, 1.00)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
