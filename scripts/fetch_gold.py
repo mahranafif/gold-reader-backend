@@ -1145,7 +1145,20 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
                 return fixed, method
 
     return None, "none"
+    
+def extract_time_from_raw(raw: str) -> str:
+    raw = raw.replace("م", "").replace("ص", "")
+    match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
+    if not match:
+        return "00:00"
 
+    hh = int(match.group(1))
+    mm = int(match.group(2))
+
+    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+        return "00:00"
+
+    return f"{hh:02d}:{mm:02d}"
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
     header_crop = crop_box(img, 0.02, 0.35, 0.98, 0.52)
