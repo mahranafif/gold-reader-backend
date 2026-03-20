@@ -103,6 +103,7 @@ jobs:
       - name: Ensure data files exist
         run: |
           mkdir -p data
+          mkdir -p data/debug
           test -f data/latest.json || echo '{"ok": false, "source": "", "date": "0000/00/00", "time": "00:00", "k21_ss": 0, "k21_sb": 0, "k21_us": 0, "k21_ub": 0, "k18_ss": 0, "k18_sb": 0, "k18_us": 0, "k18_ub": 0, "updated_at_utc": ""}' > data/latest.json
           test -f data/history.json || echo '[]' > data/history.json
           test -f data/blueprint.json || echo '{}' > data/blueprint.json
@@ -112,6 +113,7 @@ jobs:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
           GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
           PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+          GOLD_DEBUG_EXPORT: "false"
         run: |
           python scripts/fetch_gold.py
 
@@ -136,11 +138,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin main
-          git pull --rebase origin main
-
           git add data/latest.json data/history.json data/blueprint.json
+
           git diff --cached --quiet && exit 0
 
           git commit -m "Update gold prices"
+
+          git fetch origin main
+          git pull --rebase --autostash origin main
           git push origin HEAD:main
