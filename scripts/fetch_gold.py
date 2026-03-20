@@ -35,7 +35,7 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-# Dart-style smart OCR is now the default primary extractor.
+# Default to Dart-style smart OCR as primary extractor.
 DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "smart_fallback").strip().lower()
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
@@ -380,17 +380,6 @@ def extract_time_from_raw(raw: str) -> str:
 
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
     if not match:
-        compact = re.search(r"\b(\d{3,4})\b", raw)
-        if compact:
-            digits = compact.group(1)
-            if len(digits) == 3:
-                hh = int(digits[0])
-                mm = int(digits[1:])
-            else:
-                hh = int(digits[:2])
-                mm = int(digits[2:])
-            if 0 <= hh <= 23 and 0 <= mm <= 59:
-                return f"{hh:02d}:{mm:02d}"
         return "00:00"
 
     hh = int(match.group(1))
@@ -400,6 +389,20 @@ def extract_time_from_raw(raw: str) -> str:
         return "00:00"
 
     return f"{hh:02d}:{mm:02d}"
+
+
+def extract_date_with_fallback(header_raw: str, full_raw: str) -> str:
+    header_date = extract_date_from_raw(header_raw)
+    if header_date != "0000/00/00":
+        return header_date
+    return extract_date_from_raw(full_raw)
+
+
+def extract_time_with_fallback(header_raw: str, full_raw: str) -> str:
+    header_time = extract_time_from_raw(header_raw)
+    if header_time != "00:00":
+        return header_time
+    return extract_time_from_raw(full_raw)
 
 
 def safe_slug(text: str) -> str:
@@ -1144,7 +1147,6 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         return None
 
     rows = group_rows(cleaned)
-
     valid_rows: list[dict] = []
 
     for row in rows:
@@ -1165,6 +1167,11 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         if usd_sell > usd_buy:
             score += 10
 
+        logger.info(
+            "smart_row candidate: syp_sell=%s syp_buy=%s usd_sell=%s usd_buy=%s score=%s",
+            syp_sell, syp_buy, usd_sell, usd_buy, score,
+        )
+
         valid_rows.append(
             {
                 "score": score,
@@ -1179,7 +1186,6 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         logger.info("smart_fallback: no valid rows")
         return None
 
-    # Highest SYP sell is usually 21k row
     valid_rows.sort(key=lambda r: r["syp_sell"], reverse=True)
 
     best21 = valid_rows[0]
@@ -1217,6 +1223,7 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         return None
 
     return fixed
+
 
 def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
     anchor21 = find_anchor_word(words, "21")
@@ -1352,23 +1359,19 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     return None, "none"
 
 
-def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    # Slightly larger header band
-    header_crop = crop_box(img, 0.01, 0.26, 0.99, 0.52)
+def extract_date_time_from_header(img: Image.Image, full_raw_text: str = "") -> tuple[str, str]:
+    header_crop = crop_box(img, 0.02, 0.32, 0.98, 0.47)
 
-    # Time is usually further left in this layout
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.48, 1.00)
-
-    # Date usually sits more central
-    date_crop = crop_box(header_crop, 0.18, 0.00, 0.72, 1.00)
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.26, 1.00)
+    date_crop = crop_box(header_crop, 0.28, 0.00, 0.56, 1.00)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
 
     logger.info("Header OCR raw_time=%r raw_date=%r", raw_time, raw_date)
 
-    time_value = extract_time_from_raw(raw_time)
-    date_value = extract_date_from_raw(raw_date)
+    time_value = extract_time_with_fallback(raw_time, full_raw_text)
+    date_value = extract_date_with_fallback(raw_date, full_raw_text)
 
     return date_value, time_value
 
@@ -1421,15 +1424,13 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "ocr_mode": DEFAULT_OCR_MODE,
     }
 
-    date, time = extract_date_time_from_header(img)
+    date, time = extract_date_time_from_header(img, raw_text)
 
     if date == "0000/00/00":
         warnings.append("header_date_failed_used_full_text_fallback")
-        date = extract_date_from_raw(raw_text)
 
     if time == "00:00":
         warnings.append("header_time_failed_used_full_text_fallback")
-        time = extract_time_from_raw(raw_text)
 
     blueprint = load_json(BLUEPRINT_FILE, None)
     if blueprint is not None and not isinstance(blueprint, dict):
