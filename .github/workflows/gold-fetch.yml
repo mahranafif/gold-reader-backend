@@ -9,7 +9,6 @@ permissions:
   contents: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
 
 concurrency:
@@ -18,7 +17,7 @@ concurrency:
 
 jobs:
   fetch:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     steps:
@@ -33,55 +32,72 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tesseract-ocr libgl1
-
-      - name: Install base Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Install PaddlePaddle CPU
-        run: |
-          python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-
-      - name: Install PaddleOCR
-        run: |
-          python -m pip install paddleocr
-
-      - name: Verify PaddleOCR
-        run: |
-          python - <<'PY'
-          import paddle
-          from paddleocr import PaddleOCR
-
-          print("Paddle version:", paddle.__version__)
-
-          ocr = PaddleOCR(
-              use_doc_orientation_classify=False,
-              use_doc_unwarping=False,
-              use_textline_orientation=False,
-          )
-
-          print("PaddleOCR init: OK")
-          PY
-
-      - name: Show config
+      - name: Validate config
         env:
           GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
           GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
         run: |
           python - <<'PY'
           import os
+          import sys
 
-          source = os.getenv("GOLD_SOURCE_URL", "")
-          mode = os.getenv("GOLD_OCR_MODE", "")
+          source = os.getenv("GOLD_SOURCE_URL", "").strip()
+          mode = os.getenv("GOLD_OCR_MODE", "").strip()
 
           print("GOLD_SOURCE_URL is set:", bool(source))
-          print("Starts with http:", source.startswith("http"))
+          print("Starts with http:", source.startswith(("http://", "https://")))
           print("GOLD_OCR_MODE:", mode or "(empty -> script default)")
+
+          if not source:
+              print("ERROR: GOLD_SOURCE_URL is missing")
+              sys.exit(1)
+
+          if not source.startswith(("http://", "https://")):
+              print("ERROR: GOLD_SOURCE_URL must start with http:// or https://")
+              sys.exit(1)
+          PY
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr libgl1 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+          python -m pip install paddleocr
+
+      - name: Verify environment
+        run: |
+          python - <<'PY'
+          import requests
+          import numpy
+          import PIL
+          import pytesseract
+          import fastapi
+          import pydantic
+          import uvicorn
+          import paddle
+          from paddleocr import PaddleOCR
+
+          print("requests:", requests.__version__)
+          print("numpy:", numpy.__version__)
+          print("Pillow:", PIL.__version__)
+          print("pytesseract:", pytesseract.__version__)
+          print("fastapi:", fastapi.__version__)
+          print("pydantic:", pydantic.__version__)
+          print("uvicorn:", uvicorn.__version__)
+          print("paddle:", paddle.__version__)
+
+          ocr = PaddleOCR(
+              lang="ar",
+              use_doc_orientation_classify=False,
+              use_doc_unwarping=False,
+              use_textline_orientation=False,
+          )
+          print("PaddleOCR init: OK")
           PY
 
       - name: Ensure data files exist
@@ -89,6 +105,7 @@ jobs:
           mkdir -p data
           test -f data/latest.json || echo '{"ok": false, "source": "", "date": "0000/00/00", "time": "00:00", "k21_ss": 0, "k21_sb": 0, "k21_us": 0, "k21_ub": 0, "k18_ss": 0, "k18_sb": 0, "k18_us": 0, "k18_ub": 0, "updated_at_utc": ""}' > data/latest.json
           test -f data/history.json || echo '[]' > data/history.json
+          test -f data/blueprint.json || echo '{}' > data/blueprint.json
 
       - name: Run fetch script
         env:
@@ -99,19 +116,31 @@ jobs:
           python scripts/fetch_gold.py
 
       - name: Show latest result
+        if: always()
         run: |
           echo "----- data/latest.json -----"
-          cat data/latest.json
+          cat data/latest.json || true
+          echo
+          echo "----- data/history.json (tail) -----"
+          tail -n 50 data/history.json || true
+
+      - name: Upload data artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-data
+          path: data/
 
       - name: Commit updated JSON
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          git fetch origin main
+          git pull --rebase origin main
+
           git add data/latest.json data/history.json data/blueprint.json
           git diff --cached --quiet && exit 0
 
           git commit -m "Update gold prices"
-          git fetch origin main
-          git pull --rebase origin main
           git push origin HEAD:main
