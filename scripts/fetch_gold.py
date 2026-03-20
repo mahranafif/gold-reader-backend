@@ -35,7 +35,7 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-# Default to Dart-style smart OCR as primary extractor.
+# Smart fallback is the default primary extractor.
 DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "smart_fallback").strip().lower()
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
@@ -375,9 +375,9 @@ def extract_date_from_raw(raw: str) -> str:
     return "0000/00/00"
 
 
+# Targeted rollback: restore the simpler, safer time parser.
 def extract_time_from_raw(raw: str) -> str:
-    raw = normalize_date_text(raw)
-
+    raw = raw.replace("م", "").replace("ص", "")
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
     if not match:
         return "00:00"
@@ -389,20 +389,6 @@ def extract_time_from_raw(raw: str) -> str:
         return "00:00"
 
     return f"{hh:02d}:{mm:02d}"
-
-
-def extract_date_with_fallback(header_raw: str, full_raw: str) -> str:
-    header_date = extract_date_from_raw(header_raw)
-    if header_date != "0000/00/00":
-        return header_date
-    return extract_date_from_raw(full_raw)
-
-
-def extract_time_with_fallback(header_raw: str, full_raw: str) -> str:
-    header_time = extract_time_from_raw(header_raw)
-    if header_time != "00:00":
-        return header_time
-    return extract_time_from_raw(full_raw)
 
 
 def safe_slug(text: str) -> str:
@@ -1359,19 +1345,19 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
     return None, "none"
 
 
-def extract_date_time_from_header(img: Image.Image, full_raw_text: str = "") -> tuple[str, str]:
-    header_crop = crop_box(img, 0.02, 0.32, 0.98, 0.47)
-
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.26, 1.00)
-    date_crop = crop_box(header_crop, 0.28, 0.00, 0.56, 1.00)
+# Targeted rollback: restore the older working header crop behavior.
+def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
+    header_crop = crop_box(img, 0.01, 0.30, 0.99, 0.50)
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.35, 1.00)
+    date_crop = crop_box(header_crop, 0.20, 0.00, 0.65, 1.00)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
 
     logger.info("Header OCR raw_time=%r raw_date=%r", raw_time, raw_date)
 
-    time_value = extract_time_with_fallback(raw_time, full_raw_text)
-    date_value = extract_date_with_fallback(raw_date, full_raw_text)
+    time_value = extract_time_from_raw(raw_time)
+    date_value = extract_date_from_raw(raw_date)
 
     return date_value, time_value
 
@@ -1411,6 +1397,7 @@ def compute_confidence(
     return max(0.0, min(score, 1.0))
 
 
+# Targeted rollback: restore the older fallback flow that was reading date correctly.
 def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
     img = preprocess_image(image_bytes)
     words, raw_text, ocr_engine = run_ocr_with_fallback(img)
@@ -1424,13 +1411,15 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "ocr_mode": DEFAULT_OCR_MODE,
     }
 
-    date, time = extract_date_time_from_header(img, raw_text)
+    date, time = extract_date_time_from_header(img)
 
     if date == "0000/00/00":
         warnings.append("header_date_failed_used_full_text_fallback")
+        date = extract_date_from_raw(raw_text)
 
     if time == "00:00":
         warnings.append("header_time_failed_used_full_text_fallback")
+        time = extract_time_from_raw(raw_text)
 
     blueprint = load_json(BLUEPRINT_FILE, None)
     if blueprint is not None and not isinstance(blueprint, dict):
