@@ -1,8 +1,13 @@
-requests>=2.31,<2.33
+# Core HTTP & parsing
+requests>=2.32.0,<2.33
 beautifulsoup4>=4.12,<5
+
+# OCR stack
+pytesseract>=0.3.13,<0.4
+Pillow>=11.0,<12
 numpy>=1.26,<3
-pillow>=10,<12
-pytesseract>=0.3.10,<0.4
-fastapi>=0.115,<1
+
+# API
+fastapi>=0.110,<1
 uvicorn[standard]>=0.30,<1
-pydantic>=2.8,<3
+pydantic>=2.7,<3
