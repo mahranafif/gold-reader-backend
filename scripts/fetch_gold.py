@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin, urlparse
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytesseract
@@ -17,7 +18,7 @@ import uvicorn
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from paddleocr import PaddleOCR
-from PIL import Image, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field, HttpUrl
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -35,7 +36,6 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-# Smart fallback is the default primary extractor.
 DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "smart_fallback").strip().lower()
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
@@ -48,6 +48,8 @@ DEBUG_EXPORT = os.getenv("GOLD_DEBUG_EXPORT", "false").strip().lower() in {
     "on",
 }
 DEBUG_MAX_FILES = int(os.getenv("GOLD_DEBUG_MAX_FILES", "50"))
+
+APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "UTC").strip() or "UTC"
 
 MIN_USD_PRICE = 50
 MAX_USD_PRICE = 800
@@ -63,6 +65,13 @@ MIN_CANDIDATE_HEIGHT = 250
 PREFERRED_CANDIDATE_WIDTH = 400
 PREFERRED_CANDIDATE_HEIGHT = 400
 
+HEADER_Y1 = 0.30
+HEADER_Y2 = 0.50
+HEADER_TIME_X1 = 0.00
+HEADER_TIME_X2 = 0.35
+HEADER_DATE_X1 = 0.20
+HEADER_DATE_X2 = 0.65
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -72,7 +81,22 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
 }
 
+IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/bmp",
+    "image/gif",
+}
+
 _PADDLE_OCR = None
+
+try:
+    APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
+except Exception:
+    APP_TIMEZONE = timezone.utc
+    APP_TIMEZONE_NAME = "UTC"
 
 
 # =========================================================
@@ -210,9 +234,9 @@ class ExtractResponse(BaseModel):
     ocr_engine: str
     confidence: float = Field(ge=0.0, le=1.0)
 
-    warnings: list[str] = []
+    warnings: list[str] = Field(default_factory=list)
     raw_ocr_preview: str = ""
-    debug: dict = {}
+    debug: dict = Field(default_factory=dict)
 
 
 # =========================================================
@@ -224,7 +248,8 @@ def load_json(path: Path, fallback):
         return fallback
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load JSON from %s: %s", path, exc)
         return fallback
 
 
@@ -241,7 +266,7 @@ def save_json(path: Path, data):
 # =========================================================
 
 def app_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(APP_TIMEZONE)
 
 
 def normalize_digits(text: str) -> str:
@@ -280,6 +305,27 @@ def normalize_date_text(text: str) -> str:
     return re.sub(r"(^|[/\s.\-])\\", r"\g<1>1", text)
 
 
+def safe_slug(text: str) -> str:
+    text = re.sub(r"[^a-zA-Z0-9._-]+", "_", text).strip("_")
+    return text or "debug"
+
+
+def cleanup_old_debug_files(debug_dir: Path, keep: int):
+    if keep <= 0 or not debug_dir.exists():
+        return
+
+    files = sorted(
+        [p for p in debug_dir.iterdir() if p.is_file()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for old_file in files[keep:]:
+        try:
+            old_file.unlink()
+        except Exception as exc:
+            logger.warning("Could not delete old debug file %s: %s", old_file, exc)
+
+
 def _apply_date_checksum(y: int, m: int, d: int) -> str:
     now = app_now()
     min_year = now.year - 1
@@ -296,7 +342,7 @@ def _apply_date_checksum(y: int, m: int, d: int) -> str:
         if dd < 1 or dd > 31:
             return False
         try:
-            dt = datetime(yy, mm, dd, tzinfo=timezone.utc)
+            dt = datetime(yy, mm, dd, tzinfo=APP_TIMEZONE)
             if dt > now + timedelta(days=1):
                 return False
             return True
@@ -375,10 +421,13 @@ def extract_date_from_raw(raw: str) -> str:
     return "0000/00/00"
 
 
-# Targeted rollback: restore the simpler, safer time parser.
 def extract_time_from_raw(raw: str) -> str:
-    raw = raw.replace("م", "").replace("ص", "")
-    match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
+    raw = raw.strip()
+    is_pm = "م" in raw
+    is_am = "ص" in raw
+
+    cleaned = raw.replace("م", "").replace("ص", "")
+    match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", cleaned)
     if not match:
         return "00:00"
 
@@ -388,79 +437,61 @@ def extract_time_from_raw(raw: str) -> str:
     if hh < 0 or hh > 23 or mm < 0 or mm > 59:
         return "00:00"
 
+    if is_pm and 1 <= hh <= 11:
+        hh += 12
+    elif is_am and hh == 12:
+        hh = 0
+
     return f"{hh:02d}:{mm:02d}"
 
 
-def safe_slug(text: str) -> str:
-    text = re.sub(r"[^a-zA-Z0-9._-]+", "_", text).strip("_")
-    return text or "debug"
-
-
-def cleanup_old_debug_files(debug_dir: Path, keep: int):
-    if keep <= 0 or not debug_dir.exists():
-        return
-
-    files = sorted(
-        [p for p in debug_dir.iterdir() if p.is_file()],
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    for old_file in files[keep:]:
-        try:
-            old_file.unlink()
-        except Exception:
-            logger.warning("Could not delete old debug file: %s", old_file)
-
-
-def export_debug_overlay(
-    image_bytes: bytes,
-    words: list[OcrWord],
-    source_url: str,
-    date: str,
-    time: str,
-    extraction_method: str,
-) -> Optional[str]:
-    if not DEBUG_EXPORT:
+def parse_numeric_value(text: str) -> Optional[int]:
+    digits = re.sub(r"[^0-9]", "", normalize_digits(text))
+    if not digits:
         return None
-
     try:
-        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        scale_x = img.width / max(img.width * 2, 1)
-        scale_y = img.height / max(img.height * 2, 1)
-
-        draw = ImageDraw.Draw(img)
-
-        for w in words:
-            x1 = int(w.left * scale_x)
-            y1 = int(w.top * scale_y)
-            x2 = int((w.left + w.width) * scale_x)
-            y2 = int((w.top + w.height) * scale_y)
-            draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=2)
-
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        source_name = safe_slug(urlparse(source_url).path.split("/")[-1] or "image")
-        filename = f"{timestamp}_{extraction_method}_{source_name}.png"
-        output_path = DEBUG_DIR / filename
-        img.save(output_path)
-
-        meta_path = output_path.with_suffix(".json")
-        meta = {
-            "source_url": source_url,
-            "date": date,
-            "time": time,
-            "extraction_method": extraction_method,
-            "ocr_word_count": len(words),
-            "saved_at_utc": datetime.now(timezone.utc).isoformat(),
-        }
-        save_json(meta_path, meta)
-
-        cleanup_old_debug_files(DEBUG_DIR, DEBUG_MAX_FILES * 2)
-        return str(output_path.relative_to(ROOT))
-    except Exception as exc:
-        logger.warning("Failed to export debug overlay: %s", exc)
+        return int(digits)
+    except Exception:
         return None
+
+
+def classify_numeric_value(value: int) -> Optional[str]:
+    now = app_now()
+    if now.year - 1 <= value <= now.year + 3:
+        return None
+    if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
+        return "usd"
+    if MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
+        return "syp"
+    return None
+
+
+def extract_numeric_tokens(words: list[OcrWord]) -> list[NumericToken]:
+    tokens: list[NumericToken] = []
+
+    for w in words:
+        if ":" in w.text or "/" in w.text:
+            continue
+
+        value = parse_numeric_value(w.norm)
+        if value is None:
+            continue
+
+        kind = classify_numeric_value(value)
+        if kind is None:
+            continue
+
+        tokens.append(
+            NumericToken(
+                value=value,
+                kind=kind,
+                x=w.center_x,
+                y=w.center_y,
+                height=w.height,
+            )
+        )
+
+    return tokens
 
 
 # =========================================================
@@ -638,7 +669,7 @@ def tesseract_ocr_words(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], 
     return words, " ".join(texts)
 
 
-def run_ocr_with_fallback(img: Image.Image) -> tuple[list[OcrWord], str, str]:
+def run_ocr_with_fallback(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], str, str]:
     try:
         words, raw = paddle_ocr_words(img)
         logger.info("PaddleOCR words=%s", len(words))
@@ -648,9 +679,69 @@ def run_ocr_with_fallback(img: Image.Image) -> tuple[list[OcrWord], str, str]:
     except Exception as exc:
         logger.warning("PaddleOCR failed: %s", exc)
 
-    words, raw = tesseract_ocr_words(img, psm=6)
+    words, raw = tesseract_ocr_words(img, psm=psm)
     logger.info("Tesseract words=%s", len(words))
     return words, raw, "tesseract"
+
+
+# =========================================================
+# Debug export
+# =========================================================
+
+def export_debug_overlay(
+    image_bytes: bytes,
+    words: list[OcrWord],
+    source_url: str,
+    date: str,
+    time: str,
+    extraction_method: str,
+    ocr_image_size: tuple[int, int],
+) -> Optional[str]:
+    if not DEBUG_EXPORT:
+        return None
+
+    try:
+        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+        ocr_w, ocr_h = ocr_image_size
+
+        scale_x = img.width / max(ocr_w, 1)
+        scale_y = img.height / max(ocr_h, 1)
+
+        draw = ImageDraw.Draw(img)
+
+        for w in words:
+            x1 = int(w.left * scale_x)
+            y1 = int(w.top * scale_y)
+            x2 = int((w.left + w.width) * scale_x)
+            y2 = int((w.top + w.height) * scale_y)
+            draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=2)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        source_name = safe_slug(urlparse(source_url).path.split("/")[-1] or "image")
+        filename = f"{timestamp}_{extraction_method}_{source_name}.png"
+        output_path = DEBUG_DIR / filename
+        img.save(output_path)
+
+        meta_path = output_path.with_suffix(".json")
+        meta = {
+            "source_url": source_url,
+            "date": date,
+            "time": time,
+            "extraction_method": extraction_method,
+            "ocr_word_count": len(words),
+            "saved_at_utc": datetime.now(timezone.utc).isoformat(),
+            "ocr_image_size": {"width": ocr_w, "height": ocr_h},
+            "display_timezone": APP_TIMEZONE_NAME,
+        }
+        save_json(meta_path, meta)
+
+        cleanup_old_debug_files(DEBUG_DIR, DEBUG_MAX_FILES * 2)
+        return str(output_path.relative_to(ROOT))
+    except Exception as exc:
+        logger.warning("Failed to export debug overlay: %s", exc)
+        return None
 
 
 # =========================================================
@@ -664,6 +755,7 @@ def quality_score(snapshot: dict) -> int:
     total += int(snapshot.get("source_w") or 0) // 10
     total += int(snapshot.get("source_h") or 0) // 10
     total += int(snapshot.get("byte_length") or 0) // 5000
+    total += int((snapshot.get("confidence") or 0) * 100)
     return total
 
 
@@ -674,12 +766,12 @@ def snapshot_identity_key(snapshot: dict) -> str:
             snapshot.get("date", "0000/00/00"),
             snapshot.get("time", "00:00"),
             snapshot.get("k21_ss", 0),
-            snapshot.get("k21_us", 0),
             snapshot.get("k21_sb", 0),
+            snapshot.get("k21_us", 0),
             snapshot.get("k21_ub", 0),
             snapshot.get("k18_ss", 0),
-            snapshot.get("k18_us", 0),
             snapshot.get("k18_sb", 0),
+            snapshot.get("k18_us", 0),
             snapshot.get("k18_ub", 0),
         ]
     )
@@ -699,7 +791,7 @@ def has_meaningful_value_difference(a: dict, b: dict) -> bool:
 
 def parse_to_datetime(date_str: str, time_str: str) -> datetime:
     if date_str == "0000/00/00":
-        return datetime(2000, 1, 1, tzinfo=timezone.utc)
+        return datetime(2000, 1, 1, tzinfo=APP_TIMEZONE)
 
     try:
         d = date_str.split("/")
@@ -707,10 +799,10 @@ def parse_to_datetime(date_str: str, time_str: str) -> datetime:
         hh = int(re.sub(r"[^0-9]", "", t[0]))
         mm = int(re.sub(r"[^0-9]", "", t[1]))
         if hh < 0 or hh > 23 or mm < 0 or mm > 59:
-            return datetime(2000, 1, 1, tzinfo=timezone.utc)
-        return datetime(int(d[0]), int(d[1]), int(d[2]), hh, mm, tzinfo=timezone.utc)
+            return datetime(2000, 1, 1, tzinfo=APP_TIMEZONE)
+        return datetime(int(d[0]), int(d[1]), int(d[2]), hh, mm, tzinfo=APP_TIMEZONE)
     except Exception:
-        return datetime(2000, 1, 1, tzinfo=timezone.utc)
+        return datetime(2000, 1, 1, tzinfo=APP_TIMEZONE)
 
 
 def save_snapshot_into_history(snapshot: dict):
@@ -759,51 +851,18 @@ def save_snapshot_into_history(snapshot: dict):
     save_json(LATEST_FILE, snapshot)
 
 
+def snapshot_changed(latest: dict, snapshot: dict) -> bool:
+    keys = [
+        "k21_ss", "k21_sb", "k21_us", "k21_ub",
+        "k18_ss", "k18_sb", "k18_us", "k18_ub",
+        "date", "time",
+    ]
+    return any(latest.get(k) != snapshot.get(k) for k in keys)
+
+
 # =========================================================
 # Extraction helpers
 # =========================================================
-
-def words_to_numeric_tokens(words: list[OcrWord]) -> list[NumericToken]:
-    tokens: list[NumericToken] = []
-    now = app_now()
-
-    for w in words:
-        if ":" in w.text or "/" in w.text:
-            continue
-
-        digits = re.sub(r"[^0-9]", "", w.norm)
-        if not digits:
-            continue
-
-        try:
-            value = int(digits)
-        except Exception:
-            continue
-
-        if now.year - 1 <= value <= now.year + 3:
-            continue
-
-        kind: Optional[str] = None
-        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            kind = "usd"
-        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            kind = "syp"
-
-        if kind is None:
-            continue
-
-        tokens.append(
-            NumericToken(
-                value=value,
-                kind=kind,
-                x=w.center_x,
-                y=w.center_y,
-                height=w.height,
-            )
-        )
-
-    return tokens
-
 
 def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
     sorted_tokens = sorted(tokens, key=lambda t: t.y)
@@ -832,13 +891,7 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
 
 
 def find_numeric_word_value(w: OcrWord) -> Optional[int]:
-    digits = re.sub(r"[^0-9]", "", w.norm)
-    if not digits:
-        return None
-    try:
-        return int(digits)
-    except Exception:
-        return None
+    return parse_numeric_value(w.norm)
 
 
 def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
@@ -851,8 +904,7 @@ def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
     if not candidates:
         return None
 
-    candidates.sort(key=lambda w: (w.center_x, -w.conf), reverse=True)
-    return candidates[0]
+    return max(candidates, key=lambda w: (w.center_x, w.conf))
 
 
 def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
@@ -869,6 +921,10 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
         if value is None:
             continue
 
+        kind = classify_numeric_value(value)
+        if kind is None:
+            continue
+
         dy = abs(w.center_y - anchor.center_y)
         if dy > row_band:
             continue
@@ -876,10 +932,13 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
         if w.center_x >= anchor.center_x:
             continue
 
-        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            usd_candidates.append((dy, value))
-        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            syp_candidates.append((dy, value))
+        dx = anchor.center_x - w.center_x
+        distance = math.sqrt(dx * dx + (dy * 2.0) * (dy * 2.0))
+
+        if kind == "usd":
+            usd_candidates.append((distance, value))
+        elif kind == "syp":
+            syp_candidates.append((distance, value))
 
     usd_candidates.sort(key=lambda item: item[0])
     syp_candidates.sort(key=lambda item: item[0])
@@ -927,12 +986,14 @@ def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
     if not (k21.us > k18.us and k21.ub > k18.ub):
         return False
 
-    s_sell_ratio = k18.ss / k21.ss
-    s_buy_ratio = k18.sb / k21.sb
-    u_sell_ratio = k18.us / k21.us
-    u_buy_ratio = k18.ub / k21.ub
+    ratios = [
+        k18.ss / k21.ss,
+        k18.sb / k21.sb,
+        k18.us / k21.us,
+        k18.ub / k21.ub,
+    ]
 
-    for ratio in [s_sell_ratio, s_buy_ratio, u_sell_ratio, u_buy_ratio]:
+    for ratio in ratios:
         if not (MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO):
             return False
 
@@ -1024,7 +1085,6 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
-
     logger.info("anchor_rows fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
 
     if not is_reasonable_extraction(fixed[0], fixed[1]):
@@ -1035,33 +1095,9 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
 
 
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    syp_prices = []
-    usd_prices = []
-    now = app_now()
-
-    for w in words:
-        if ":" in w.text or "/" in w.text:
-            continue
-
-        digits = re.sub(r"[^0-9]", "", w.norm)
-        if not digits:
-            continue
-
-        try:
-            value = int(digits)
-        except Exception:
-            continue
-
-        if now.year - 1 <= value <= now.year + 3:
-            continue
-
-        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            usd_prices.append(value)
-        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            syp_prices.append(value)
-
-    syp_prices = sorted(syp_prices, reverse=True)
-    usd_prices = sorted(usd_prices, reverse=True)
+    tokens = extract_numeric_tokens(words)
+    syp_prices = sorted([t.value for t in tokens if t.kind == "syp"], reverse=True)
+    usd_prices = sorted([t.value for t in tokens if t.kind == "usd"], reverse=True)
 
     if len(syp_prices) < 2 or len(usd_prices) < 2:
         return None
@@ -1091,44 +1127,7 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
 
 
 def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    cleaned: list[NumericToken] = []
-    now = app_now()
-
-    for w in words:
-        if ":" in w.text or "/" in w.text:
-            continue
-
-        digits = re.sub(r"[^0-9]", "", w.norm)
-        if not digits:
-            continue
-
-        try:
-            value = int(digits)
-        except Exception:
-            continue
-
-        if now.year - 1 <= value <= now.year + 3:
-            continue
-
-        kind: Optional[str] = None
-        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            kind = "usd"
-        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            kind = "syp"
-
-        if kind is None:
-            continue
-
-        cleaned.append(
-            NumericToken(
-                value=value,
-                kind=kind,
-                x=w.center_x,
-                y=w.center_y,
-                height=w.height,
-            )
-        )
-
+    cleaned = extract_numeric_tokens(words)
     if not cleaned:
         return None
 
@@ -1172,7 +1171,7 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         logger.info("smart_fallback: no valid rows")
         return None
 
-    valid_rows.sort(key=lambda r: r["syp_sell"], reverse=True)
+    valid_rows.sort(key=lambda r: (r["score"], r["syp_sell"]), reverse=True)
 
     best21 = valid_rows[0]
 
@@ -1192,7 +1191,6 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         sb=best21["syp_buy"],
         ss=best21["syp_sell"],
     )
-
     k18 = GoldRate(
         ub=best18["usd_buy"],
         us=best18["usd_sell"],
@@ -1201,7 +1199,6 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
     )
 
     fixed = apply_price_sanity_check(k21, k18)
-
     logger.info("smart_fallback fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
 
     if not is_reasonable_extraction(fixed[0], fixed[1]):
@@ -1212,6 +1209,16 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
 
 
 def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
+    required_21 = [
+        "21_SYP_Sell",
+        "21_SYP_Buy",
+        "21_USD_Sell",
+        "21_USD_Buy",
+    ]
+    if not all(k in blueprint for k in required_21):
+        logger.warning("Blueprint missing required 21k keys")
+        return None
+
     anchor21 = find_anchor_word(words, "21")
     anchor18 = find_anchor_word(words, "18")
 
@@ -1235,21 +1242,11 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
             if ":" in w.text or "/" in w.text:
                 continue
 
-            digits = re.sub(r"[^0-9]", "", w.norm)
-            if not digits:
+            value = parse_numeric_value(w.norm)
+            if value is None:
                 continue
 
-            try:
-                value = int(digits)
-            except Exception:
-                continue
-
-            kind = None
-            if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-                kind = "usd"
-            elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-                kind = "syp"
-
+            kind = classify_numeric_value(value)
             if kind != expected_kind:
                 continue
 
@@ -1274,17 +1271,19 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         _, chosen, idx = candidates[0]
         used_ids.add(idx)
 
-        try:
-            return int(re.sub(r"[^0-9]", "", chosen.norm))
-        except Exception:
-            return 0
+        value = parse_numeric_value(chosen.norm)
+        return value or 0
 
     s21ss = get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp")
     s21sb = get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp")
     u21ss = get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd")
     u21sb = get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd")
 
-    if anchor18 is not None and "18_SYP_Sell" in blueprint:
+    has_18_blueprint = all(
+        k in blueprint for k in ["18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy"]
+    )
+
+    if anchor18 is not None and has_18_blueprint:
         s18ss = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
         s18sb = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
         u18ss = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
@@ -1304,14 +1303,18 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
-
     if not is_reasonable_extraction(fixed[0], fixed[1]):
         return None
 
     return fixed
 
 
-def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str) -> tuple[Optional[tuple[GoldRate, GoldRate]], str]:
+def extract_rates(
+    words: list[OcrWord],
+    blueprint: Optional[dict],
+    ocr_mode: str,
+) -> tuple[Optional[tuple[GoldRate, GoldRate]], str, dict]:
+    diagnostics: dict[str, str] = {}
     attempts: list[tuple[str, Optional[tuple[GoldRate, GoldRate]]]] = []
 
     if ocr_mode == "smart_fallback":
@@ -1337,29 +1340,105 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
         ]
 
     for method, result in attempts:
-        if result is not None:
-            fixed = apply_price_sanity_check(result[0], result[1])
-            if is_reasonable_extraction(fixed[0], fixed[1]):
-                return fixed, method
+        if result is None:
+            diagnostics[method] = "no_result"
+            continue
 
-    return None, "none"
+        fixed = apply_price_sanity_check(result[0], result[1])
+        if is_reasonable_extraction(fixed[0], fixed[1]):
+            diagnostics[method] = "accepted"
+            return fixed, method, diagnostics
+
+        diagnostics[method] = "rejected_by_sanity_check"
+
+    return None, "none", diagnostics
 
 
-# Targeted rollback: restore the older working header crop behavior.
-def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    header_crop = crop_box(img, 0.01, 0.30, 0.99, 0.50)
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.35, 1.00)
-    date_crop = crop_box(header_crop, 0.20, 0.00, 0.65, 1.00)
+# =========================================================
+# Header extraction
+# =========================================================
 
-    _, raw_time, _ = run_ocr_with_fallback(time_crop)
-    _, raw_date, _ = run_ocr_with_fallback(date_crop)
+def filter_words_by_region(
+    words: list[OcrWord],
+    img_size: tuple[int, int],
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+) -> list[OcrWord]:
+    img_w, img_h = img_size
+    left = x1 * img_w
+    top = y1 * img_h
+    right = x2 * img_w
+    bottom = y2 * img_h
 
-    logger.info("Header OCR raw_time=%r raw_date=%r", raw_time, raw_date)
+    result = []
+    for w in words:
+        if left <= w.center_x <= right and top <= w.center_y <= bottom:
+            result.append(w)
+    return result
+
+
+def words_to_text(words: list[OcrWord]) -> str:
+    if not words:
+        return ""
+    ordered = sorted(words, key=lambda w: (w.top, w.left))
+    return " ".join(w.text for w in ordered)
+
+
+def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
+    diagnostics = {
+        "header_source": "full_image_word_filter",
+        "header_time_raw": "",
+        "header_date_raw": "",
+    }
+
+    header_words = filter_words_by_region(
+        words, img.size, 0.01, HEADER_Y1, 0.99, HEADER_Y2
+    )
+
+    time_words = filter_words_by_region(
+        header_words, img.size, HEADER_TIME_X1, HEADER_Y1, HEADER_TIME_X2, HEADER_Y2
+    )
+    date_words = filter_words_by_region(
+        header_words, img.size, HEADER_DATE_X1, HEADER_Y1, HEADER_DATE_X2, HEADER_Y2
+    )
+
+    raw_time = words_to_text(time_words)
+    raw_date = words_to_text(date_words)
+
+    diagnostics["header_time_raw"] = raw_time
+    diagnostics["header_date_raw"] = raw_date
 
     time_value = extract_time_from_raw(raw_time)
     date_value = extract_date_from_raw(raw_date)
 
-    return date_value, time_value
+    if date_value != "0000/00/00" and time_value != "00:00":
+        return date_value, time_value, diagnostics
+
+    diagnostics["header_source"] = "crop_ocr_fallback"
+
+    header_crop = crop_box(img, 0.01, HEADER_Y1, 0.99, HEADER_Y2)
+    time_crop = crop_box(header_crop, HEADER_TIME_X1, 0.00, HEADER_TIME_X2, 1.00)
+    date_crop = crop_box(header_crop, HEADER_DATE_X1, 0.00, HEADER_DATE_X2, 1.00)
+
+    _, raw_time_crop, _ = run_ocr_with_fallback(time_crop)
+    _, raw_date_crop, _ = run_ocr_with_fallback(date_crop)
+
+    logger.info("Header OCR fallback raw_time=%r raw_date=%r", raw_time_crop, raw_date_crop)
+
+    fallback_time = extract_time_from_raw(raw_time_crop)
+    fallback_date = extract_date_from_raw(raw_date_crop)
+
+    diagnostics["header_time_raw_crop"] = raw_time_crop
+    diagnostics["header_date_raw_crop"] = raw_date_crop
+
+    if time_value == "00:00":
+        time_value = fallback_time
+    if date_value == "0000/00/00":
+        date_value = fallback_date
+
+    return date_value, time_value, diagnostics
 
 
 def compute_confidence(
@@ -1397,21 +1476,27 @@ def compute_confidence(
     return max(0.0, min(score, 1.0))
 
 
-# Targeted rollback: restore the older fallback flow that was reading date correctly.
+def load_blueprint() -> Optional[dict]:
+    blueprint = load_json(BLUEPRINT_FILE, None)
+    return blueprint if isinstance(blueprint, dict) else None
+
+
 def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
     img = preprocess_image(image_bytes)
     words, raw_text, ocr_engine = run_ocr_with_fallback(img)
 
     warnings: list[str] = []
-    debug = {
+    debug: dict = {
         "source_url": source_url,
         "ocr_word_count": len(words),
         "image_width": img.width,
         "image_height": img.height,
         "ocr_mode": DEFAULT_OCR_MODE,
+        "display_timezone": APP_TIMEZONE_NAME,
     }
 
-    date, time = extract_date_time_from_header(img)
+    date, time, header_debug = extract_date_time_from_header(img, words)
+    debug["header"] = header_debug
 
     if date == "0000/00/00":
         warnings.append("header_date_failed_used_full_text_fallback")
@@ -1421,11 +1506,11 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         warnings.append("header_time_failed_used_full_text_fallback")
         time = extract_time_from_raw(raw_text)
 
-    blueprint = load_json(BLUEPRINT_FILE, None)
-    if blueprint is not None and not isinstance(blueprint, dict):
-        blueprint = None
+    blueprint = load_blueprint()
 
-    rates, extraction_method = extract_rates(words, blueprint, DEFAULT_OCR_MODE)
+    rates, extraction_method, rate_diagnostics = extract_rates(words, blueprint, DEFAULT_OCR_MODE)
+    debug["rate_attempts"] = rate_diagnostics
+
     if rates is None:
         raise ValueError("Price extraction failed")
 
@@ -1442,6 +1527,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         date=date,
         time=time,
         extraction_method=extraction_method,
+        ocr_image_size=img.size,
     )
     if debug_overlay_path:
         debug["debug_overlay_path"] = debug_overlay_path
@@ -1467,7 +1553,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
 
 def looks_like_direct_image_url(url: str) -> bool:
     path = urlparse(url).path.lower()
-    return any(path.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"])
+    return any(path.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"])
 
 
 def candidate_score(c: ImageCandidate) -> float:
@@ -1543,7 +1629,7 @@ def extract_image_candidates_from_html(page_url: str, html: str) -> list[ImageCa
         add_candidate(og_image["content"])
 
     extra_urls = set(
-        re.findall(r'https://[^"\']+?(?:jpg|jpeg|png|webp)[^"\']*', html, flags=re.IGNORECASE)
+        re.findall(r'https://[^"\']+?(?:jpg|jpeg|png|webp|bmp|gif)[^"\']*', html, flags=re.IGNORECASE)
     )
     for src in extra_urls:
         add_candidate(src)
@@ -1557,9 +1643,19 @@ def fetch_page_image_candidates(source_url: str) -> list[ImageCandidate]:
     return extract_image_candidates_from_html(source_url, response.text)
 
 
+def validate_image_response(response: requests.Response, source_url: str):
+    content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+
+    if content_type and content_type not in IMAGE_CONTENT_TYPES:
+        raise RuntimeError(
+            f"Unsupported content type for image download from {source_url}: {content_type}"
+        )
+
+
 def fetch_image_bytes(url: str) -> tuple[bytes, str]:
     response = SESSION.get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
+    validate_image_response(response, url)
     return response.content, response.url
 
 
@@ -1617,6 +1713,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "source_h": result.debug.get("image_height", 0),
         "byte_length": len(image_bytes),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "display_timezone": APP_TIMEZONE_NAME,
         "ocr_mode": DEFAULT_OCR_MODE,
         "ocr_engine": result.ocr_engine,
         "extraction_method": result.extraction_method,
@@ -1634,7 +1731,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1645,7 +1742,9 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
+        "version": "2.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
+        "display_timezone": APP_TIMEZONE_NAME,
     }
 
 
@@ -1695,16 +1794,9 @@ def main():
     snapshot = build_snapshot_from_image(image_bytes, final_image_url)
 
     latest = load_json(LATEST_FILE, {})
-    changed = (
-        latest.get("k21_ss") != snapshot["k21_ss"]
-        or latest.get("k21_us") != snapshot["k21_us"]
-        or latest.get("k18_ss") != snapshot["k18_ss"]
-        or latest.get("k18_us") != snapshot["k18_us"]
-        or latest.get("date") != snapshot["date"]
-        or latest.get("time") != snapshot["time"]
-    )
+    changed = not LATEST_FILE.exists() or snapshot_changed(latest, snapshot)
 
-    if changed or not LATEST_FILE.exists():
+    if changed:
         save_snapshot_into_history(snapshot)
     else:
         save_json(LATEST_FILE, snapshot)
