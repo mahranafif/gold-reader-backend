@@ -1133,8 +1133,7 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
 
     rows = group_rows(cleaned)
 
-    best_score = -1
-    best_row: Optional[dict] = None
+    valid_rows: list[dict] = []
 
     for row in rows:
         syp = sorted({t.value for t in row if t.kind == "syp"}, reverse=True)
@@ -1148,46 +1147,53 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         usd_sell = usd[0]
         usd_buy = usd[1]
 
-        ratio = (round(syp_sell * 18 / 21) / syp_sell) if syp_sell else 0.0
-
         score = 0
         if syp_sell > syp_buy:
             score += 10
         if usd_sell > usd_buy:
             score += 10
-        if MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO:
-            score += 5
 
-        logger.info(
-            "smart_row candidate: syp_sell=%s syp_buy=%s usd_sell=%s usd_buy=%s score=%s",
-            syp_sell, syp_buy, usd_sell, usd_buy, score,
-        )
-
-        if score > best_score:
-            best_score = score
-            best_row = {
+        valid_rows.append(
+            {
+                "score": score,
                 "syp_sell": syp_sell,
                 "syp_buy": syp_buy,
                 "usd_sell": usd_sell,
                 "usd_buy": usd_buy,
             }
+        )
 
-    if best_row is None:
-        logger.info("smart_fallback: no valid best row")
+    if not valid_rows:
+        logger.info("smart_fallback: no valid rows")
         return None
 
+    # Highest SYP sell is usually 21k row
+    valid_rows.sort(key=lambda r: r["syp_sell"], reverse=True)
+
+    best21 = valid_rows[0]
+
+    if len(valid_rows) >= 2:
+        best18 = valid_rows[1]
+    else:
+        best18 = {
+            "syp_sell": round(best21["syp_sell"] * 18 / 21),
+            "syp_buy": round(best21["syp_buy"] * 18 / 21),
+            "usd_sell": round(best21["usd_sell"] * 18 / 21),
+            "usd_buy": round(best21["usd_buy"] * 18 / 21),
+        }
+
     k21 = GoldRate(
-        ub=best_row["usd_buy"],
-        us=best_row["usd_sell"],
-        sb=best_row["syp_buy"],
-        ss=best_row["syp_sell"],
+        ub=best21["usd_buy"],
+        us=best21["usd_sell"],
+        sb=best21["syp_buy"],
+        ss=best21["syp_sell"],
     )
 
     k18 = GoldRate(
-        ub=round(best_row["usd_buy"] * 18 / 21),
-        us=round(best_row["usd_sell"] * 18 / 21),
-        sb=round(best_row["syp_buy"] * 18 / 21),
-        ss=round(best_row["syp_sell"] * 18 / 21),
+        ub=best18["usd_buy"],
+        us=best18["usd_sell"],
+        sb=best18["syp_buy"],
+        ss=best18["syp_sell"],
     )
 
     fixed = apply_price_sanity_check(k21, k18)
@@ -1199,7 +1205,6 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         return None
 
     return fixed
-
 
 def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
     anchor21 = find_anchor_word(words, "21")
