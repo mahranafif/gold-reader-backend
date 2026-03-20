@@ -35,7 +35,9 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "prefer_blueprint").strip().lower()
+# Dart-style smart OCR is now the default primary extractor.
+DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "smart_fallback").strip().lower()
+
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
@@ -807,9 +809,6 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
     if not sorted_tokens:
         return []
 
-    avg_height = sum(t.height for t in sorted_tokens) / len(sorted_tokens)
-    row_threshold = max(16.0, avg_height * 0.9)
-
     rows: list[list[NumericToken]] = []
 
     for token in sorted_tokens:
@@ -820,7 +819,7 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
         last_row = rows[-1]
         avg_y = sum(t.y for t in last_row) / len(last_row)
 
-        if abs(token.y - avg_y) <= row_threshold:
+        if abs(token.y - avg_y) <= 28:
             last_row.append(token)
         else:
             rows.append([token])
@@ -856,9 +855,11 @@ def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
 
 
 def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
-    row_band = max(anchor.height * 1.5, 60.0)
+    row_band = max(anchor.height * 0.95, 32.0)
 
-    row_words = []
+    usd_candidates: list[tuple[float, int]] = []
+    syp_candidates: list[tuple[float, int]] = []
+
     for w in words:
         if w is anchor:
             continue
@@ -867,34 +868,46 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
         if value is None:
             continue
 
-        if abs(w.center_y - anchor.center_y) > row_band:
+        dy = abs(w.center_y - anchor.center_y)
+        if dy > row_band:
             continue
 
         if w.center_x >= anchor.center_x:
             continue
 
-        row_words.append((w, value))
-
-    usd_values = []
-    syp_values = []
-
-    for _, value in row_words:
         if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-            usd_values.append(value)
+            usd_candidates.append((dy, value))
         elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-            syp_values.append(value)
+            syp_candidates.append((dy, value))
 
-    usd_values = sorted(set(usd_values))
-    syp_values = sorted(set(syp_values))
+    usd_candidates.sort(key=lambda item: item[0])
+    syp_candidates.sort(key=lambda item: item[0])
+
+    usd_values: list[int] = []
+    for _, value in usd_candidates:
+        if value not in usd_values:
+            usd_values.append(value)
+        if len(usd_values) == 2:
+            break
+
+    syp_values: list[int] = []
+    for _, value in syp_candidates:
+        if value not in syp_values:
+            syp_values.append(value)
+        if len(syp_values) == 2:
+            break
 
     if len(usd_values) < 2 or len(syp_values) < 2:
         return None
 
+    usd_values.sort()
+    syp_values.sort()
+
     return {
         "usd_buy": usd_values[0],
-        "usd_sell": usd_values[-1],
+        "usd_sell": usd_values[1],
         "syp_buy": syp_values[0],
-        "syp_sell": syp_values[-1],
+        "syp_sell": syp_values[1],
     }
 
 
@@ -976,7 +989,14 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     anchor18 = find_anchor_word(words, "18")
 
     if anchor21 is None or anchor18 is None:
+        logger.info("anchor_rows: missing anchors anchor21=%s anchor18=%s", anchor21, anchor18)
         return None
+
+    logger.info(
+        "anchor21 at x=%.1f y=%.1f h=%.1f | anchor18 at x=%.1f y=%.1f h=%.1f",
+        anchor21.center_x, anchor21.center_y, anchor21.height,
+        anchor18.center_x, anchor18.center_y, anchor18.height,
+    )
 
     row21 = extract_row_values_for_anchor(words, anchor21)
     row18 = extract_row_values_for_anchor(words, anchor18)
@@ -1004,7 +1024,10 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
 
     fixed = apply_price_sanity_check(result[0], result[1])
 
+    logger.info("anchor_rows fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
+
     if not is_reasonable_extraction(fixed[0], fixed[1]):
+        logger.info("anchor_rows rejected by sanity check")
         return None
 
     return fixed
@@ -1067,58 +1090,115 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
 
 
 def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    cleaned = words_to_numeric_tokens(words)
+    cleaned: list[NumericToken] = []
+    now = app_now()
+
+    for w in words:
+        if ":" in w.text or "/" in w.text:
+            continue
+
+        digits = re.sub(r"[^0-9]", "", w.norm)
+        if not digits:
+            continue
+
+        try:
+            value = int(digits)
+        except Exception:
+            continue
+
+        if now.year - 1 <= value <= now.year + 3:
+            continue
+
+        kind: Optional[str] = None
+        if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
+            kind = "usd"
+        elif MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
+            kind = "syp"
+
+        if kind is None:
+            continue
+
+        cleaned.append(
+            NumericToken(
+                value=value,
+                kind=kind,
+                x=w.center_x,
+                y=w.center_y,
+                height=w.height,
+            )
+        )
+
     if not cleaned:
         return None
 
     rows = group_rows(cleaned)
-    valid_rows = []
+
+    best_score = -1
+    best_row: Optional[dict] = None
 
     for row in rows:
         syp = sorted({t.value for t in row if t.kind == "syp"}, reverse=True)
         usd = sorted({t.value for t in row if t.kind == "usd"}, reverse=True)
-        if len(syp) >= 2 and len(usd) >= 2:
-            valid_rows.append(
-                {
-                    "sypSell": syp[0],
-                    "sypBuy": syp[1],
-                    "usdSell": usd[0],
-                    "usdBuy": usd[1],
-                }
-            )
 
-    if not valid_rows:
+        if len(syp) < 2 or len(usd) < 2:
+            continue
+
+        syp_sell = syp[0]
+        syp_buy = syp[1]
+        usd_sell = usd[0]
+        usd_buy = usd[1]
+
+        ratio = (round(syp_sell * 18 / 21) / syp_sell) if syp_sell else 0.0
+
+        score = 0
+        if syp_sell > syp_buy:
+            score += 10
+        if usd_sell > usd_buy:
+            score += 10
+        if MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO:
+            score += 5
+
+        logger.info(
+            "smart_row candidate: syp_sell=%s syp_buy=%s usd_sell=%s usd_buy=%s score=%s",
+            syp_sell, syp_buy, usd_sell, usd_buy, score,
+        )
+
+        if score > best_score:
+            best_score = score
+            best_row = {
+                "syp_sell": syp_sell,
+                "syp_buy": syp_buy,
+                "usd_sell": usd_sell,
+                "usd_buy": usd_buy,
+            }
+
+    if best_row is None:
+        logger.info("smart_fallback: no valid best row")
         return None
 
-    valid_rows.sort(key=lambda r: r["sypSell"], reverse=True)
-
-    best21 = valid_rows[0]
-    if len(valid_rows) >= 2:
-        best18 = valid_rows[1]
-    else:
-        best18 = {
-            "sypSell": round(best21["sypSell"] * 18 / 21),
-            "sypBuy": round(best21["sypBuy"] * 18 / 21),
-            "usdSell": round(best21["usdSell"] * 18 / 21),
-            "usdBuy": round(best21["usdBuy"] * 18 / 21),
-        }
-
-    result = (
-        GoldRate(
-            ub=best21["usdBuy"],
-            us=best21["usdSell"],
-            sb=best21["sypBuy"],
-            ss=best21["sypSell"],
-        ),
-        GoldRate(
-            ub=best18["usdBuy"],
-            us=best18["usdSell"],
-            sb=best18["sypBuy"],
-            ss=best18["sypSell"],
-        ),
+    k21 = GoldRate(
+        ub=best_row["usd_buy"],
+        us=best_row["usd_sell"],
+        sb=best_row["syp_buy"],
+        ss=best_row["syp_sell"],
     )
-    fixed = apply_price_sanity_check(result[0], result[1])
-    return fixed if is_reasonable_extraction(fixed[0], fixed[1]) else None
+
+    k18 = GoldRate(
+        ub=round(best_row["usd_buy"] * 18 / 21),
+        us=round(best_row["usd_sell"] * 18 / 21),
+        sb=round(best_row["syp_buy"] * 18 / 21),
+        ss=round(best_row["syp_sell"] * 18 / 21),
+    )
+
+    fixed = apply_price_sanity_check(k21, k18)
+
+    logger.info("smart_fallback fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
+
+    if not is_reasonable_extraction(fixed[0], fixed[1]):
+        logger.info("smart_fallback rejected by sanity check")
+        return None
+
+    return fixed
 
 
 def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
@@ -1224,25 +1304,25 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
 def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str) -> tuple[Optional[tuple[GoldRate, GoldRate]], str]:
     attempts: list[tuple[str, Optional[tuple[GoldRate, GoldRate]]]] = []
 
-    if ocr_mode == "prefer_blueprint":
+    if ocr_mode == "smart_fallback":
         attempts = [
+            ("smart_fallback", extract_smart_fallback(words)),
             ("anchor_rows", extract_anchor_rows(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("smart_fallback", extract_smart_fallback(words)),
             ("legacy_fallback", extract_legacy_fallback(words)),
         ]
-    elif ocr_mode == "smart_fallback":
+    elif ocr_mode == "prefer_blueprint":
         attempts = [
-            ("anchor_rows", extract_anchor_rows(words)),
-            ("smart_fallback", extract_smart_fallback(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("smart_fallback", extract_smart_fallback(words)),
+            ("anchor_rows", extract_anchor_rows(words)),
             ("legacy_fallback", extract_legacy_fallback(words)),
         ]
     else:
         attempts = [
             ("legacy_fallback", extract_legacy_fallback(words)),
-            ("anchor_rows", extract_anchor_rows(words)),
             ("smart_fallback", extract_smart_fallback(words)),
+            ("anchor_rows", extract_anchor_rows(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
         ]
 
@@ -1256,9 +1336,9 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
 
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
-    header_crop = crop_box(img, 0.01, 0.30, 0.99, 0.50)
-    time_crop = crop_box(header_crop, 0.00, 0.00, 0.35, 1.00)
-    date_crop = crop_box(header_crop, 0.20, 0.00, 0.65, 1.00)
+    header_crop = crop_box(img, 0.01, 0.28, 0.99, 0.50)
+    time_crop = crop_box(header_crop, 0.00, 0.00, 0.42, 1.00)
+    date_crop = crop_box(header_crop, 0.18, 0.00, 0.70, 1.00)
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
@@ -1280,12 +1360,12 @@ def compute_confidence(
 ) -> float:
     score = 0.50
 
-    if method == "anchor_rows":
+    if method == "smart_fallback":
         score += 0.25
+    elif method == "anchor_rows":
+        score += 0.20
     elif method == "blueprint":
-        score += 0.22
-    elif method == "smart_fallback":
-        score += 0.14
+        score += 0.18
     elif method == "legacy_fallback":
         score += 0.08
 
