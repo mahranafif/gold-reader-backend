@@ -16,7 +16,7 @@
   "source_w": 2048,
   "source_h": 2048,
   "byte_length": 154110,
-  "updated_at_utc": "2026-03-20T13:20:02.980165+00:00",
+  "updated_at_utc": "2026-03-20T14:12:32.133776+00:00",
   "ocr_mode": "smart_fallback",
   "ocr_engine": "paddleocr",
   "extraction_method": "smart_fallback",
