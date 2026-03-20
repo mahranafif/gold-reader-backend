@@ -278,6 +278,116 @@ def normalize_date_text(text: str) -> str:
     return re.sub(r"(^|[/\s.\-])\\", r"\g<1>1", text)
 
 
+def _apply_date_checksum(y: int, m: int, d: int) -> str:
+    now = app_now()
+    min_year = now.year - 1
+    max_year = now.year + 3
+
+    def fmt(yy: int, mm: int, dd: int) -> str:
+        return f"{yy:04d}/{mm:02d}/{dd:02d}"
+
+    def is_reasonable(yy: int, mm: int, dd: int) -> bool:
+        if yy < min_year or yy > max_year:
+            return False
+        if mm < 1 or mm > 12:
+            return False
+        if dd < 1 or dd > 31:
+            return False
+        try:
+            dt = datetime(yy, mm, dd, tzinfo=timezone.utc)
+            if dt > now + timedelta(days=1):
+                return False
+            return True
+        except Exception:
+            return False
+
+    if is_reasonable(y, m, d):
+        return fmt(y, m, d)
+    if is_reasonable(y, d, m):
+        return fmt(y, d, m)
+    if m == 8 and is_reasonable(y, 3, d):
+        return fmt(y, 3, d)
+    if d == 8 and is_reasonable(y, m, 3):
+        return fmt(y, m, 3)
+
+    return "0000/00/00"
+
+
+def extract_date_from_raw(raw: str) -> str:
+    normalized = normalize_date_text(raw)
+
+    now = app_now()
+    min_year = now.year - 1
+    max_year = now.year + 3
+    year_alternation = "|".join(str(y) for y in range(min_year, max_year + 1))
+
+    direct_regex = re.compile(
+        rf"({year_alternation})\s*[/\.\-]\s*(\d{{1,2}})\s*[/\.\-]\s*(\d{{1,2}})"
+        rf"|(\d{{1,2}})\s*[/\.\-]\s*(\d{{1,2}})\s*[/\.\-]\s*({year_alternation})"
+    )
+
+    m = direct_regex.search(normalized)
+    if m:
+        if m.group(1) is not None:
+            y = int(m.group(1))
+            mm = int(m.group(2))
+            dd = int(m.group(3))
+            return _apply_date_checksum(y, mm, dd)
+
+        dd = int(m.group(4))
+        mm = int(m.group(5))
+        y = int(m.group(6))
+        return _apply_date_checksum(y, mm, dd)
+
+    t_match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", normalized)
+    text_without_time = normalized.replace(t_match.group(0), "") if t_match else normalized
+    numbers_only = re.sub(r"[^\d]", " ", text_without_time)
+    numbers_only = re.sub(r"\s+", " ", numbers_only).strip()
+    all_nums = [s for s in numbers_only.split(" ") if s]
+
+    y_idx = -1
+    for idx, n in enumerate(all_nums):
+        try:
+            value = int(n)
+        except Exception:
+            continue
+        if len(n) == 4 and min_year <= value <= max_year:
+            y_idx = idx
+            break
+
+    if y_idx != -1:
+        if y_idx <= len(all_nums) - 3:
+            y = int(all_nums[y_idx])
+            mm = int(all_nums[y_idx + 1]) if y_idx + 1 < len(all_nums) else 99
+            dd = int(all_nums[y_idx + 2]) if y_idx + 2 < len(all_nums) else 99
+            return _apply_date_checksum(y, mm, dd)
+
+        if y_idx >= 2:
+            y = int(all_nums[y_idx])
+            mm = int(all_nums[y_idx - 1]) if y_idx - 1 >= 0 else 99
+            dd = int(all_nums[y_idx - 2]) if y_idx - 2 >= 0 else 99
+            if mm > 12 and dd <= 12:
+                mm, dd = dd, mm
+            return _apply_date_checksum(y, mm, dd)
+
+    return "0000/00/00"
+
+
+def extract_time_from_raw(raw: str) -> str:
+    raw = normalize_date_text(raw)
+    match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
+    if not match:
+        return "00:00"
+
+    hh = int(match.group(1))
+    mm = int(match.group(2))
+
+    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+        return "00:00"
+
+    return f"{hh:02d}:{mm:02d}"
+
+
 def safe_slug(text: str) -> str:
     text = re.sub(r"[^a-zA-Z0-9._-]+", "_", text).strip("_")
     return text or "debug"
@@ -1145,20 +1255,7 @@ def extract_rates(words: list[OcrWord], blueprint: Optional[dict], ocr_mode: str
                 return fixed, method
 
     return None, "none"
-    
-def extract_time_from_raw(raw: str) -> str:
-    raw = raw.replace("م", "").replace("ص", "")
-    match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", raw)
-    if not match:
-        return "00:00"
 
-    hh = int(match.group(1))
-    mm = int(match.group(2))
-
-    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
-        return "00:00"
-
-    return f"{hh:02d}:{mm:02d}"
 
 def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
     header_crop = crop_box(img, 0.02, 0.35, 0.98, 0.52)
@@ -1167,6 +1264,8 @@ def extract_date_time_from_header(img: Image.Image) -> tuple[str, str]:
 
     _, raw_time, _ = run_ocr_with_fallback(time_crop)
     _, raw_date, _ = run_ocr_with_fallback(date_crop)
+
+    logger.info("Header OCR raw_time=%r raw_date=%r", raw_time, raw_date)
 
     time_value = extract_time_from_raw(raw_time)
     date_value = extract_date_from_raw(raw_date)
