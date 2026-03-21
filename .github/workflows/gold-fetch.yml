@@ -1,4 +1,4 @@
-name: Gold Fetch
+name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
@@ -8,142 +8,71 @@ on:
 permissions:
   contents: write
 
-env:
-  PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-
-concurrency:
-  group: gold-fetch-main
-  cancel-in-progress: true
-
 jobs:
-  fetch:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
+  fetch-gold:
+    runs-on: ubuntu-latest
+
+    env:
+      APP_MODE: cli
+      APP_TIMEZONE: Asia/Dubai
+      LOG_LEVEL: INFO
+      GOLD_OCR_MODE: prefer_blueprint
+      REQUEST_TIMEOUT: 35
+
+      FACEBOOK_HEADLESS: "true"
+      FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Validate config
-        env:
-          GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
-          GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
-        run: |
-          python - <<'PY'
-          import os
-          import sys
-
-          source = os.getenv("GOLD_SOURCE_URL", "").strip()
-          mode = os.getenv("GOLD_OCR_MODE", "").strip()
-
-          print("GOLD_SOURCE_URL is set:", bool(source))
-          print("Starts with http:", source.startswith(("http://", "https://")))
-          print("GOLD_OCR_MODE:", mode or "(empty -> script default)")
-
-          if not source:
-              print("ERROR: GOLD_SOURCE_URL is missing")
-              sys.exit(1)
-
-          if not source.startswith(("http://", "https://")):
-              print("ERROR: GOLD_SOURCE_URL must start with http:// or https://")
-              sys.exit(1)
-          PY
-
-      - name: Install system packages
+      - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr libgl1 libglib2.0-0
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-ara
 
-      - name: Install Python dependencies
+      - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-          python -m pip install paddleocr
+          pip install \
+            numpy \
+            pytesseract \
+            requests \
+            uvicorn \
+            beautifulsoup4 \
+            fastapi \
+            paddleocr \
+            pillow \
+            pydantic \
+            playwright
 
-      - name: Verify environment
-        run: |
-          python - <<'PY'
-          import requests
-          import numpy
-          import PIL
-          import pytesseract
-          import fastapi
-          import pydantic
-          import uvicorn
-          import paddle
-          from paddleocr import PaddleOCR
+      - name: Install Playwright Chromium
+        run: python -m playwright install chromium
 
-          print("requests:", requests.__version__)
-          print("numpy:", numpy.__version__)
-          print("Pillow:", PIL.__version__)
-          print("pytesseract:", pytesseract.__version__)
-          print("fastapi:", fastapi.__version__)
-          print("pydantic:", pydantic.__version__)
-          print("uvicorn:", uvicorn.__version__)
-          print("paddle:", paddle.__version__)
+      - name: Ensure data dir exists
+        run: mkdir -p data
 
-          ocr = PaddleOCR(
-              lang="ar",
-              use_doc_orientation_classify=False,
-              use_doc_unwarping=False,
-              use_textline_orientation=False,
-          )
-          print("PaddleOCR init: OK")
-          PY
+      - name: Scrape public Facebook image
+        run: python scripts/fetch_facebook_public_image.py
 
-      - name: Ensure data files exist
-        run: |
-          mkdir -p data
-          mkdir -p data/debug
-          test -f data/latest.json || echo '{"ok": false, "source": "", "date": "0000/00/00", "time": "00:00", "k21_ss": 0, "k21_sb": 0, "k21_us": 0, "k21_ub": 0, "k18_ss": 0, "k18_sb": 0, "k18_us": 0, "k18_ub": 0, "updated_at_utc": ""}' > data/latest.json
-          test -f data/history.json || echo '[]' > data/history.json
-          test -f data/blueprint.json || echo '{}' > data/blueprint.json
+      - name: Run gold OCR using scraped image
+        run: python scripts/run_gold_from_facebook_json.py
 
-      - name: Run fetch script
-        env:
-          GOLD_SOURCE_URL: ${{ vars.GOLD_SOURCE_URL }}
-          GOLD_OCR_MODE: ${{ vars.GOLD_OCR_MODE }}
-          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-          GOLD_DEBUG_EXPORT: "false"
-        run: |
-          python scripts/fetch_gold.py
-
-      - name: Show latest result
-        if: always()
-        run: |
-          echo "----- data/latest.json -----"
-          cat data/latest.json || true
-          echo
-          echo "----- data/history.json (tail) -----"
-          tail -n 50 data/history.json || true
-
-      - name: Upload data artifacts
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: gold-data
-          path: data/
-
-      - name: Commit updated JSON
+      - name: Commit updated files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/latest.json data/history.json data/blueprint.json
+          git add data/latest.json data/history.json data/facebook_latest_image.json data/debug || true
 
-          git diff --cached --quiet && exit 0
-
-          git commit -m "Update gold prices"
-
-          git fetch origin main
-          git pull --rebase --autostash origin main
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update gold OCR snapshot"
+            git push
+          fi
