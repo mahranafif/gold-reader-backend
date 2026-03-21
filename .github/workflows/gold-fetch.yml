@@ -27,8 +27,10 @@ jobs:
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
       FACEBOOK_MAX_SCROLL_STEPS: "10"
       FACEBOOK_SCROLL_DELAY_MS: "1200"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "8"
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+      DISABLE_PADDLE: "false"
 
     steps:
       - name: Checkout
@@ -96,7 +98,7 @@ jobs:
           echo "facebook_latest_image.json:"
           cat data/facebook_latest_image.json
 
-      - name: Run gold OCR using scraped image
+      - name: Run gold OCR using scraped image candidates
         run: python scripts/run_gold_from_facebook_json.py
 
       - name: Show OCR output
@@ -112,6 +114,7 @@ jobs:
           path: |
             data/facebook_latest_image.json
             data/facebook_page_debug.png
+            data/facebook_ocr_failures.json
             data/latest.json
             data/history.json
             data/debug
@@ -129,6 +132,7 @@ jobs:
             data/history.json \
             data/facebook_latest_image.json \
             data/facebook_page_debug.png \
+            data/facebook_ocr_failures.json \
             data/debug || true
 
           if git diff --cached --quiet; then
