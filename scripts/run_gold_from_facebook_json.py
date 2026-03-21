@@ -6,23 +6,58 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FACEBOOK_JSON = ROOT / "data" / "facebook_latest_image.json"
+FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
+
+MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "8"))
 
 
-def choose_best_post_image(payload: dict) -> str:
-    selected_image_url = (payload.get("selected_image_url") or "").strip()
-    selected_in_post = bool(payload.get("selected_in_post", False))
+def unique_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
 
-    if selected_image_url and selected_in_post:
-        return selected_image_url
+    for item in items:
+        value = (item or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
 
-    candidates = payload.get("candidates") or []
-    for candidate in candidates:
-        image_url = str(candidate.get("src") or "").strip()
-        in_post = bool(candidate.get("in_post", False))
-        if image_url and in_post:
-            return image_url
+    return out
 
-    return ""
+
+def build_candidate_urls(payload: dict) -> list[str]:
+    urls: list[str] = []
+
+    selected = (payload.get("selected_image_url") or "").strip()
+    if selected:
+        urls.append(selected)
+
+    for candidate in payload.get("candidates") or []:
+        src = str(candidate.get("src") or "").strip()
+        if src:
+            urls.append(src)
+
+    urls = unique_preserve_order(urls)
+    return urls[:MAX_CANDIDATES_TO_TRY]
+
+
+def run_fetch_gold_for_url(image_url: str) -> tuple[bool, str]:
+    env = os.environ.copy()
+    env["GOLD_SOURCE_URL"] = image_url
+    env["GOLD_SOURCE_FILE"] = ""
+
+    result = subprocess.run(
+        [sys.executable, str(FETCH_GOLD_SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    combined_output = "\n".join(
+        part for part in [result.stdout, result.stderr] if part and part.strip()
+    )
+
+    return result.returncode == 0, combined_output
 
 
 def main():
@@ -34,23 +69,57 @@ def main():
     if not payload.get("ok"):
         raise RuntimeError(f"Facebook scrape failed: {payload.get('message')}")
 
-    image_url = choose_best_post_image(payload)
-    if not image_url:
+    candidate_urls = build_candidate_urls(payload)
+    if not candidate_urls:
         raise RuntimeError(
-            "Could not find any in-post Facebook image candidate. "
-            "The scraper likely selected only cover/profile/header assets."
+            "No candidate image URLs found in facebook_latest_image.json"
         )
 
-    print(f"Using Facebook image URL: {image_url}")
+    failures: list[dict] = []
 
-    env = os.environ.copy()
-    env["GOLD_SOURCE_URL"] = image_url
-    env["GOLD_SOURCE_FILE"] = ""
+    print(f"Trying up to {len(candidate_urls)} Facebook image candidate(s)...")
 
-    subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "fetch_gold.py")],
-        check=True,
-        env=env,
+    for index, image_url in enumerate(candidate_urls, start=1):
+        print(f"\n[{index}/{len(candidate_urls)}] Trying candidate:")
+        print(image_url)
+
+        ok, output = run_fetch_gold_for_url(image_url)
+
+        if ok:
+            print("\nOCR succeeded with candidate:")
+            print(image_url)
+            return
+
+        failures.append(
+            {
+                "index": index,
+                "url": image_url,
+                "output_tail": output[-4000:] if output else "",
+            }
+        )
+
+        print("\nCandidate failed. Last output:")
+        if output:
+            print(output[-2000:])
+        else:
+            print("(no output)")
+
+    failure_report = {
+        "message": "All Facebook image candidates failed OCR extraction",
+        "tried_count": len(candidate_urls),
+        "failures": failures,
+    }
+
+    debug_path = ROOT / "data" / "facebook_ocr_failures.json"
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    debug_path.write_text(
+        json.dumps(failure_report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    raise RuntimeError(
+        f"All {len(candidate_urls)} Facebook image candidates failed OCR extraction. "
+        f"See {debug_path} for details."
     )
 
 
