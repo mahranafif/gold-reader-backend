@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
@@ -36,7 +37,7 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "smart_fallback").strip().lower()
+DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "prefer_blueprint").strip().lower()
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -65,12 +66,27 @@ MIN_CANDIDATE_HEIGHT = 250
 PREFERRED_CANDIDATE_WIDTH = 400
 PREFERRED_CANDIDATE_HEIGHT = 400
 
-HEADER_Y1 = 0.30
-HEADER_Y2 = 0.50
-HEADER_TIME_X1 = 0.00
-HEADER_TIME_X2 = 0.35
-HEADER_DATE_X1 = 0.20
-HEADER_DATE_X2 = 0.65
+# Multiple candidate header bands instead of one rigid range
+HEADER_REGION_CANDIDATES = [
+    {
+        "name": "band_a",
+        "header": (0.01, 0.26, 0.99, 0.46),
+        "time": (0.00, 0.00, 0.38, 1.00),
+        "date": (0.18, 0.00, 0.72, 1.00),
+    },
+    {
+        "name": "band_b",
+        "header": (0.01, 0.30, 0.99, 0.50),
+        "time": (0.00, 0.00, 0.38, 1.00),
+        "date": (0.18, 0.00, 0.72, 1.00),
+    },
+    {
+        "name": "band_c",
+        "header": (0.01, 0.34, 0.99, 0.56),
+        "time": (0.00, 0.00, 0.40, 1.00),
+        "date": (0.18, 0.00, 0.76, 1.00),
+    },
+]
 
 HEADERS = {
     "User-Agent": (
@@ -91,6 +107,10 @@ IMAGE_CONTENT_TYPES = {
 }
 
 _PADDLE_OCR = None
+_PADDLE_OCR_LOCK = Lock()
+
+_BLUEPRINT_CACHE: Optional[dict] = None
+_BLUEPRINT_MTIME: Optional[float] = None
 
 try:
     APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
@@ -523,12 +543,14 @@ def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Im
 def get_paddle_ocr():
     global _PADDLE_OCR
     if _PADDLE_OCR is None:
-        _PADDLE_OCR = PaddleOCR(
-            lang="ar",
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-        )
+        with _PADDLE_OCR_LOCK:
+            if _PADDLE_OCR is None:
+                _PADDLE_OCR = PaddleOCR(
+                    lang="ar",
+                    use_doc_orientation_classify=False,
+                    use_doc_unwarping=False,
+                    use_textline_orientation=False,
+                )
     return _PADDLE_OCR
 
 
@@ -633,9 +655,14 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
     return words, " ".join(texts)
 
 
-def tesseract_ocr_words(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], str]:
+def tesseract_ocr_words(
+    img: Image.Image,
+    psm: int = 6,
+    lang: str = "ara+eng",
+) -> tuple[list[OcrWord], str]:
     data = pytesseract.image_to_data(
         img,
+        lang=lang,
         output_type=pytesseract.Output.DICT,
         config=f"--oem 3 --psm {psm}",
     )
@@ -679,7 +706,7 @@ def run_ocr_with_fallback(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord]
     except Exception as exc:
         logger.warning("PaddleOCR failed: %s", exc)
 
-    words, raw = tesseract_ocr_words(img, psm=psm)
+    words, raw = tesseract_ocr_words(img, psm=psm, lang="ara+eng")
     logger.info("Tesseract words=%s", len(words))
     return words, raw, "tesseract"
 
@@ -878,8 +905,11 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
 
         last_row = rows[-1]
         avg_y = sum(t.y for t in last_row) / len(last_row)
+        avg_h = max(sum(t.height for t in last_row) / len(last_row), 1.0)
 
-        if abs(token.y - avg_y) <= 28:
+        y_threshold = max(avg_h * 0.9, 20.0)
+
+        if abs(token.y - avg_y) <= y_threshold:
             last_row.append(token)
         else:
             rows.append([token])
@@ -1001,17 +1031,24 @@ def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
 
 
 def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, GoldRate]:
-    s21ss, s21sb, u21ss, u21sb = k21.ss, k21.sb, k21.us, k21.ub
-    s18ss, s18sb, u18ss, u18sb = k18.ss, k18.sb, k18.us, k18.ub
+    k21_syp_sell = k21.ss
+    k21_syp_buy = k21.sb
+    k21_usd_sell = k21.us
+    k21_usd_buy = k21.ub
 
-    if s21ss > 0 and s21sb > 0 and s21ss < s21sb:
-        s21ss, s21sb = s21sb, s21ss
-    if s18ss > 0 and s18sb > 0 and s18ss < s18sb:
-        s18ss, s18sb = s18sb, s18ss
-    if u21ss > 0 and u21sb > 0 and u21ss < u21sb:
-        u21ss, u21sb = u21sb, u21ss
-    if u18ss > 0 and u18sb > 0 and u18ss < u18sb:
-        u18ss, u18sb = u18sb, u18ss
+    k18_syp_sell = k18.ss
+    k18_syp_buy = k18.sb
+    k18_usd_sell = k18.us
+    k18_usd_buy = k18.ub
+
+    if k21_syp_sell > 0 and k21_syp_buy > 0 and k21_syp_sell < k21_syp_buy:
+        k21_syp_sell, k21_syp_buy = k21_syp_buy, k21_syp_sell
+    if k18_syp_sell > 0 and k18_syp_buy > 0 and k18_syp_sell < k18_syp_buy:
+        k18_syp_sell, k18_syp_buy = k18_syp_buy, k18_syp_sell
+    if k21_usd_sell > 0 and k21_usd_buy > 0 and k21_usd_sell < k21_usd_buy:
+        k21_usd_sell, k21_usd_buy = k21_usd_buy, k21_usd_sell
+    if k18_usd_sell > 0 and k18_usd_buy > 0 and k18_usd_sell < k18_usd_buy:
+        k18_usd_sell, k18_usd_buy = k18_usd_buy, k18_usd_sell
 
     def is_ratio_valid(val21: int, val18: int) -> bool:
         if val21 == 0 or val18 == 0:
@@ -1019,30 +1056,40 @@ def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, Go
         ratio = val18 / val21
         return MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO
 
-    def fix_pair(v21: int, v18: int) -> int:
-        if is_ratio_valid(v21, v18):
-            return v21
-        if v21 < v18 or (v21 < OCR_SANITY_THRESHOLD and v18 > OCR_SANITY_THRESHOLD):
-            return round(v18 * 21 / 18)
-        return v21
+    def fix_21_from_18_if_needed(value21: int, value18: int) -> int:
+        if is_ratio_valid(value21, value18):
+            return value21
+        if value21 < value18 or (value21 < OCR_SANITY_THRESHOLD and value18 > OCR_SANITY_THRESHOLD):
+            return round(value18 * 21 / 18)
+        return value21
 
-    s21ss = fix_pair(s21ss, s18ss)
-    s21sb = fix_pair(s21sb, s18sb)
-    u21ss = fix_pair(u21ss, u18ss)
-    u21sb = fix_pair(u21sb, u18sb)
+    k21_syp_sell = fix_21_from_18_if_needed(k21_syp_sell, k18_syp_sell)
+    k21_syp_buy = fix_21_from_18_if_needed(k21_syp_buy, k18_syp_buy)
+    k21_usd_sell = fix_21_from_18_if_needed(k21_usd_sell, k18_usd_sell)
+    k21_usd_buy = fix_21_from_18_if_needed(k21_usd_buy, k18_usd_buy)
 
-    if not is_ratio_valid(s21ss, s18ss):
-        s18ss = round(s21ss * 18 / 21)
-    if not is_ratio_valid(s21sb, s18sb):
-        s18sb = round(s21sb * 18 / 21)
-    if not is_ratio_valid(u21ss, u18ss):
-        u18ss = round(u21ss * 18 / 21)
-    if not is_ratio_valid(u21sb, u18sb):
-        u18sb = round(u21sb * 18 / 21)
+    if not is_ratio_valid(k21_syp_sell, k18_syp_sell):
+        k18_syp_sell = round(k21_syp_sell * 18 / 21)
+    if not is_ratio_valid(k21_syp_buy, k18_syp_buy):
+        k18_syp_buy = round(k21_syp_buy * 18 / 21)
+    if not is_ratio_valid(k21_usd_sell, k18_usd_sell):
+        k18_usd_sell = round(k21_usd_sell * 18 / 21)
+    if not is_ratio_valid(k21_usd_buy, k18_usd_buy):
+        k18_usd_buy = round(k21_usd_buy * 18 / 21)
 
     return (
-        GoldRate(ub=u21sb, us=u21ss, sb=s21sb, ss=s21ss),
-        GoldRate(ub=u18sb, us=u18ss, sb=s18sb, ss=s18ss),
+        GoldRate(
+            ub=k21_usd_buy,
+            us=k21_usd_sell,
+            sb=k21_syp_buy,
+            ss=k21_syp_sell,
+        ),
+        GoldRate(
+            ub=k18_usd_buy,
+            us=k18_usd_sell,
+            sb=k18_syp_buy,
+            ss=k18_syp_sell,
+        ),
     )
 
 
@@ -1102,25 +1149,25 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
     if len(syp_prices) < 2 or len(usd_prices) < 2:
         return None
 
-    s21ss = syp_prices[0]
-    s21sb = syp_prices[1]
-    u21ss = usd_prices[0]
-    u21sb = usd_prices[1]
+    k21_syp_sell = syp_prices[0]
+    k21_syp_buy = syp_prices[1]
+    k21_usd_sell = usd_prices[0]
+    k21_usd_buy = usd_prices[1]
 
     if len(syp_prices) >= 4 and len(usd_prices) >= 4:
-        s18ss = syp_prices[2]
-        s18sb = syp_prices[3]
-        u18ss = usd_prices[2]
-        u18sb = usd_prices[3]
+        k18_syp_sell = syp_prices[2]
+        k18_syp_buy = syp_prices[3]
+        k18_usd_sell = usd_prices[2]
+        k18_usd_buy = usd_prices[3]
     else:
-        s18ss = round(s21ss * 18 / 21)
-        s18sb = round(s21sb * 18 / 21)
-        u18ss = round(u21ss * 18 / 21)
-        u18sb = round(u21sb * 18 / 21)
+        k18_syp_sell = round(k21_syp_sell * 18 / 21)
+        k18_syp_buy = round(k21_syp_buy * 18 / 21)
+        k18_usd_sell = round(k21_usd_sell * 18 / 21)
+        k18_usd_buy = round(k21_usd_buy * 18 / 21)
 
     result = (
-        GoldRate(ub=u21sb, us=u21ss, sb=s21sb, ss=s21ss),
-        GoldRate(ub=u18sb, us=u18ss, sb=s18sb, ss=s18ss),
+        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
+        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
     )
     fixed = apply_price_sanity_check(result[0], result[1])
     return fixed if is_reasonable_extraction(fixed[0], fixed[1]) else None
@@ -1151,6 +1198,9 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
             score += 10
         if usd_sell > usd_buy:
             score += 10
+
+        avg_height = sum(t.height for t in row) / len(row)
+        score += min(int(avg_height // 8), 5)
 
         logger.info(
             "smart_row candidate: syp_sell=%s syp_buy=%s usd_sell=%s usd_buy=%s score=%s",
@@ -1274,32 +1324,32 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         value = parse_numeric_value(chosen.norm)
         return value or 0
 
-    s21ss = get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp")
-    s21sb = get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp")
-    u21ss = get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd")
-    u21sb = get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd")
+    k21_syp_sell = get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp")
+    k21_syp_buy = get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp")
+    k21_usd_sell = get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd")
+    k21_usd_buy = get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd")
 
     has_18_blueprint = all(
         k in blueprint for k in ["18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy"]
     )
 
     if anchor18 is not None and has_18_blueprint:
-        s18ss = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
-        s18sb = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
-        u18ss = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
-        u18sb = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
+        k18_syp_sell = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
+        k18_syp_buy = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
+        k18_usd_sell = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
+        k18_usd_buy = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
     else:
-        s18ss = round(s21ss * 18 / 21)
-        s18sb = round(s21sb * 18 / 21)
-        u18ss = round(u21ss * 18 / 21)
-        u18sb = round(u21sb * 18 / 21)
+        k18_syp_sell = round(k21_syp_sell * 18 / 21)
+        k18_syp_buy = round(k21_syp_buy * 18 / 21)
+        k18_usd_sell = round(k21_usd_sell * 18 / 21)
+        k18_usd_buy = round(k21_usd_buy * 18 / 21)
 
-    if any(v == 0 for v in [s21ss, s21sb, u21ss, u21sb]):
+    if any(v == 0 for v in [k21_syp_sell, k21_syp_buy, k21_usd_sell, k21_usd_buy]):
         return None
 
     result = (
-        GoldRate(ub=u21sb, us=u21ss, sb=s21sb, ss=s21ss),
-        GoldRate(ub=u18sb, us=u18ss, sb=s18sb, ss=s18ss),
+        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
+        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
@@ -1315,28 +1365,27 @@ def extract_rates(
     ocr_mode: str,
 ) -> tuple[Optional[tuple[GoldRate, GoldRate]], str, dict]:
     diagnostics: dict[str, str] = {}
-    attempts: list[tuple[str, Optional[tuple[GoldRate, GoldRate]]]] = []
 
-    if ocr_mode == "smart_fallback":
+    if ocr_mode == "prefer_blueprint":
         attempts = [
-            ("smart_fallback", extract_smart_fallback(words)),
-            ("anchor_rows", extract_anchor_rows(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("anchor_rows", extract_anchor_rows(words)),
+            ("smart_fallback", extract_smart_fallback(words)),
             ("legacy_fallback", extract_legacy_fallback(words)),
         ]
-    elif ocr_mode == "prefer_blueprint":
+    elif ocr_mode == "smart_fallback":
         attempts = [
+            ("anchor_rows", extract_anchor_rows(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
             ("smart_fallback", extract_smart_fallback(words)),
-            ("anchor_rows", extract_anchor_rows(words)),
             ("legacy_fallback", extract_legacy_fallback(words)),
         ]
     else:
         attempts = [
-            ("legacy_fallback", extract_legacy_fallback(words)),
-            ("smart_fallback", extract_smart_fallback(words)),
             ("anchor_rows", extract_anchor_rows(words)),
             ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("smart_fallback", extract_smart_fallback(words)),
+            ("legacy_fallback", extract_legacy_fallback(words)),
         ]
 
     for method, result in attempts:
@@ -1386,59 +1435,131 @@ def words_to_text(words: list[OcrWord]) -> str:
     return " ".join(w.text for w in ordered)
 
 
-def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
-    diagnostics = {
-        "header_source": "full_image_word_filter",
-        "header_time_raw": "",
-        "header_date_raw": "",
-    }
+def evaluate_header_candidate(
+    img: Image.Image,
+    words: list[OcrWord],
+    candidate: dict,
+) -> tuple[str, str, dict]:
+    header_x1, header_y1, header_x2, header_y2 = candidate["header"]
+    time_x1, time_y1, time_x2, time_y2 = candidate["time"]
+    date_x1, date_y1, date_x2, date_y2 = candidate["date"]
 
-    header_words = filter_words_by_region(
-        words, img.size, 0.01, HEADER_Y1, 0.99, HEADER_Y2
-    )
+    header_words = filter_words_by_region(words, img.size, header_x1, header_y1, header_x2, header_y2)
+
+    if not header_words:
+        return "0000/00/00", "00:00", {
+            "candidate": candidate["name"],
+            "header_source": "full_image_word_filter",
+            "header_word_count": 0,
+            "header_time_raw": "",
+            "header_date_raw": "",
+        }
+
+    header_crop_w = max(int((header_x2 - header_x1) * img.size[0]), 1)
+    header_crop_h = max(int((header_y2 - header_y1) * img.size[1]), 1)
 
     time_words = filter_words_by_region(
-        header_words, img.size, HEADER_TIME_X1, HEADER_Y1, HEADER_TIME_X2, HEADER_Y2
+        header_words,
+        (header_crop_w, header_crop_h),
+        time_x1,
+        time_y1,
+        time_x2,
+        time_y2,
     )
     date_words = filter_words_by_region(
-        header_words, img.size, HEADER_DATE_X1, HEADER_Y1, HEADER_DATE_X2, HEADER_Y2
+        header_words,
+        (header_crop_w, header_crop_h),
+        date_x1,
+        date_y1,
+        date_x2,
+        date_y2,
     )
 
     raw_time = words_to_text(time_words)
     raw_date = words_to_text(date_words)
 
-    diagnostics["header_time_raw"] = raw_time
-    diagnostics["header_date_raw"] = raw_date
-
     time_value = extract_time_from_raw(raw_time)
     date_value = extract_date_from_raw(raw_date)
 
-    if date_value != "0000/00/00" and time_value != "00:00":
-        return date_value, time_value, diagnostics
-
-    diagnostics["header_source"] = "crop_ocr_fallback"
-
-    header_crop = crop_box(img, 0.01, HEADER_Y1, 0.99, HEADER_Y2)
-    time_crop = crop_box(header_crop, HEADER_TIME_X1, 0.00, HEADER_TIME_X2, 1.00)
-    date_crop = crop_box(header_crop, HEADER_DATE_X1, 0.00, HEADER_DATE_X2, 1.00)
-
-    _, raw_time_crop, _ = run_ocr_with_fallback(time_crop)
-    _, raw_date_crop, _ = run_ocr_with_fallback(date_crop)
-
-    logger.info("Header OCR fallback raw_time=%r raw_date=%r", raw_time_crop, raw_date_crop)
-
-    fallback_time = extract_time_from_raw(raw_time_crop)
-    fallback_date = extract_date_from_raw(raw_date_crop)
-
-    diagnostics["header_time_raw_crop"] = raw_time_crop
-    diagnostics["header_date_raw_crop"] = raw_date_crop
-
-    if time_value == "00:00":
-        time_value = fallback_time
-    if date_value == "0000/00/00":
-        date_value = fallback_date
+    diagnostics = {
+        "candidate": candidate["name"],
+        "header_source": "full_image_word_filter",
+        "header_word_count": len(header_words),
+        "header_time_raw": raw_time,
+        "header_date_raw": raw_date,
+    }
 
     return date_value, time_value, diagnostics
+
+
+def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
+    best_date = "0000/00/00"
+    best_time = "00:00"
+    best_debug: dict = {
+        "header_source": "none",
+        "tried_candidates": [],
+    }
+
+    # Pass 1: use OCR words from full image
+    for candidate in HEADER_REGION_CANDIDATES:
+        date_value, time_value, diagnostics = evaluate_header_candidate(img, words, candidate)
+        best_debug["tried_candidates"].append(diagnostics)
+
+        has_date = date_value != "0000/00/00"
+        has_time = time_value != "00:00"
+
+        if has_date and has_time:
+            return date_value, time_value, diagnostics
+
+        if has_date and best_date == "0000/00/00":
+            best_date = date_value
+            best_debug = diagnostics
+
+        if has_time and best_time == "00:00":
+            best_time = time_value
+            best_debug = diagnostics
+
+    # Pass 2: crop OCR fallback across multiple bands
+    crop_attempts = []
+    for candidate in HEADER_REGION_CANDIDATES:
+        header_x1, header_y1, header_x2, header_y2 = candidate["header"]
+        time_x1, time_y1, time_x2, time_y2 = candidate["time"]
+        date_x1, date_y1, date_x2, date_y2 = candidate["date"]
+
+        header_crop = crop_box(img, header_x1, header_y1, header_x2, header_y2)
+        time_crop = crop_box(header_crop, time_x1, time_y1, time_x2, time_y2)
+        date_crop = crop_box(header_crop, date_x1, date_y1, date_x2, date_y2)
+
+        _, raw_time_crop, _ = run_ocr_with_fallback(time_crop)
+        _, raw_date_crop, _ = run_ocr_with_fallback(date_crop)
+
+        fallback_time = extract_time_from_raw(raw_time_crop)
+        fallback_date = extract_date_from_raw(raw_date_crop)
+
+        crop_attempt = {
+            "candidate": candidate["name"],
+            "header_source": "crop_ocr_fallback",
+            "header_time_raw_crop": raw_time_crop,
+            "header_date_raw_crop": raw_date_crop,
+        }
+        crop_attempts.append(crop_attempt)
+
+        has_date = fallback_date != "0000/00/00"
+        has_time = fallback_time != "00:00"
+
+        if has_date and best_date == "0000/00/00":
+            best_date = fallback_date
+            best_debug = crop_attempt
+
+        if has_time and best_time == "00:00":
+            best_time = fallback_time
+            best_debug = crop_attempt
+
+        if has_date and has_time:
+            return fallback_date, fallback_time, crop_attempt
+
+    best_debug["crop_attempts"] = crop_attempts
+    return best_date, best_time, best_debug
 
 
 def compute_confidence(
@@ -1450,12 +1571,12 @@ def compute_confidence(
 ) -> float:
     score = 0.50
 
-    if method == "smart_fallback":
-        score += 0.25
+    if method == "blueprint":
+        score += 0.28
     elif method == "anchor_rows":
-        score += 0.20
-    elif method == "blueprint":
-        score += 0.18
+        score += 0.22
+    elif method == "smart_fallback":
+        score += 0.15
     elif method == "legacy_fallback":
         score += 0.08
 
@@ -1477,8 +1598,27 @@ def compute_confidence(
 
 
 def load_blueprint() -> Optional[dict]:
-    blueprint = load_json(BLUEPRINT_FILE, None)
-    return blueprint if isinstance(blueprint, dict) else None
+    global _BLUEPRINT_CACHE, _BLUEPRINT_MTIME
+
+    if not BLUEPRINT_FILE.exists():
+        _BLUEPRINT_CACHE = None
+        _BLUEPRINT_MTIME = None
+        return None
+
+    try:
+        mtime = BLUEPRINT_FILE.stat().st_mtime
+        if _BLUEPRINT_CACHE is not None and _BLUEPRINT_MTIME == mtime:
+            return _BLUEPRINT_CACHE
+
+        blueprint = load_json(BLUEPRINT_FILE, None)
+        if isinstance(blueprint, dict):
+            _BLUEPRINT_CACHE = blueprint
+            _BLUEPRINT_MTIME = mtime
+            return blueprint
+    except Exception as exc:
+        logger.warning("Failed to load blueprint cache: %s", exc)
+
+    return None
 
 
 def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
@@ -1558,11 +1698,18 @@ def looks_like_direct_image_url(url: str) -> bool:
 
 def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
-    ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
+
+    # Looser aspect ratio penalty: do not strongly punish portrait screenshots
+    preferred_ratio = 0.90
+    ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 50000.0
+
     size_bonus = 50000.0 if (
         c.width >= PREFERRED_CANDIDATE_WIDTH and c.height >= PREFERRED_CANDIDATE_HEIGHT
     ) else 0.0
-    return area_score + size_bonus - ratio_penalty
+
+    portrait_bonus = 15000.0 if c.height >= c.width else 0.0
+
+    return area_score + size_bonus + portrait_bonus - ratio_penalty
 
 
 def rank_candidates(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
@@ -1660,9 +1807,14 @@ def fetch_image_bytes(url: str) -> tuple[bytes, str]:
 
 
 def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
-    if looks_like_direct_image_url(source_url):
+    # First try direct fetch even if URL does not end with image extension
+    try:
         content, final_url = fetch_image_bytes(source_url)
-        return content, final_url
+        img = Image.open(BytesIO(content))
+        if img.width >= MIN_CANDIDATE_WIDTH and img.height >= MIN_CANDIDATE_HEIGHT:
+            return content, final_url
+    except Exception:
+        pass
 
     candidates = fetch_page_image_candidates(source_url)
     ranked = rank_candidates(candidates)
@@ -1694,7 +1846,7 @@ def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
 def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     result = extract_gold_from_image_bytes(image_bytes, source_url)
 
-    return {
+    snapshot = {
         "ok": True,
         "source": source_url,
         "date": result.date,
@@ -1707,7 +1859,6 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "k18_sb": result.k18.sb,
         "k18_us": result.k18.us,
         "k18_ub": result.k18.ub,
-        "raw_ocr": result.raw_ocr,
         "raw_ocr_preview": result.raw_ocr_preview,
         "source_w": result.debug.get("image_width", 0),
         "source_h": result.debug.get("image_height", 0),
@@ -1724,6 +1875,12 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "debug": result.debug,
     }
 
+    # Save full OCR only when debug export is enabled
+    if DEBUG_EXPORT:
+        snapshot["raw_ocr"] = result.raw_ocr
+
+    return snapshot
+
 
 # =========================================================
 # FastAPI app
@@ -1731,7 +1888,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="2.0.0",
+    version="2.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1742,7 +1899,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
