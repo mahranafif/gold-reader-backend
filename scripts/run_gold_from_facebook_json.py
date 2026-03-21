@@ -20,6 +20,13 @@ def main():
     if not image_url:
         raise RuntimeError("selected_image_url is empty")
 
+    # Guardrail: reject obvious non-post selections
+    if not payload.get("selected_in_post", False):
+        raise RuntimeError(
+            "Selected Facebook image is not inside a post/feed container. "
+            "Refusing to run OCR on likely cover/profile asset."
+        )
+
     env = os.environ.copy()
     env["GOLD_SOURCE_URL"] = image_url
     env["GOLD_SOURCE_FILE"] = ""
