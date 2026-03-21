@@ -272,15 +272,7 @@ async def scrape_public_facebook_image() -> dict:
                     "candidates": [],
                 }
             else:
-                best = None
-
-                for candidate in candidates:
-                    if candidate.in_post:
-                        best = candidate
-                        break
-
-                if best is None:
-                    best = candidates[0]
+                best = candidates[0]
 
                 result = {
                     "ok": True,
