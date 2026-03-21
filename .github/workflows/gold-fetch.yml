@@ -30,7 +30,7 @@ jobs:
       FACEBOOK_MAX_CANDIDATES_TO_TRY: "8"
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-      DISABLE_PADDLE: "false"
+      DISABLE_PADDLE: "true"
 
     steps:
       - name: Checkout
