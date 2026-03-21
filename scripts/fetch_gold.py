@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import math
@@ -19,7 +20,7 @@ import uvicorn
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from paddleocr import PaddleOCR
-from PIL import Image, ImageDraw, ImageFilter, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from pydantic import BaseModel, Field, HttpUrl
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -66,7 +67,6 @@ MIN_CANDIDATE_HEIGHT = 250
 PREFERRED_CANDIDATE_WIDTH = 400
 PREFERRED_CANDIDATE_HEIGHT = 400
 
-# Multiple candidate header bands instead of one rigid range
 HEADER_REGION_CANDIDATES = [
     {
         "name": "band_a",
@@ -263,6 +263,38 @@ class ExtractResponse(BaseModel):
 # JSON helpers
 # =========================================================
 
+def sanitize_for_json(obj):
+    """
+    Defensive serializer sanitization to avoid accidental circular references
+    or non-serializable objects in debug payloads.
+    """
+    seen: set[int] = set()
+
+    def _walk(value):
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+
+        obj_id = id(value)
+        if obj_id in seen:
+            return "<circular_ref>"
+
+        if isinstance(value, dict):
+            seen.add(obj_id)
+            result = {str(k): _walk(v) for k, v in value.items()}
+            seen.remove(obj_id)
+            return result
+
+        if isinstance(value, (list, tuple, set)):
+            seen.add(obj_id)
+            result = [_walk(v) for v in value]
+            seen.remove(obj_id)
+            return result
+
+        return str(value)
+
+    return _walk(obj)
+
+
 def load_json(path: Path, fallback):
     if not path.exists():
         return fallback
@@ -275,10 +307,13 @@ def load_json(path: Path, fallback):
 
 def save_json(path: Path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        safe_data = sanitize_for_json(data)
+        payload = json.dumps(safe_data, ensure_ascii=False, indent=2)
+    except Exception:
+        logger.exception("Failed to serialize JSON for %s", path)
+        raise
+    path.write_text(payload, encoding="utf-8")
 
 
 # =========================================================
@@ -1292,6 +1327,7 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
             if ":" in w.text or "/" in w.text:
                 continue
 
+                # numeric only
             value = parse_numeric_value(w.norm)
             if value is None:
                 continue
@@ -1493,34 +1529,56 @@ def evaluate_header_candidate(
 
 
 def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
+    """
+    Best fix:
+    - never reuse a dict object that will also be inserted into a list
+    - always build fresh result dicts
+    - keep a stable debug structure with no shared mutable references
+    """
+    tried_candidates: list[dict] = []
+    crop_attempts: list[dict] = []
+
     best_date = "0000/00/00"
     best_time = "00:00"
     best_debug: dict = {
         "header_source": "none",
         "tried_candidates": [],
+        "crop_attempts": [],
     }
 
     # Pass 1: use OCR words from full image
     for candidate in HEADER_REGION_CANDIDATES:
         date_value, time_value, diagnostics = evaluate_header_candidate(img, words, candidate)
-        best_debug["tried_candidates"].append(diagnostics)
+        diagnostics_copy = copy.deepcopy(diagnostics)
+        tried_candidates.append(diagnostics_copy)
 
         has_date = date_value != "0000/00/00"
         has_time = time_value != "00:00"
 
         if has_date and has_time:
-            return date_value, time_value, diagnostics
+            return date_value, time_value, {
+                **copy.deepcopy(diagnostics_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": [],
+            }
 
         if has_date and best_date == "0000/00/00":
             best_date = date_value
-            best_debug = diagnostics
+            best_debug = {
+                **copy.deepcopy(diagnostics_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": [],
+            }
 
         if has_time and best_time == "00:00":
             best_time = time_value
-            best_debug = diagnostics
+            best_debug = {
+                **copy.deepcopy(diagnostics_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": [],
+            }
 
     # Pass 2: crop OCR fallback across multiple bands
-    crop_attempts = []
     for candidate in HEADER_REGION_CANDIDATES:
         header_x1, header_y1, header_x2, header_y2 = candidate["header"]
         time_x1, time_y1, time_x2, time_y2 = candidate["time"]
@@ -1542,24 +1600,40 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
             "header_time_raw_crop": raw_time_crop,
             "header_date_raw_crop": raw_date_crop,
         }
-        crop_attempts.append(crop_attempt)
+        crop_attempt_copy = copy.deepcopy(crop_attempt)
+        crop_attempts.append(crop_attempt_copy)
 
         has_date = fallback_date != "0000/00/00"
         has_time = fallback_time != "00:00"
 
         if has_date and best_date == "0000/00/00":
             best_date = fallback_date
-            best_debug = crop_attempt
+            best_debug = {
+                **copy.deepcopy(crop_attempt_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": copy.deepcopy(crop_attempts),
+            }
 
         if has_time and best_time == "00:00":
             best_time = fallback_time
-            best_debug = crop_attempt
+            best_debug = {
+                **copy.deepcopy(crop_attempt_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": copy.deepcopy(crop_attempts),
+            }
 
         if has_date and has_time:
-            return fallback_date, fallback_time, crop_attempt
+            return fallback_date, fallback_time, {
+                **copy.deepcopy(crop_attempt_copy),
+                "tried_candidates": copy.deepcopy(tried_candidates),
+                "crop_attempts": copy.deepcopy(crop_attempts),
+            }
 
-    best_debug["crop_attempts"] = crop_attempts
-    return best_date, best_time, best_debug
+    return best_date, best_time, {
+        **copy.deepcopy(best_debug),
+        "tried_candidates": copy.deepcopy(tried_candidates),
+        "crop_attempts": copy.deepcopy(crop_attempts),
+    }
 
 
 def compute_confidence(
@@ -1698,8 +1772,6 @@ def looks_like_direct_image_url(url: str) -> bool:
 
 def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
-
-    # Looser aspect ratio penalty: do not strongly punish portrait screenshots
     preferred_ratio = 0.90
     ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 50000.0
 
@@ -1807,7 +1879,6 @@ def fetch_image_bytes(url: str) -> tuple[bytes, str]:
 
 
 def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
-    # First try direct fetch even if URL does not end with image extension
     try:
         content, final_url = fetch_image_bytes(source_url)
         img = Image.open(BytesIO(content))
@@ -1875,7 +1946,6 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "debug": result.debug,
     }
 
-    # Save full OCR only when debug export is enabled
     if DEBUG_EXPORT:
         snapshot["raw_ocr"] = result.raw_ocr
 
@@ -1888,7 +1958,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="2.1.0",
+    version="2.1.1",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1899,7 +1969,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "2.1.0",
+        "version": "2.1.1",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
@@ -1959,7 +2029,7 @@ def main():
         save_json(LATEST_FILE, snapshot)
 
     print("Updated latest.json successfully")
-    print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+    print(json.dumps(sanitize_for_json(snapshot), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
