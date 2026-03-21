@@ -664,7 +664,7 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                 if not text:
                     continue
 
-                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                    score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
                 poly = rec_polys[idx]
 
                 xs = [float(p[0]) for p in poly]
@@ -975,7 +975,8 @@ def build_anchor_local_rows(
             continue
 
         dx = w.center_x - anchor.center_x
-        dy = abs(w.center_y - anchor.center_y)
+        dy_signed = w.center_y - anchor.center_y
+        dy = abs(dy_signed)
 
         if dx < -max_left_dx or dx > max_right_dx:
             continue
@@ -999,7 +1000,11 @@ def build_anchor_local_rows(
     return [TokenRow(tokens=row) for row in raw_rows if row]
 
 
-def choose_best_anchor_local_row(rows: list[TokenRow], anchor: OcrWord) -> Optional[TokenRow]:
+def choose_best_anchor_local_row(
+    rows: list[TokenRow],
+    anchor: OcrWord,
+    prefer_below: bool = False,
+) -> Optional[TokenRow]:
     if not rows:
         return None
 
@@ -1012,14 +1017,26 @@ def choose_best_anchor_local_row(rows: list[TokenRow], anchor: OcrWord) -> Optio
         if len(usd_values) < 2 or len(syp_values) < 2:
             continue
 
-        dy = abs(row.center_y - anchor.center_y)
-        score = dy * 8.0
-        score -= len(row.tokens) * 5.0
+        dy_signed = row.center_y - anchor.center_y
+        dy = abs(dy_signed)
+
+        score = dy * 14.0
+
+        if prefer_below:
+            if dy_signed < -4:
+                score += 1200.0
+            else:
+                score -= min(dy_signed, 25.0) * 6.0
+
+        score -= len(row.tokens) * 8.0
 
         if usd_values[-1] > usd_values[-2]:
-            score -= 10.0
+            score -= 20.0
         if syp_values[-1] > syp_values[-2]:
-            score -= 10.0
+            score -= 20.0
+
+        avg_h = row.avg_height
+        score += abs(avg_h - anchor.height) * 2.0
 
         scored.append((score, row))
 
@@ -1037,16 +1054,11 @@ def extract_values_from_token_row(row: TokenRow) -> Optional[dict]:
     if len(usd_values) < 2 or len(syp_values) < 2:
         return None
 
-    usd_buy = usd_values[-2]
-    usd_sell = usd_values[-1]
-    syp_buy = syp_values[-2]
-    syp_sell = syp_values[-1]
-
     return {
-        "usd_buy": usd_buy,
-        "usd_sell": usd_sell,
-        "syp_buy": syp_buy,
-        "syp_sell": syp_sell,
+        "usd_buy": usd_values[-2],
+        "usd_sell": usd_values[-1],
+        "syp_buy": syp_values[-2],
+        "syp_sell": syp_values[-1],
     }
 
 
@@ -1078,7 +1090,11 @@ def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
     return max(candidates, key=lambda w: (w.center_x, w.height, w.conf))
 
 
-def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
+def extract_row_values_for_anchor(
+    words: list[OcrWord],
+    anchor: OcrWord,
+    prefer_below: bool = False,
+) -> Optional[dict]:
     local_rows = build_anchor_local_rows(
         words=words,
         anchor=anchor,
@@ -1087,18 +1103,18 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
         max_dy=max(anchor.height * 2.2, 110.0),
     )
 
-    best_row = choose_best_anchor_local_row(local_rows, anchor)
+    best_row = choose_best_anchor_local_row(local_rows, anchor, prefer_below=prefer_below)
     if best_row is None:
         return None
 
-    values = extract_values_from_token_row(best_row)
-    if values is None:
-        return None
-
-    return values
+    return extract_values_from_token_row(best_row)
 
 
-def extract_row_values_for_anchor_relaxed(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
+def extract_row_values_for_anchor_relaxed(
+    words: list[OcrWord],
+    anchor: OcrWord,
+    prefer_below: bool = False,
+) -> Optional[dict]:
     local_rows = build_anchor_local_rows(
         words=words,
         anchor=anchor,
@@ -1107,15 +1123,11 @@ def extract_row_values_for_anchor_relaxed(words: list[OcrWord], anchor: OcrWord)
         max_dy=max(anchor.height * 3.0, 150.0),
     )
 
-    best_row = choose_best_anchor_local_row(local_rows, anchor)
+    best_row = choose_best_anchor_local_row(local_rows, anchor, prefer_below=prefer_below)
     if best_row is None:
         return None
 
-    values = extract_values_from_token_row(best_row)
-    if values is None:
-        return None
-
-    return values
+    return extract_values_from_token_row(best_row)
 
 
 def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
@@ -1182,11 +1194,11 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         anchor18.center_x, anchor18.center_y, anchor18.height,
     )
 
-    row21 = extract_row_values_for_anchor(words, anchor21)
-    row18 = extract_row_values_for_anchor(words, anchor18)
+    row21 = extract_row_values_for_anchor(words, anchor21, prefer_below=False)
+    row18 = extract_row_values_for_anchor(words, anchor18, prefer_below=True)
 
     if row18 is None:
-        row18 = extract_row_values_for_anchor_relaxed(words, anchor18)
+        row18 = extract_row_values_for_anchor_relaxed(words, anchor18, prefer_below=True)
 
     logger.info("anchor21 row=%s", row21)
     logger.info("anchor18 row=%s", row18)
@@ -1970,7 +1982,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="4.2.0",
+    version="4.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1981,7 +1993,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "4.2.0",
+        "version": "4.3.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
