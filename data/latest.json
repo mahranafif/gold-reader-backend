@@ -1,62 +1,60 @@
 {
   "ok": true,
-  "source": "https://scontent.fdxb3-2.fna.fbcdn.net/v/t39.30808-6/653911472_1259365289659925_3528865706317355782_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=e06c5d&_nc_ohc=SZO07VcpOmkQ7kNvwEgWCW2&_nc_oc=AdkSXjkMNQ4rDRHzQkTwztGi91gb09vS87T2xYHadO2Ds7nWjNSPAMKNhBNJpFnC5eeZ1kKkeuykejeTmqF_qSbK&_nc_zt=23&_nc_ht=scontent.fdxb3-2.fna&_nc_gid=lbuvtBpPMkG4XrH3Cbq1TA&_nc_ss=8&oh=00_Afwe9Wqp3WYaVfF-8q6jNIQX-e8mW4l2igqIcNoWJzHw6Q&oe=69BF3256",
-  "date": "2026/03/17",
+  "source": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=105&ccb=1-7&_nc_sid=7b2446&_nc_ohc=7H7KrctyCK0Q7kNvwEit7p9&_nc_oc=Adpcrk7p9OsAYdOHnt2T-An2ZG7B0IHc2V74evhIl3aEr2qxPPg6JPTfRix-7iIyDCY&_nc_zt=23&_nc_ht=scontent-iad3-2.xx&_nc_gid=e1qXrfY1HXEGCGtvpXXIXA&_nc_ss=7a30f&oh=00_AfzFhDXZ6hkbV2awJx4UitTsg0B-K-x11Pn2KPoyuQIIZw&oe=69C4876E",
+  "date": "0000/00/00",
   "time": "00:00",
-  "k21_ss": 16700,
-  "k21_sb": 16350,
+  "k21_ss": 16350,
+  "k21_sb": 1388,
   "k21_us": 141,
-  "k21_ub": 138,
-  "k18_ss": 14300,
-  "k18_sb": 13950,
+  "k21_ub": 60,
+  "k18_ss": 14014,
+  "k18_sb": 1190,
   "k18_us": 121,
-  "k18_ub": 118,
-  "raw_ocr_preview": "B اليومية لبيع ال الذهب التسعيرة الصادرة عن I جمعية الصاغة بدمشق التاريخ الساعةم اليوم الثلاثاء سعر الغرام$ سعر الغرام ل س العيار شراء مييح شراء ميع 21 138 141 16350 16700 18 118 121 13950 14300 ماحظةالالنزام بوضع التسعيرة على الواجهة بشكل واضح مشقالحريقةمقاببنك سورياامهجر",
-  "source_w": 2048,
-  "source_h": 2048,
-  "byte_length": 154110,
-  "updated_at_utc": "2026-03-21T12:10:10.437871+00:00",
-  "display_timezone": "UTC",
-  "ocr_mode": "smart_fallback",
-  "ocr_engine": "paddleocr",
-  "extraction_method": "anchor_rows",
-  "confidence": 0.7699999999999999,
+  "k18_ub": 51,
+  "raw_ocr_preview": "« * 7 التسعيزة اليومية لبيع ia PGBS‏ ie‏ الضادرة عن aes‏ ا 1 اليوم: التاريخ: الساعة: = سعر القرام ل.س اس سعرالغرام 8© 0 العيار ow‏ شراع ow‏ شراع 3 21 60 16350 | 141 1388 | 18 0- 13950 | 121 512118 ملاحظة : الالنزام بوضع التسعيرة على الواجية بشكل واضح. دمشق ‏ الحريقة ‏ مقابل بنك سوريا والمهجر (2230766(_)2248005)",
+  "source_w": 1052,
+  "source_h": 1052,
+  "byte_length": 49831,
+  "updated_at_utc": "2026-03-21T13:37:28.480408+00:00",
+  "display_timezone": "Asia/Dubai",
+  "ocr_mode": "prefer_blueprint",
+  "ocr_engine": "tesseract",
+  "extraction_method": "smart_fallback",
+  "confidence": 0.4700000000000001,
   "has_blueprint": true,
-  "ocr_word_count": 30,
+  "ocr_word_count": 60,
   "warnings": [
+    "header_date_failed_used_full_text_fallback",
     "header_time_failed_used_full_text_fallback"
   ],
   "debug": {
-    "source_url": "https://scontent.fdxb3-2.fna.fbcdn.net/v/t39.30808-6/653911472_1259365289659925_3528865706317355782_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=e06c5d&_nc_ohc=SZO07VcpOmkQ7kNvwEgWCW2&_nc_oc=AdkSXjkMNQ4rDRHzQkTwztGi91gb09vS87T2xYHadO2Ds7nWjNSPAMKNhBNJpFnC5eeZ1kKkeuykejeTmqF_qSbK&_nc_zt=23&_nc_ht=scontent.fdxb3-2.fna&_nc_gid=lbuvtBpPMkG4XrH3Cbq1TA&_nc_ss=8&oh=00_Afwe9Wqp3WYaVfF-8q6jNIQX-e8mW4l2igqIcNoWJzHw6Q&oe=69BF3256",
-    "ocr_word_count": 30,
-    "image_width": 2048,
-    "image_height": 2048,
-    "ocr_mode": "smart_fallback",
-    "display_timezone": "UTC",
+    "source_url": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=105&ccb=1-7&_nc_sid=7b2446&_nc_ohc=7H7KrctyCK0Q7kNvwEit7p9&_nc_oc=Adpcrk7p9OsAYdOHnt2T-An2ZG7B0IHc2V74evhIl3aEr2qxPPg6JPTfRix-7iIyDCY&_nc_zt=23&_nc_ht=scontent-iad3-2.xx&_nc_gid=e1qXrfY1HXEGCGtvpXXIXA&_nc_ss=7a30f&oh=00_AfzFhDXZ6hkbV2awJx4UitTsg0B-K-x11Pn2KPoyuQIIZw&oe=69C4876E",
+    "ocr_word_count": 60,
+    "image_width": 1052,
+    "image_height": 1052,
+    "ocr_mode": "prefer_blueprint",
+    "display_timezone": "Asia/Dubai",
     "header": {
-      "candidate": "band_b",
-      "header_source": "crop_ocr_fallback",
-      "header_time_raw_crop": "الساعة 20",
-      "header_date_raw_crop": "الساعة التاريخ 2026/3/17",
+      "header_source": "none",
       "tried_candidates": [
         {
           "candidate": "band_a",
           "header_source": "full_image_word_filter",
-          "header_word_count": 2,
+          "header_word_count": 0,
           "header_time_raw": "",
           "header_date_raw": ""
         },
         {
           "candidate": "band_b",
           "header_source": "full_image_word_filter",
-          "header_word_count": 4,
+          "header_word_count": 3,
           "header_time_raw": "",
           "header_date_raw": ""
         },
         {
           "candidate": "band_c",
           "header_source": "full_image_word_filter",
-          "header_word_count": 7,
+          "header_word_count": 12,
           "header_time_raw": "",
           "header_date_raw": ""
         }
@@ -65,27 +63,29 @@
         {
           "candidate": "band_a",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "Rr 4 sm : y A pees ue og; Gwe oF Sa ya oF nine tpg tea” : ee BSoy NS Si eae ¢ CUS ORA ROSS Fe oye ia SN” CN ees Ree = nr",
-          "header_date_raw_crop": "فة بدمشق"
+          "header_time_raw_crop": "",
+          "header_date_raw_crop": "2< رار"
         },
         {
           "candidate": "band_b",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "الساعة 20",
-          "header_date_raw_crop": "الساعة التاريخ 2026/3/17"
+          "header_time_raw_crop": "Bp site ree",
+          "header_date_raw_crop": "ا ات .حدر له إن 5 pF Pa‏ التاريخ: . الساعة:"
         },
         {
           "candidate": "band_c",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "الساعة سعر الغرام",
-          "header_date_raw_crop": "الساعة التاريخ سعرال سعر الغرام ل س"
+          "header_time_raw_crop": "|S سعرالترام‎ |",
+          "header_date_raw_crop": "التاريخ: الساعة : سعر القرام ل.س سعرال"
         }
       ]
     },
     "rate_attempts": {
-      "anchor_rows": "accepted"
+      "blueprint": "no_result",
+      "anchor_rows": "no_result",
+      "smart_fallback": "accepted"
     },
     "has_blueprint": true,
-    "extraction_method": "anchor_rows"
+    "extraction_method": "smart_fallback"
   }
 }
