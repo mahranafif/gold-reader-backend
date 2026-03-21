@@ -217,6 +217,19 @@ class ImageCandidate:
 
 
 @dataclass
+class TokenRow:
+    tokens: list[NumericToken]
+
+    @property
+    def center_y(self) -> float:
+        return sum(t.y for t in self.tokens) / max(len(self.tokens), 1)
+
+    @property
+    def avg_height(self) -> float:
+        return sum(t.height for t in self.tokens) / max(len(self.tokens), 1)
+
+
+@dataclass
 class ExtractionResult:
     date: str
     time: str
@@ -557,7 +570,7 @@ def get_paddle_ocr():
         with _PADDLE_OCR_LOCK:
             if _PADDLE_OCR is None:
                 try:
-                    from paddleocr import PaddleOCR  # lazy import
+                    from paddleocr import PaddleOCR
                 except Exception as exc:
                     disable_paddle(f"import_failed: {exc}")
                     raise
@@ -940,6 +953,103 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
     return rows
 
 
+def build_anchor_local_rows(
+    words: list[OcrWord],
+    anchor: OcrWord,
+    max_left_dx: float,
+    max_right_dx: float,
+    max_dy: float,
+) -> list[TokenRow]:
+    tokens: list[NumericToken] = []
+
+    for w in words:
+        if w is anchor:
+            continue
+
+        value = find_numeric_word_value(w)
+        if value is None:
+            continue
+
+        kind = classify_numeric_value(value)
+        if kind is None:
+            continue
+
+        dx = w.center_x - anchor.center_x
+        dy = abs(w.center_y - anchor.center_y)
+
+        if dx < -max_left_dx or dx > max_right_dx:
+            continue
+        if dy > max_dy:
+            continue
+
+        tokens.append(
+            NumericToken(
+                value=value,
+                kind=kind,
+                x=w.center_x,
+                y=w.center_y,
+                height=w.height,
+            )
+        )
+
+    if not tokens:
+        return []
+
+    raw_rows = group_rows(tokens)
+    return [TokenRow(tokens=row) for row in raw_rows if row]
+
+
+def choose_best_anchor_local_row(rows: list[TokenRow], anchor: OcrWord) -> Optional[TokenRow]:
+    if not rows:
+        return None
+
+    scored: list[tuple[float, TokenRow]] = []
+
+    for row in rows:
+        usd_values = sorted({t.value for t in row.tokens if t.kind == "usd"})
+        syp_values = sorted({t.value for t in row.tokens if t.kind == "syp"})
+
+        if len(usd_values) < 2 or len(syp_values) < 2:
+            continue
+
+        dy = abs(row.center_y - anchor.center_y)
+        score = dy * 8.0
+        score -= len(row.tokens) * 5.0
+
+        if usd_values[-1] > usd_values[-2]:
+            score -= 10.0
+        if syp_values[-1] > syp_values[-2]:
+            score -= 10.0
+
+        scored.append((score, row))
+
+    if not scored:
+        return None
+
+    scored.sort(key=lambda x: x[0])
+    return scored[0][1]
+
+
+def extract_values_from_token_row(row: TokenRow) -> Optional[dict]:
+    usd_values = sorted({t.value for t in row.tokens if t.kind == "usd"})
+    syp_values = sorted({t.value for t in row.tokens if t.kind == "syp"})
+
+    if len(usd_values) < 2 or len(syp_values) < 2:
+        return None
+
+    usd_buy = usd_values[-2]
+    usd_sell = usd_values[-1]
+    syp_buy = syp_values[-2]
+    syp_sell = syp_values[-1]
+
+    return {
+        "usd_buy": usd_buy,
+        "usd_sell": usd_sell,
+        "syp_buy": syp_buy,
+        "syp_sell": syp_sell,
+    }
+
+
 def find_numeric_word_value(w: OcrWord) -> Optional[int]:
     return parse_numeric_value(w.norm)
 
@@ -969,131 +1079,43 @@ def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
 
 
 def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
-    row_band = max(anchor.height * 1.75, 70.0)
+    local_rows = build_anchor_local_rows(
+        words=words,
+        anchor=anchor,
+        max_left_dx=max(anchor.width * 14.0, 900.0),
+        max_right_dx=max(anchor.width * 0.50, 40.0),
+        max_dy=max(anchor.height * 2.2, 110.0),
+    )
 
-    usd_candidates: list[tuple[float, int]] = []
-    syp_candidates: list[tuple[float, int]] = []
-
-    for w in words:
-        if w is anchor:
-            continue
-
-        value = find_numeric_word_value(w)
-        if value is None:
-            continue
-
-        kind = classify_numeric_value(value)
-        if kind is None:
-            continue
-
-        dy = abs(w.center_y - anchor.center_y)
-        if dy > row_band:
-            continue
-
-        if w.center_x >= anchor.center_x + max(anchor.width * 0.25, 20.0):
-            continue
-
-        dx = anchor.center_x - w.center_x
-        distance = math.sqrt(dx * dx + (dy * 3.5) * (dy * 3.5))
-
-        if kind == "usd":
-            usd_candidates.append((distance, value))
-        elif kind == "syp":
-            syp_candidates.append((distance, value))
-
-    usd_candidates.sort(key=lambda item: item[0])
-    syp_candidates.sort(key=lambda item: item[0])
-
-    usd_values: list[int] = []
-    for _, value in usd_candidates:
-        if value not in usd_values:
-            usd_values.append(value)
-        if len(usd_values) == 2:
-            break
-
-    syp_values: list[int] = []
-    for _, value in syp_candidates:
-        if value not in syp_values:
-            syp_values.append(value)
-        if len(syp_values) == 2:
-            break
-
-    if len(usd_values) < 2 or len(syp_values) < 2:
+    best_row = choose_best_anchor_local_row(local_rows, anchor)
+    if best_row is None:
         return None
 
-    usd_values.sort()
-    syp_values.sort()
+    values = extract_values_from_token_row(best_row)
+    if values is None:
+        return None
 
-    return {
-        "usd_buy": usd_values[0],
-        "usd_sell": usd_values[1],
-        "syp_buy": syp_values[0],
-        "syp_sell": syp_values[1],
-    }
+    return values
 
 
 def extract_row_values_for_anchor_relaxed(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
-    row_band = max(anchor.height * 2.2, 95.0)
+    local_rows = build_anchor_local_rows(
+        words=words,
+        anchor=anchor,
+        max_left_dx=max(anchor.width * 18.0, 1100.0),
+        max_right_dx=max(anchor.width * 0.80, 70.0),
+        max_dy=max(anchor.height * 3.0, 150.0),
+    )
 
-    usd_candidates: list[tuple[float, int]] = []
-    syp_candidates: list[tuple[float, int]] = []
-
-    for w in words:
-        if w is anchor:
-            continue
-
-        value = find_numeric_word_value(w)
-        if value is None:
-            continue
-
-        kind = classify_numeric_value(value)
-        if kind is None:
-            continue
-
-        dy = abs(w.center_y - anchor.center_y)
-        if dy > row_band:
-            continue
-
-        if w.center_x >= anchor.center_x + max(anchor.width * 0.35, 25.0):
-            continue
-
-        dx = anchor.center_x - w.center_x
-        distance = math.sqrt(dx * dx + (dy * 4.0) * (dy * 4.0))
-
-        if kind == "usd":
-            usd_candidates.append((distance, value))
-        elif kind == "syp":
-            syp_candidates.append((distance, value))
-
-    usd_candidates.sort(key=lambda item: item[0])
-    syp_candidates.sort(key=lambda item: item[0])
-
-    usd_values: list[int] = []
-    for _, value in usd_candidates:
-        if value not in usd_values:
-            usd_values.append(value)
-        if len(usd_values) == 2:
-            break
-
-    syp_values: list[int] = []
-    for _, value in syp_candidates:
-        if value not in syp_values:
-            syp_values.append(value)
-        if len(syp_values) == 2:
-            break
-
-    if len(usd_values) < 2 or len(syp_values) < 2:
+    best_row = choose_best_anchor_local_row(local_rows, anchor)
+    if best_row is None:
         return None
 
-    usd_values.sort()
-    syp_values.sort()
+    values = extract_values_from_token_row(best_row)
+    if values is None:
+        return None
 
-    return {
-        "usd_buy": usd_values[0],
-        "usd_sell": usd_values[1],
-        "syp_buy": syp_values[0],
-        "syp_sell": syp_values[1],
-    }
+    return values
 
 
 def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
@@ -1154,6 +1176,12 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: anchors too small, likely wrong image")
         return None
 
+    logger.info(
+        "anchor21 at x=%.1f y=%.1f h=%.1f | anchor18 at x=%.1f y=%.1f h=%.1f",
+        anchor21.center_x, anchor21.center_y, anchor21.height,
+        anchor18.center_x, anchor18.center_y, anchor18.height,
+    )
+
     row21 = extract_row_values_for_anchor(words, anchor21)
     row18 = extract_row_values_for_anchor(words, anchor18)
 
@@ -1166,28 +1194,28 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     if row21 is None or row18 is None:
         return None
 
-    result = (
-        GoldRate(
-            ub=row21["usd_buy"],
-            us=row21["usd_sell"],
-            sb=row21["syp_buy"],
-            ss=row21["syp_sell"],
-        ),
-        GoldRate(
-            ub=row18["usd_buy"],
-            us=row18["usd_sell"],
-            sb=row18["syp_buy"],
-            ss=row18["syp_sell"],
-        ),
+    k21 = GoldRate(
+        ub=row21["usd_buy"],
+        us=row21["usd_sell"],
+        sb=row21["syp_buy"],
+        ss=row21["syp_sell"],
+    )
+    k18 = GoldRate(
+        ub=row18["usd_buy"],
+        us=row18["usd_sell"],
+        sb=row18["syp_buy"],
+        ss=row18["syp_sell"],
     )
 
-    fixed = apply_price_sanity_check(result[0], result[1])
+    fixed21, fixed18 = apply_price_sanity_check(k21, k18)
 
-    if not is_reasonable_extraction(fixed[0], fixed[1]):
+    logger.info("anchor_rows fixed: 21k=%s 18k=%s", fixed21, fixed18)
+
+    if not is_reasonable_extraction(fixed21, fixed18):
         logger.info("anchor_rows rejected by sanity check")
         return None
 
-    return fixed
+    return fixed21, fixed18
 
 
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
@@ -1942,7 +1970,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="4.1.0",
+    version="4.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1953,7 +1981,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "4.1.0",
+        "version": "4.2.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
