@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwH9rnRL&_nc_oc=AdpHkg33SZYzH4L3oCwT2LY_5P0njZjGt6e2W4UgjqtUK7iUeB9F1oHfvR2UGxXK0FY&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=uzVx4lPbQ2kucUwPPhECMQ&_nc_ss=7a30f&oh=00_Afwet50MWqThwmVpxoZ1YhV03nO9h-it8F9b3OvPAXZhCw&oe=69C4C851",
+  "source": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwGxQ55-&_nc_oc=AdqWnM0J2GDOEkqmz42O6hpaogqfP0ft-XckheUxmvXoLOx5ExugToHR3hTS6IzABUw&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=KTJVD3E3e_fALClCDcqqqw&_nc_ss=7a30f&oh=00_AfzaOjoqY62Zax8oJX-E7OJ9-UXt-MLbJxodUuqLQgg-IA&oe=69C4C851",
   "date": "0000/00/00",
   "time": "00:00",
   "k21_ss": 15950,
@@ -15,7 +15,7 @@
   "source_w": 1052,
   "source_h": 1052,
   "byte_length": 51320,
-  "updated_at_utc": "2026-03-21T20:48:55.284663+00:00",
+  "updated_at_utc": "2026-03-21T21:17:41.744421+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "tesseract",
@@ -28,7 +28,7 @@
     "header_time_failed_used_full_text_fallback"
   ],
   "debug": {
-    "source_url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwH9rnRL&_nc_oc=AdpHkg33SZYzH4L3oCwT2LY_5P0njZjGt6e2W4UgjqtUK7iUeB9F1oHfvR2UGxXK0FY&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=uzVx4lPbQ2kucUwPPhECMQ&_nc_ss=7a30f&oh=00_Afwet50MWqThwmVpxoZ1YhV03nO9h-it8F9b3OvPAXZhCw&oe=69C4C851",
+    "source_url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwGxQ55-&_nc_oc=AdqWnM0J2GDOEkqmz42O6hpaogqfP0ft-XckheUxmvXoLOx5ExugToHR3hTS6IzABUw&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=KTJVD3E3e_fALClCDcqqqw&_nc_ss=7a30f&oh=00_AfzaOjoqY62Zax8oJX-E7OJ9-UXt-MLbJxodUuqLQgg-IA&oe=69C4C851",
     "ocr_word_count": 65,
     "image_width": 1052,
     "image_height": 1052,
