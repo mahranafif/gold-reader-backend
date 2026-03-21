@@ -70,21 +70,21 @@ PREFERRED_CANDIDATE_HEIGHT = 400
 HEADER_REGION_CANDIDATES = [
     {
         "name": "band_a",
-        "header": (0.01, 0.26, 0.99, 0.46),
+        "header": (0.01, 0.24, 0.99, 0.46),
         "time": (0.00, 0.00, 0.38, 1.00),
-        "date": (0.18, 0.00, 0.72, 1.00),
+        "date": (0.18, 0.00, 0.78, 1.00),
     },
     {
         "name": "band_b",
-        "header": (0.01, 0.30, 0.99, 0.50),
+        "header": (0.01, 0.28, 0.99, 0.50),
         "time": (0.00, 0.00, 0.38, 1.00),
-        "date": (0.18, 0.00, 0.72, 1.00),
+        "date": (0.18, 0.00, 0.78, 1.00),
     },
     {
         "name": "band_c",
-        "header": (0.01, 0.34, 0.99, 0.56),
-        "time": (0.00, 0.00, 0.40, 1.00),
-        "date": (0.18, 0.00, 0.76, 1.00),
+        "header": (0.01, 0.32, 0.99, 0.54),
+        "time": (0.00, 0.00, 0.42, 1.00),
+        "date": (0.18, 0.00, 0.80, 1.00),
     },
 ]
 
@@ -264,10 +264,6 @@ class ExtractResponse(BaseModel):
 # =========================================================
 
 def sanitize_for_json(obj):
-    """
-    Defensive serializer sanitization to avoid accidental circular references
-    or non-serializable objects in debug payloads.
-    """
     seen: set[int] = set()
 
     def _walk(value):
@@ -325,6 +321,11 @@ def app_now() -> datetime:
 
 
 def normalize_digits(text: str) -> str:
+    arabic_indic_map = str.maketrans(
+        "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+        "01234567890123456789",
+    )
+    text = text.translate(arabic_indic_map)
     return (
         text.replace("B", "3")
         .replace("b", "3")
@@ -342,22 +343,18 @@ def normalize_digits(text: str) -> str:
 
 
 def normalize_date_text(text: str) -> str:
-    text = (
-        text.replace("B", "3")
-        .replace("b", "3")
-        .replace("O", "0")
-        .replace("o", "0")
-        .replace("l", "1")
-        .replace("I", "1")
-        .replace("|", "1")
-        .replace("S", "5")
-        .replace("s", "5")
-        .replace("Z", "2")
-        .replace("G", "6")
-        .replace("م", "")
-        .replace("ص", "")
-    )
+    text = normalize_digits(text)
+    text = text.replace("م", "").replace("ص", "")
     return re.sub(r"(^|[/\s.\-])\\", r"\g<1>1", text)
+
+
+def normalized_word_text(text: str) -> str:
+    text = normalize_digits(text)
+    text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+    text = text.replace("ة", "ه")
+    text = text.replace("ى", "ي")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def safe_slug(text: str) -> str:
@@ -477,14 +474,16 @@ def extract_date_from_raw(raw: str) -> str:
 
 
 def extract_time_from_raw(raw: str) -> str:
-    raw = raw.strip()
+    raw = normalize_digits(raw.strip())
     is_pm = "م" in raw
     is_am = "ص" in raw
 
     cleaned = raw.replace("م", "").replace("ص", "")
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", cleaned)
     if not match:
-        return "00:00"
+        match = re.search(r"(\d{1,2})\D{0,2}(\d{2})", cleaned)
+        if not match:
+            return "00:00"
 
     hh = int(match.group(1))
     mm = int(match.group(2))
@@ -814,6 +813,8 @@ def quality_score(snapshot: dict) -> int:
     total = 0
     if snapshot.get("date") != "0000/00/00":
         total += 1000
+    if snapshot.get("time") != "00:00":
+        total += 500
     total += int(snapshot.get("source_w") or 0) // 10
     total += int(snapshot.get("source_h") or 0) // 10
     total += int(snapshot.get("byte_length") or 0) // 5000
@@ -871,10 +872,6 @@ def save_snapshot_into_history(snapshot: dict):
     history = load_json(HISTORY_FILE, [])
     if not isinstance(history, list):
         history = []
-
-    if snapshot.get("date") == "0000/00/00":
-        save_json(LATEST_FILE, snapshot)
-        return
 
     exact_key = snapshot_identity_key(snapshot)
     if any(snapshot_identity_key(item) == exact_key for item in history if isinstance(item, dict)):
@@ -941,7 +938,6 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
         last_row = rows[-1]
         avg_y = sum(t.y for t in last_row) / len(last_row)
         avg_h = max(sum(t.height for t in last_row) / len(last_row), 1.0)
-
         y_threshold = max(avg_h * 0.9, 20.0)
 
         if abs(token.y - avg_y) <= y_threshold:
@@ -960,20 +956,31 @@ def find_numeric_word_value(w: OcrWord) -> Optional[int]:
 
 
 def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
-    candidates = []
+    candidates: list[OcrWord] = []
+
     for w in words:
-        value = re.sub(r"[^0-9]", "", w.norm)
-        if value == target:
+        text = normalize_digits(w.text)
+        digits = re.sub(r"[^0-9]", "", text)
+
+        if digits == target:
             candidates.append(w)
+            continue
+
+        if target == "21":
+            if digits in {"21", "2", "1"} or text in {"21", "2l", "l1"}:
+                candidates.append(w)
+        elif target == "18":
+            if digits in {"18", "1", "8"} or text in {"18", "l8"}:
+                candidates.append(w)
 
     if not candidates:
         return None
 
-    return max(candidates, key=lambda w: (w.center_x, w.conf))
+    return max(candidates, key=lambda w: (w.center_x, w.height, w.conf))
 
 
 def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
-    row_band = max(anchor.height * 0.95, 32.0)
+    row_band = max(anchor.height * 1.10, 38.0)
 
     usd_candidates: list[tuple[float, int]] = []
     syp_candidates: list[tuple[float, int]] = []
@@ -1085,33 +1092,6 @@ def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, Go
     if k18_usd_sell > 0 and k18_usd_buy > 0 and k18_usd_sell < k18_usd_buy:
         k18_usd_sell, k18_usd_buy = k18_usd_buy, k18_usd_sell
 
-    def is_ratio_valid(val21: int, val18: int) -> bool:
-        if val21 == 0 or val18 == 0:
-            return False
-        ratio = val18 / val21
-        return MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO
-
-    def fix_21_from_18_if_needed(value21: int, value18: int) -> int:
-        if is_ratio_valid(value21, value18):
-            return value21
-        if value21 < value18 or (value21 < OCR_SANITY_THRESHOLD and value18 > OCR_SANITY_THRESHOLD):
-            return round(value18 * 21 / 18)
-        return value21
-
-    k21_syp_sell = fix_21_from_18_if_needed(k21_syp_sell, k18_syp_sell)
-    k21_syp_buy = fix_21_from_18_if_needed(k21_syp_buy, k18_syp_buy)
-    k21_usd_sell = fix_21_from_18_if_needed(k21_usd_sell, k18_usd_sell)
-    k21_usd_buy = fix_21_from_18_if_needed(k21_usd_buy, k18_usd_buy)
-
-    if not is_ratio_valid(k21_syp_sell, k18_syp_sell):
-        k18_syp_sell = round(k21_syp_sell * 18 / 21)
-    if not is_ratio_valid(k21_syp_buy, k18_syp_buy):
-        k18_syp_buy = round(k21_syp_buy * 18 / 21)
-    if not is_ratio_valid(k21_usd_sell, k18_usd_sell):
-        k18_usd_sell = round(k21_usd_sell * 18 / 21)
-    if not is_ratio_valid(k21_usd_buy, k18_usd_buy):
-        k18_usd_buy = round(k21_usd_buy * 18 / 21)
-
     return (
         GoldRate(
             ub=k21_usd_buy,
@@ -1181,7 +1161,8 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
     syp_prices = sorted([t.value for t in tokens if t.kind == "syp"], reverse=True)
     usd_prices = sorted([t.value for t in tokens if t.kind == "usd"], reverse=True)
 
-    if len(syp_prices) < 2 or len(usd_prices) < 2:
+    if len(syp_prices) < 4 or len(usd_prices) < 4:
+        logger.info("legacy_fallback: not enough values for real 21k and 18k rows")
         return None
 
     k21_syp_sell = syp_prices[0]
@@ -1189,16 +1170,10 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
     k21_usd_sell = usd_prices[0]
     k21_usd_buy = usd_prices[1]
 
-    if len(syp_prices) >= 4 and len(usd_prices) >= 4:
-        k18_syp_sell = syp_prices[2]
-        k18_syp_buy = syp_prices[3]
-        k18_usd_sell = usd_prices[2]
-        k18_usd_buy = usd_prices[3]
-    else:
-        k18_syp_sell = round(k21_syp_sell * 18 / 21)
-        k18_syp_buy = round(k21_syp_buy * 18 / 21)
-        k18_usd_sell = round(k21_usd_sell * 18 / 21)
-        k18_usd_buy = round(k21_usd_buy * 18 / 21)
+    k18_syp_sell = syp_prices[2]
+    k18_syp_buy = syp_prices[3]
+    k18_usd_sell = usd_prices[2]
+    k18_usd_buy = usd_prices[3]
 
     result = (
         GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
@@ -1252,23 +1227,14 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
             }
         )
 
-    if not valid_rows:
-        logger.info("smart_fallback: no valid rows")
+    if len(valid_rows) < 2:
+        logger.warning("smart_fallback: 18k row not detected — rejecting extraction")
         return None
 
     valid_rows.sort(key=lambda r: (r["score"], r["syp_sell"]), reverse=True)
 
     best21 = valid_rows[0]
-
-    if len(valid_rows) >= 2:
-        best18 = valid_rows[1]
-    else:
-        best18 = {
-            "syp_sell": round(best21["syp_sell"] * 18 / 21),
-            "syp_buy": round(best21["syp_buy"] * 18 / 21),
-            "usd_sell": round(best21["usd_sell"] * 18 / 21),
-            "usd_buy": round(best21["usd_buy"] * 18 / 21),
-        }
+    best18 = valid_rows[1]
 
     k21 = GoldRate(
         ub=best21["usd_buy"],
@@ -1307,7 +1273,7 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
     anchor21 = find_anchor_word(words, "21")
     anchor18 = find_anchor_word(words, "18")
 
-    if anchor21 is None:
+    if anchor21 is None or anchor18 is None:
         return None
 
     used_ids: set[int] = set()
@@ -1316,18 +1282,17 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         expected_x = anchor.center_x + (float(ratios.get("dx", 0.0)) * max(anchor.width, 1.0))
         expected_y = anchor.center_y + (float(ratios.get("dy", 0.0)) * max(anchor.height, 1.0))
 
-        max_dx = max(anchor.width * 6.0, 120.0)
-        max_dy = max(anchor.height * 1.8, 45.0)
+        max_dx = max(anchor.width * 6.5, 140.0)
+        max_dy = max(anchor.height * 2.0, 55.0)
 
         candidates = []
 
         for idx, w in enumerate(words):
-            if w is anchor21 or (anchor18 is not None and w is anchor18):
+            if w is anchor21 or w is anchor18:
                 continue
             if ":" in w.text or "/" in w.text:
                 continue
 
-                # numeric only
             value = parse_numeric_value(w.norm)
             if value is None:
                 continue
@@ -1369,18 +1334,19 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         k in blueprint for k in ["18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy"]
     )
 
-    if anchor18 is not None and has_18_blueprint:
-        k18_syp_sell = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
-        k18_syp_buy = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
-        k18_usd_sell = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
-        k18_usd_buy = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
-    else:
-        k18_syp_sell = round(k21_syp_sell * 18 / 21)
-        k18_syp_buy = round(k21_syp_buy * 18 / 21)
-        k18_usd_sell = round(k21_usd_sell * 18 / 21)
-        k18_usd_buy = round(k21_usd_buy * 18 / 21)
+    if not has_18_blueprint:
+        logger.warning("Blueprint missing 18k keys")
+        return None
 
-    if any(v == 0 for v in [k21_syp_sell, k21_syp_buy, k21_usd_sell, k21_usd_buy]):
+    k18_syp_sell = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
+    k18_syp_buy = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
+    k18_usd_sell = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
+    k18_usd_buy = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
+
+    if any(v == 0 for v in [
+        k21_syp_sell, k21_syp_buy, k21_usd_sell, k21_usd_buy,
+        k18_syp_sell, k18_syp_buy, k18_usd_sell, k18_usd_buy,
+    ]):
         return None
 
     result = (
@@ -1404,8 +1370,8 @@ def extract_rates(
 
     if ocr_mode == "prefer_blueprint":
         attempts = [
-            ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
             ("anchor_rows", extract_anchor_rows(words)),
+            ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
             ("smart_fallback", extract_smart_fallback(words)),
             ("legacy_fallback", extract_legacy_fallback(words)),
         ]
@@ -1471,6 +1437,130 @@ def words_to_text(words: list[OcrWord]) -> str:
     return " ".join(w.text for w in ordered)
 
 
+def find_text_anchor(words: list[OcrWord], targets: list[str]) -> Optional[OcrWord]:
+    normalized_targets = [normalized_word_text(t) for t in targets]
+    candidates: list[OcrWord] = []
+
+    for w in words:
+        text = normalized_word_text(w.text)
+        if any(t in text for t in normalized_targets):
+            candidates.append(w)
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=lambda w: (w.conf, w.width * w.height))
+
+
+def collect_words_near_anchor(
+    words: list[OcrWord],
+    anchor: OcrWord,
+    max_dx: float,
+    max_dy: float,
+) -> list[OcrWord]:
+    out: list[OcrWord] = []
+
+    for w in words:
+        dx = abs(w.center_x - anchor.center_x)
+        dy = abs(w.center_y - anchor.center_y)
+        if dy <= max_dy and dx <= max_dx:
+            out.append(w)
+
+    out.sort(key=lambda w: (w.top, w.left))
+    return out
+
+
+def extract_day_from_header_words(words: list[OcrWord]) -> str:
+    day_anchor = find_text_anchor(words, ["اليوم", "يوم"])
+    if day_anchor is None:
+        return ""
+
+    nearby = collect_words_near_anchor(
+        words,
+        day_anchor,
+        max_dx=max(day_anchor.width * 8.0, 260.0),
+        max_dy=max(day_anchor.height * 1.8, 70.0),
+    )
+    raw = " ".join(w.text for w in nearby)
+    normalized = normalized_word_text(raw)
+
+    day_names = [
+        "الاثنين", "الثلاثاء", "الاربعاء", "الخميس",
+        "الجمعه", "السبت", "الاحد", "الأحد", "الجمعة",
+    ]
+
+    for day in day_names:
+        if normalized_word_text(day) in normalized:
+            return day
+
+    return ""
+
+
+def extract_date_from_header_words(words: list[OcrWord]) -> str:
+    date_anchor = find_text_anchor(words, ["التاريخ", "تاريخ"])
+    if date_anchor is None:
+        return "0000/00/00"
+
+    nearby = collect_words_near_anchor(
+        words,
+        date_anchor,
+        max_dx=max(date_anchor.width * 9.0, 420.0),
+        max_dy=max(date_anchor.height * 1.8, 70.0),
+    )
+
+    raw = " ".join(w.text for w in nearby)
+    date_value = extract_date_from_raw(raw)
+    if date_value != "0000/00/00":
+        return date_value
+
+    normalized = normalize_date_text(raw)
+    m = re.search(r"(20\d{2})\D{0,3}(\d{1,2})\D{0,3}(\d{1,2})", normalized)
+    if m:
+        y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return _apply_date_checksum(y, mm, dd)
+
+    return "0000/00/00"
+
+
+def extract_time_from_header_words(words: list[OcrWord]) -> str:
+    time_anchor = find_text_anchor(words, ["الساعه", "الساعة", "ساعه", "ساعة"])
+    if time_anchor is None:
+        return "00:00"
+
+    nearby = collect_words_near_anchor(
+        words,
+        time_anchor,
+        max_dx=max(time_anchor.width * 9.0, 300.0),
+        max_dy=max(time_anchor.height * 1.8, 70.0),
+    )
+
+    raw = " ".join(w.text for w in nearby)
+    time_value = extract_time_from_raw(raw)
+    if time_value != "00:00":
+        return time_value
+
+    normalized = normalize_digits(raw)
+    is_pm = "م" in raw
+    is_am = "ص" in raw
+
+    m = re.search(r"(\d{1,2})\D{0,2}(\d{2})", normalized)
+    if not m:
+        return "00:00"
+
+    hh = int(m.group(1))
+    mm = int(m.group(2))
+
+    if hh > 23 or mm > 59:
+        return "00:00"
+
+    if is_pm and 1 <= hh <= 11:
+        hh += 12
+    elif is_am and hh == 12:
+        hh = 0
+
+    return f"{hh:02d}:{mm:02d}"
+
+
 def evaluate_header_candidate(
     img: Image.Image,
     words: list[OcrWord],
@@ -1529,14 +1619,22 @@ def evaluate_header_candidate(
 
 
 def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
-    """
-    Best fix:
-    - never reuse a dict object that will also be inserted into a list
-    - always build fresh result dicts
-    - keep a stable debug structure with no shared mutable references
-    """
     tried_candidates: list[dict] = []
     crop_attempts: list[dict] = []
+
+    anchor_date = extract_date_from_header_words(words)
+    anchor_time = extract_time_from_header_words(words)
+    anchor_day = extract_day_from_header_words(words)
+
+    anchor_debug = {
+        "header_source": "anchor_word_search",
+        "anchor_day": anchor_day,
+        "anchor_date": anchor_date,
+        "anchor_time": anchor_time,
+    }
+
+    if anchor_date != "0000/00/00" or anchor_time != "00:00":
+        return anchor_date, anchor_time, anchor_debug
 
     best_date = "0000/00/00"
     best_time = "00:00"
@@ -1544,9 +1642,11 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
         "header_source": "none",
         "tried_candidates": [],
         "crop_attempts": [],
+        "anchor_day": anchor_day,
+        "anchor_date": anchor_date,
+        "anchor_time": anchor_time,
     }
 
-    # Pass 1: use OCR words from full image
     for candidate in HEADER_REGION_CANDIDATES:
         date_value, time_value, diagnostics = evaluate_header_candidate(img, words, candidate)
         diagnostics_copy = copy.deepcopy(diagnostics)
@@ -1560,6 +1660,9 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(diagnostics_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": [],
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
         if has_date and best_date == "0000/00/00":
@@ -1568,6 +1671,9 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(diagnostics_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": [],
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
         if has_time and best_time == "00:00":
@@ -1576,9 +1682,11 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(diagnostics_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": [],
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
-    # Pass 2: crop OCR fallback across multiple bands
     for candidate in HEADER_REGION_CANDIDATES:
         header_x1, header_y1, header_x2, header_y2 = candidate["header"]
         time_x1, time_y1, time_x2, time_y2 = candidate["time"]
@@ -1612,6 +1720,9 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(crop_attempt_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": copy.deepcopy(crop_attempts),
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
         if has_time and best_time == "00:00":
@@ -1620,6 +1731,9 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(crop_attempt_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": copy.deepcopy(crop_attempts),
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
         if has_date and has_time:
@@ -1627,12 +1741,18 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
                 **copy.deepcopy(crop_attempt_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": copy.deepcopy(crop_attempts),
+                "anchor_day": anchor_day,
+                "anchor_date": anchor_date,
+                "anchor_time": anchor_time,
             }
 
     return best_date, best_time, {
         **copy.deepcopy(best_debug),
         "tried_candidates": copy.deepcopy(tried_candidates),
         "crop_attempts": copy.deepcopy(crop_attempts),
+        "anchor_day": anchor_day,
+        "anchor_date": anchor_date,
+        "anchor_time": anchor_time,
     }
 
 
@@ -1643,22 +1763,22 @@ def compute_confidence(
     time: str,
     warnings: list[str],
 ) -> float:
-    score = 0.50
+    score = 0.45
 
     if method == "blueprint":
-        score += 0.28
+        score += 0.30
     elif method == "anchor_rows":
-        score += 0.22
+        score += 0.25
     elif method == "smart_fallback":
-        score += 0.15
+        score += 0.10
     elif method == "legacy_fallback":
-        score += 0.08
+        score += 0.05
 
     if len(words) >= 20:
         score += 0.10
 
     if date != "0000/00/00":
-        score += 0.08
+        score += 0.07
     else:
         score -= 0.10
 
@@ -1765,11 +1885,6 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
 # Image source resolution
 # =========================================================
 
-def looks_like_direct_image_url(url: str) -> bool:
-    path = urlparse(url).path.lower()
-    return any(path.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"])
-
-
 def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
     preferred_ratio = 0.90
@@ -1864,7 +1979,6 @@ def fetch_page_image_candidates(source_url: str) -> list[ImageCandidate]:
 
 def validate_image_response(response: requests.Response, source_url: str):
     content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-
     if content_type and content_type not in IMAGE_CONTENT_TYPES:
         raise RuntimeError(
             f"Unsupported content type for image download from {source_url}: {content_type}"
@@ -1876,6 +1990,21 @@ def fetch_image_bytes(url: str) -> tuple[bytes, str]:
     response.raise_for_status()
     validate_image_response(response, url)
     return response.content, response.url
+
+
+def read_local_image_bytes(file_path: str) -> tuple[bytes, str]:
+    path = Path(file_path)
+    if not path.is_absolute():
+        path = (ROOT / path).resolve()
+
+    if not path.exists() or not path.is_file():
+        raise RuntimeError(f"Local image file not found: {path}")
+
+    suffix = path.suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
+        raise RuntimeError(f"Unsupported local image file type: {path.suffix}")
+
+    return path.read_bytes(), path.as_uri()
 
 
 def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
@@ -1908,6 +2037,19 @@ def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
             continue
 
     raise RuntimeError(f"Failed to download/process ranked image candidates: {last_error}")
+
+
+def resolve_input_image() -> tuple[bytes, str]:
+    source_file = os.getenv("GOLD_SOURCE_FILE", "").strip()
+    source_url = os.getenv("GOLD_SOURCE_URL", "").strip()
+
+    if source_file:
+        return read_local_image_bytes(source_file)
+
+    if source_url:
+        return resolve_best_image_source(source_url)
+
+    raise RuntimeError("Neither GOLD_SOURCE_FILE nor GOLD_SOURCE_URL is set")
 
 
 # =========================================================
@@ -1958,7 +2100,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="2.1.1",
+    version="4.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1969,7 +2111,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "2.1.1",
+        "version": "4.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
@@ -2013,12 +2155,8 @@ def extract(payload: ExtractRequest):
 # =========================================================
 
 def main():
-    source_url = os.getenv("GOLD_SOURCE_URL", "").strip()
-    if not source_url:
-        raise RuntimeError("GOLD_SOURCE_URL is empty")
-
-    image_bytes, final_image_url = resolve_best_image_source(source_url)
-    snapshot = build_snapshot_from_image(image_bytes, final_image_url)
+    image_bytes, final_source = resolve_input_image()
+    snapshot = build_snapshot_from_image(image_bytes, final_source)
 
     latest = load_json(LATEST_FILE, {})
     changed = not LATEST_FILE.exists() or snapshot_changed(latest, snapshot)
