@@ -3,7 +3,6 @@ import json
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Optional
 
 from playwright.async_api import async_playwright, Page
 
@@ -18,9 +17,10 @@ HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {
 }
 
 OUTPUT_FILE = Path(os.getenv("FACEBOOK_OUTPUT_JSON", "data/facebook_latest_image.json"))
+SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page_debug.png"))
 
 REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
-MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "8"))
+MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "10"))
 SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1200"))
 
 
@@ -29,6 +29,9 @@ class ImageCandidate:
     src: str
     width: int
     height: int
+    top: float
+    in_post: bool
+    score: float = 0.0
 
     @property
     def area(self) -> int:
@@ -39,32 +42,47 @@ class ImageCandidate:
         return self.width / self.height if self.height else 0.0
 
 
-def candidate_score(c: ImageCandidate) -> float:
-    area_score = float(c.area)
+def compute_candidate_score(c: ImageCandidate) -> float:
+    score = float(c.area)
 
-    # Good for portrait post images / boards
-    preferred_ratio = 0.90
-    ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 50000.0
+    # Favor feed/post images heavily
+    if c.in_post:
+        score += 500000
 
-    portrait_bonus = 15000.0 if c.height >= c.width else 0.0
-    size_bonus = 50000.0 if c.width >= 400 and c.height >= 400 else 0.0
+    # Avoid header/cover region
+    if c.top > 500:
+        score += 120000
+    else:
+        score -= 250000
 
-    return area_score + portrait_bonus + size_bonus - ratio_penalty
+    # Favor portrait-ish or board-like images over banners
+    ratio = c.aspect_ratio
+    if 0.65 <= ratio <= 1.35:
+        score += 120000
+    elif 1.35 < ratio <= 1.9:
+        score += 40000
+    else:
+        score -= 60000
+
+    # Favor reasonably large images
+    if c.width >= 500 and c.height >= 500:
+        score += 50000
+
+    # Penalize obviously avatar-like squares near top
+    if 0.85 <= ratio <= 1.15 and c.top < 700:
+        score -= 120000
+
+    return score
 
 
 async def dismiss_login_modal(page: Page) -> bool:
-    """
-    Try several selectors for the 'X' close button shown by Facebook guest modal.
-    """
     selectors = [
         'div[aria-label="Close"]',
         'div[role="button"][aria-label="Close"]',
         'div[role="button"][aria-label="إغلاق"]',
         'div[aria-label="إغلاق"]',
-        'svg[aria-label="Close"]',
-        'svg[aria-label="إغلاق"]',
-        # fallback: dialog close icon container
-        'div[role="dialog"] div[role="button"]',
+        '[role="dialog"] [aria-label="Close"]',
+        '[role="dialog"] [aria-label="إغلاق"]',
     ]
 
     for selector in selectors:
@@ -77,20 +95,20 @@ async def dismiss_login_modal(page: Page) -> bool:
         except Exception:
             pass
 
-    # Last-resort JS click on likely top-right close buttons
     try:
         clicked = await page.evaluate(
             """
             () => {
-              const candidates = Array.from(document.querySelectorAll('[role="button"], div, svg'));
-              for (const el of candidates) {
+              const els = Array.from(document.querySelectorAll('[role="button"], div, svg'));
+              for (const el of els) {
                 const label = (el.getAttribute('aria-label') || '').toLowerCase();
                 const rect = el.getBoundingClientRect();
                 const nearTopRight =
+                  rect.top >= 0 &&
+                  rect.top < window.innerHeight * 0.4 &&
+                  rect.left > window.innerWidth * 0.55 &&
                   rect.width > 10 &&
-                  rect.height > 10 &&
-                  rect.top < window.innerHeight * 0.35 &&
-                  rect.left > window.innerWidth * 0.55;
+                  rect.height > 10;
 
                 if (nearTopRight && (label.includes('close') || label.includes('إغلاق'))) {
                   el.click();
@@ -114,11 +132,36 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
     raw = await page.evaluate(
         """
         () => {
-          return Array.from(document.images).map(img => ({
-            src: img.currentSrc || img.src || '',
-            width: img.naturalWidth || 0,
-            height: img.naturalHeight || 0
-          }));
+          function isInsidePost(img) {
+            let el = img;
+            for (let i = 0; i < 8 && el; i++, el = el.parentElement) {
+              const role = (el.getAttribute && el.getAttribute('role')) || '';
+              const dataPagelet = (el.getAttribute && el.getAttribute('data-pagelet')) || '';
+              const aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
+              const tag = (el.tagName || '').toLowerCase();
+
+              if (
+                tag === 'article' ||
+                role === 'article' ||
+                dataPagelet.toLowerCase().includes('feed') ||
+                aria.toLowerCase().includes('post')
+              ) {
+                return true;
+              }
+            }
+            return false;
+          }
+
+          return Array.from(document.images).map(img => {
+            const rect = img.getBoundingClientRect();
+            return {
+              src: img.currentSrc || img.src || '',
+              width: img.naturalWidth || 0,
+              height: img.naturalHeight || 0,
+              top: rect.top + window.scrollY,
+              in_post: isInsidePost(img),
+            };
+          });
         }
         """
     )
@@ -130,6 +173,8 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
         src = str(item.get("src") or "").strip()
         width = int(item.get("width") or 0)
         height = int(item.get("height") or 0)
+        top = float(item.get("top") or 0)
+        in_post = bool(item.get("in_post") or False)
 
         if not src or src in seen:
             continue
@@ -137,15 +182,32 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
 
         lower = src.lower()
 
-        # Keep only useful post images, avoid icons and avatars as much as possible
         if width < 250 or height < 250:
             continue
-        if any(bad in lower for bad in ["emoji", "profile_pic", "scontent.xx", "static.xx.fbcdn", "icon"]):
+
+        # Exclude obvious non-target assets
+        bad_parts = [
+            "emoji",
+            "static.xx",
+            "profile_pic",
+            "scontent.xx",
+            "safe_image.php",
+            "lookaside",
+        ]
+        if any(part in lower for part in bad_parts):
             continue
 
-        out.append(ImageCandidate(src=src, width=width, height=height))
+        candidate = ImageCandidate(
+            src=src,
+            width=width,
+            height=height,
+            top=top,
+            in_post=in_post,
+        )
+        candidate.score = compute_candidate_score(candidate)
+        out.append(candidate)
 
-    out.sort(key=candidate_score, reverse=True)
+    out.sort(key=lambda c: c.score, reverse=True)
     return out
 
 
@@ -176,14 +238,14 @@ async def scrape_public_facebook_image() -> dict:
             await page.wait_for_timeout(1500)
 
             modal_closed = await dismiss_login_modal(page)
-
-            # Give the page time to settle after closing modal
             await page.wait_for_timeout(1500)
 
-            # Scroll a bit to allow post images to load
             for _ in range(MAX_SCROLL_STEPS):
-                await page.evaluate("window.scrollBy(0, Math.max(window.innerHeight * 0.8, 900));")
+                await page.evaluate("window.scrollBy(0, Math.max(window.innerHeight * 0.75, 850));")
                 await page.wait_for_timeout(SCROLL_DELAY_MS)
+
+            SCREENSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+            await page.screenshot(path=str(SCREENSHOT_FILE), full_page=True)
 
             candidates = await extract_candidates(page)
 
@@ -196,6 +258,8 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_image_url": "",
                     "selected_width": 0,
                     "selected_height": 0,
+                    "selected_top": 0,
+                    "selected_in_post": False,
                     "candidates": [],
                 }
             else:
@@ -208,6 +272,8 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_image_url": best.src,
                     "selected_width": best.width,
                     "selected_height": best.height,
+                    "selected_top": best.top,
+                    "selected_in_post": best.in_post,
                     "candidates": [asdict(c) for c in candidates[:10]],
                 }
 
