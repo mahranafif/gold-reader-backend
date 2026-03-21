@@ -19,7 +19,6 @@ import requests
 import uvicorn
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
-from paddleocr import PaddleOCR
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from pydantic import BaseModel, Field, HttpUrl
 from requests.adapters import HTTPAdapter
@@ -53,6 +52,13 @@ DEBUG_MAX_FILES = int(os.getenv("GOLD_DEBUG_MAX_FILES", "50"))
 
 APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "UTC").strip() or "UTC"
 
+DISABLE_PADDLE = os.getenv("DISABLE_PADDLE", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 MIN_USD_PRICE = 50
 MAX_USD_PRICE = 800
 MIN_SYP_PRICE = 1000
@@ -60,7 +66,6 @@ MAX_SYP_PRICE = 200000
 
 MIN_18K_TO_21K_RATIO = 0.84
 MAX_18K_TO_21K_RATIO = 0.87
-OCR_SANITY_THRESHOLD = 5000
 
 MIN_CANDIDATE_WIDTH = 250
 MIN_CANDIDATE_HEIGHT = 250
@@ -108,6 +113,8 @@ IMAGE_CONTENT_TYPES = {
 
 _PADDLE_OCR = None
 _PADDLE_OCR_LOCK = Lock()
+_PADDLE_AVAILABLE = not DISABLE_PADDLE
+_PADDLE_FAILURE_REASON: Optional[str] = None
 
 _BLUEPRINT_CACHE: Optional[dict] = None
 _BLUEPRINT_MTIME: Optional[float] = None
@@ -405,10 +412,6 @@ def _apply_date_checksum(y: int, m: int, d: int) -> str:
         return fmt(y, m, d)
     if is_reasonable(y, d, m):
         return fmt(y, d, m)
-    if m == 8 and is_reasonable(y, 3, d):
-        return fmt(y, 3, d)
-    if d == 8 and is_reasonable(y, m, 3):
-        return fmt(y, m, 3)
 
     return "0000/00/00"
 
@@ -429,46 +432,8 @@ def extract_date_from_raw(raw: str) -> str:
     m = direct_regex.search(normalized)
     if m:
         if m.group(1) is not None:
-            y = int(m.group(1))
-            mm = int(m.group(2))
-            dd = int(m.group(3))
-            return _apply_date_checksum(y, mm, dd)
-
-        dd = int(m.group(4))
-        mm = int(m.group(5))
-        y = int(m.group(6))
-        return _apply_date_checksum(y, mm, dd)
-
-    t_match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", normalized)
-    text_without_time = normalized.replace(t_match.group(0), "") if t_match else normalized
-    numbers_only = re.sub(r"[^\d]", " ", text_without_time)
-    numbers_only = re.sub(r"\s+", " ", numbers_only).strip()
-    all_nums = [s for s in numbers_only.split(" ") if s]
-
-    y_idx = -1
-    for idx, n in enumerate(all_nums):
-        try:
-            value = int(n)
-        except Exception:
-            continue
-        if len(n) == 4 and min_year <= value <= max_year:
-            y_idx = idx
-            break
-
-    if y_idx != -1:
-        if y_idx <= len(all_nums) - 3:
-            y = int(all_nums[y_idx])
-            mm = int(all_nums[y_idx + 1]) if y_idx + 1 < len(all_nums) else 99
-            dd = int(all_nums[y_idx + 2]) if y_idx + 2 < len(all_nums) else 99
-            return _apply_date_checksum(y, mm, dd)
-
-        if y_idx >= 2:
-            y = int(all_nums[y_idx])
-            mm = int(all_nums[y_idx - 1]) if y_idx - 1 >= 0 else 99
-            dd = int(all_nums[y_idx - 2]) if y_idx - 2 >= 0 else 99
-            if mm > 12 and dd <= 12:
-                mm, dd = dd, mm
-            return _apply_date_checksum(y, mm, dd)
+            return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        return _apply_date_checksum(int(m.group(6)), int(m.group(5)), int(m.group(4)))
 
     return "0000/00/00"
 
@@ -520,7 +485,7 @@ def classify_numeric_value(value: int) -> Optional[str]:
     return None
 
 
-def extract_numeric_tokens(words: list[OcrWord]) -> list[NumericToken]:
+def extract_numeric_tokens(words: list["OcrWord"]) -> list["NumericToken"]:
     tokens: list[NumericToken] = []
 
     for w in words:
@@ -574,17 +539,40 @@ def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Im
 # OCR
 # =========================================================
 
+def disable_paddle(reason: str):
+    global _PADDLE_AVAILABLE, _PADDLE_FAILURE_REASON, _PADDLE_OCR
+    _PADDLE_AVAILABLE = False
+    _PADDLE_FAILURE_REASON = reason
+    _PADDLE_OCR = None
+    logger.warning("PaddleOCR disabled for this process: %s", reason)
+
+
 def get_paddle_ocr():
-    global _PADDLE_OCR
+    global _PADDLE_OCR, _PADDLE_AVAILABLE
+
+    if not _PADDLE_AVAILABLE:
+        raise RuntimeError(_PADDLE_FAILURE_REASON or "PaddleOCR disabled")
+
     if _PADDLE_OCR is None:
         with _PADDLE_OCR_LOCK:
             if _PADDLE_OCR is None:
-                _PADDLE_OCR = PaddleOCR(
-                    lang="ar",
-                    use_doc_orientation_classify=False,
-                    use_doc_unwarping=False,
-                    use_textline_orientation=False,
-                )
+                try:
+                    from paddleocr import PaddleOCR  # lazy import
+                except Exception as exc:
+                    disable_paddle(f"import_failed: {exc}")
+                    raise
+
+                try:
+                    _PADDLE_OCR = PaddleOCR(
+                        lang="ar",
+                        use_doc_orientation_classify=False,
+                        use_doc_unwarping=False,
+                        use_textline_orientation=False,
+                    )
+                except Exception as exc:
+                    disable_paddle(f"init_failed: {exc}")
+                    raise
+
     return _PADDLE_OCR
 
 
@@ -731,14 +719,15 @@ def tesseract_ocr_words(
 
 
 def run_ocr_with_fallback(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], str, str]:
-    try:
-        words, raw = paddle_ocr_words(img)
-        logger.info("PaddleOCR words=%s", len(words))
-        if words:
-            return words, raw, "paddleocr"
-        logger.warning("PaddleOCR returned 0 words, falling back to Tesseract")
-    except Exception as exc:
-        logger.warning("PaddleOCR failed: %s", exc)
+    if _PADDLE_AVAILABLE:
+        try:
+            words, raw = paddle_ocr_words(img)
+            logger.info("PaddleOCR words=%s", len(words))
+            if words:
+                return words, raw, "paddleocr"
+            logger.warning("PaddleOCR returned 0 words, falling back to Tesseract")
+        except Exception as exc:
+            disable_paddle(f"runtime_failed: {exc}")
 
     words, raw = tesseract_ocr_words(img, psm=psm, lang="ara+eng")
     logger.info("Tesseract words=%s", len(words))
@@ -938,7 +927,7 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
         last_row = rows[-1]
         avg_y = sum(t.y for t in last_row) / len(last_row)
         avg_h = max(sum(t.height for t in last_row) / len(last_row), 1.0)
-        y_threshold = max(avg_h * 0.9, 20.0)
+        y_threshold = max(avg_h * 1.0, 24.0)
 
         if abs(token.y - avg_y) <= y_threshold:
             last_row.append(token)
@@ -980,7 +969,7 @@ def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
 
 
 def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
-    row_band = max(anchor.height * 1.10, 38.0)
+    row_band = max(anchor.height * 1.75, 70.0)
 
     usd_candidates: list[tuple[float, int]] = []
     syp_candidates: list[tuple[float, int]] = []
@@ -1001,11 +990,75 @@ def extract_row_values_for_anchor(words: list[OcrWord], anchor: OcrWord) -> Opti
         if dy > row_band:
             continue
 
-        if w.center_x >= anchor.center_x:
+        if w.center_x >= anchor.center_x + max(anchor.width * 0.25, 20.0):
             continue
 
         dx = anchor.center_x - w.center_x
-        distance = math.sqrt(dx * dx + (dy * 2.0) * (dy * 2.0))
+        distance = math.sqrt(dx * dx + (dy * 3.5) * (dy * 3.5))
+
+        if kind == "usd":
+            usd_candidates.append((distance, value))
+        elif kind == "syp":
+            syp_candidates.append((distance, value))
+
+    usd_candidates.sort(key=lambda item: item[0])
+    syp_candidates.sort(key=lambda item: item[0])
+
+    usd_values: list[int] = []
+    for _, value in usd_candidates:
+        if value not in usd_values:
+            usd_values.append(value)
+        if len(usd_values) == 2:
+            break
+
+    syp_values: list[int] = []
+    for _, value in syp_candidates:
+        if value not in syp_values:
+            syp_values.append(value)
+        if len(syp_values) == 2:
+            break
+
+    if len(usd_values) < 2 or len(syp_values) < 2:
+        return None
+
+    usd_values.sort()
+    syp_values.sort()
+
+    return {
+        "usd_buy": usd_values[0],
+        "usd_sell": usd_values[1],
+        "syp_buy": syp_values[0],
+        "syp_sell": syp_values[1],
+    }
+
+
+def extract_row_values_for_anchor_relaxed(words: list[OcrWord], anchor: OcrWord) -> Optional[dict]:
+    row_band = max(anchor.height * 2.2, 95.0)
+
+    usd_candidates: list[tuple[float, int]] = []
+    syp_candidates: list[tuple[float, int]] = []
+
+    for w in words:
+        if w is anchor:
+            continue
+
+        value = find_numeric_word_value(w)
+        if value is None:
+            continue
+
+        kind = classify_numeric_value(value)
+        if kind is None:
+            continue
+
+        dy = abs(w.center_y - anchor.center_y)
+        if dy > row_band:
+            continue
+
+        if w.center_x >= anchor.center_x + max(anchor.width * 0.35, 25.0):
+            continue
+
+        dx = anchor.center_x - w.center_x
+        distance = math.sqrt(dx * dx + (dy * 4.0) * (dy * 4.0))
 
         if kind == "usd":
             usd_candidates.append((distance, value))
@@ -1073,38 +1126,19 @@ def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
 
 
 def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, GoldRate]:
-    k21_syp_sell = k21.ss
-    k21_syp_buy = k21.sb
-    k21_usd_sell = k21.us
-    k21_usd_buy = k21.ub
+    k21_syp_sell = max(k21.ss, k21.sb)
+    k21_syp_buy = min(k21.ss, k21.sb)
+    k21_usd_sell = max(k21.us, k21.ub)
+    k21_usd_buy = min(k21.us, k21.ub)
 
-    k18_syp_sell = k18.ss
-    k18_syp_buy = k18.sb
-    k18_usd_sell = k18.us
-    k18_usd_buy = k18.ub
-
-    if k21_syp_sell > 0 and k21_syp_buy > 0 and k21_syp_sell < k21_syp_buy:
-        k21_syp_sell, k21_syp_buy = k21_syp_buy, k21_syp_sell
-    if k18_syp_sell > 0 and k18_syp_buy > 0 and k18_syp_sell < k18_syp_buy:
-        k18_syp_sell, k18_syp_buy = k18_syp_buy, k18_syp_sell
-    if k21_usd_sell > 0 and k21_usd_buy > 0 and k21_usd_sell < k21_usd_buy:
-        k21_usd_sell, k21_usd_buy = k21_usd_buy, k21_usd_sell
-    if k18_usd_sell > 0 and k18_usd_buy > 0 and k18_usd_sell < k18_usd_buy:
-        k18_usd_sell, k18_usd_buy = k18_usd_buy, k18_usd_sell
+    k18_syp_sell = max(k18.ss, k18.sb)
+    k18_syp_buy = min(k18.ss, k18.sb)
+    k18_usd_sell = max(k18.us, k18.ub)
+    k18_usd_buy = min(k18.us, k18.ub)
 
     return (
-        GoldRate(
-            ub=k21_usd_buy,
-            us=k21_usd_sell,
-            sb=k21_syp_buy,
-            ss=k21_syp_sell,
-        ),
-        GoldRate(
-            ub=k18_usd_buy,
-            us=k18_usd_sell,
-            sb=k18_syp_buy,
-            ss=k18_syp_sell,
-        ),
+        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
+        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
     )
 
 
@@ -1116,14 +1150,15 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: missing anchors anchor21=%s anchor18=%s", anchor21, anchor18)
         return None
 
-    logger.info(
-        "anchor21 at x=%.1f y=%.1f h=%.1f | anchor18 at x=%.1f y=%.1f h=%.1f",
-        anchor21.center_x, anchor21.center_y, anchor21.height,
-        anchor18.center_x, anchor18.center_y, anchor18.height,
-    )
+    if anchor21.height < 20 and anchor18.height < 20:
+        logger.info("anchor_rows: anchors too small, likely wrong image")
+        return None
 
     row21 = extract_row_values_for_anchor(words, anchor21)
     row18 = extract_row_values_for_anchor(words, anchor18)
+
+    if row18 is None:
+        row18 = extract_row_values_for_anchor_relaxed(words, anchor18)
 
     logger.info("anchor21 row=%s", row21)
     logger.info("anchor18 row=%s", row18)
@@ -1147,7 +1182,6 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
-    logger.info("anchor_rows fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
 
     if not is_reasonable_extraction(fixed[0], fixed[1]):
         logger.info("anchor_rows rejected by sanity check")
@@ -1162,23 +1196,13 @@ def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Go
     usd_prices = sorted([t.value for t in tokens if t.kind == "usd"], reverse=True)
 
     if len(syp_prices) < 4 or len(usd_prices) < 4:
-        logger.info("legacy_fallback: not enough values for real 21k and 18k rows")
         return None
 
-    k21_syp_sell = syp_prices[0]
-    k21_syp_buy = syp_prices[1]
-    k21_usd_sell = usd_prices[0]
-    k21_usd_buy = usd_prices[1]
-
-    k18_syp_sell = syp_prices[2]
-    k18_syp_buy = syp_prices[3]
-    k18_usd_sell = usd_prices[2]
-    k18_usd_buy = usd_prices[3]
-
     result = (
-        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
-        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
+        GoldRate(ub=usd_prices[1], us=usd_prices[0], sb=syp_prices[1], ss=syp_prices[0]),
+        GoldRate(ub=usd_prices[3], us=usd_prices[2], sb=syp_prices[3], ss=syp_prices[2]),
     )
+
     fixed = apply_price_sanity_check(result[0], result[1])
     return fixed if is_reasonable_extraction(fixed[0], fixed[1]) else None
 
@@ -1198,32 +1222,13 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         if len(syp) < 2 or len(usd) < 2:
             continue
 
-        syp_sell = syp[0]
-        syp_buy = syp[1]
-        usd_sell = usd[0]
-        usd_buy = usd[1]
-
-        score = 0
-        if syp_sell > syp_buy:
-            score += 10
-        if usd_sell > usd_buy:
-            score += 10
-
-        avg_height = sum(t.height for t in row) / len(row)
-        score += min(int(avg_height // 8), 5)
-
-        logger.info(
-            "smart_row candidate: syp_sell=%s syp_buy=%s usd_sell=%s usd_buy=%s score=%s",
-            syp_sell, syp_buy, usd_sell, usd_buy, score,
-        )
-
         valid_rows.append(
             {
-                "score": score,
-                "syp_sell": syp_sell,
-                "syp_buy": syp_buy,
-                "usd_sell": usd_sell,
-                "usd_buy": usd_buy,
+                "score": len(row),
+                "syp_sell": syp[0],
+                "syp_buy": syp[1],
+                "usd_sell": usd[0],
+                "usd_buy": usd[1],
             }
         )
 
@@ -1250,29 +1255,19 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
     )
 
     fixed = apply_price_sanity_check(k21, k18)
-    logger.info("smart_fallback fixed: 21k=%s 18k=%s", fixed[0], fixed[1])
-
-    if not is_reasonable_extraction(fixed[0], fixed[1]):
-        logger.info("smart_fallback rejected by sanity check")
-        return None
-
-    return fixed
+    return fixed if is_reasonable_extraction(fixed[0], fixed[1]) else None
 
 
 def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
-    required_21 = [
-        "21_SYP_Sell",
-        "21_SYP_Buy",
-        "21_USD_Sell",
-        "21_USD_Buy",
+    required = [
+        "21_SYP_Sell", "21_SYP_Buy", "21_USD_Sell", "21_USD_Buy",
+        "18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy",
     ]
-    if not all(k in blueprint for k in required_21):
-        logger.warning("Blueprint missing required 21k keys")
+    if not all(k in blueprint for k in required):
         return None
 
     anchor21 = find_anchor_word(words, "21")
     anchor18 = find_anchor_word(words, "18")
-
     if anchor21 is None or anchor18 is None:
         return None
 
@@ -1321,44 +1316,29 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
 
         _, chosen, idx = candidates[0]
         used_ids.add(idx)
+        return parse_numeric_value(chosen.norm) or 0
 
-        value = parse_numeric_value(chosen.norm)
-        return value or 0
+    values = {
+        "21_ss": get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp"),
+        "21_sb": get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp"),
+        "21_us": get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd"),
+        "21_ub": get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd"),
+        "18_ss": get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp"),
+        "18_sb": get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp"),
+        "18_us": get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd"),
+        "18_ub": get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd"),
+    }
 
-    k21_syp_sell = get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp")
-    k21_syp_buy = get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp")
-    k21_usd_sell = get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd")
-    k21_usd_buy = get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd")
-
-    has_18_blueprint = all(
-        k in blueprint for k in ["18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy"]
-    )
-
-    if not has_18_blueprint:
-        logger.warning("Blueprint missing 18k keys")
-        return None
-
-    k18_syp_sell = get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp")
-    k18_syp_buy = get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp")
-    k18_usd_sell = get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd")
-    k18_usd_buy = get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd")
-
-    if any(v == 0 for v in [
-        k21_syp_sell, k21_syp_buy, k21_usd_sell, k21_usd_buy,
-        k18_syp_sell, k18_syp_buy, k18_usd_sell, k18_usd_buy,
-    ]):
+    if any(v == 0 for v in values.values()):
         return None
 
     result = (
-        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
-        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
+        GoldRate(ub=values["21_ub"], us=values["21_us"], sb=values["21_sb"], ss=values["21_ss"]),
+        GoldRate(ub=values["18_ub"], us=values["18_us"], sb=values["18_sb"], ss=values["18_ss"]),
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
-    if not is_reasonable_extraction(fixed[0], fixed[1]):
-        return None
-
-    return fixed
+    return fixed if is_reasonable_extraction(fixed[0], fixed[1]) else None
 
 
 def extract_rates(
@@ -1368,27 +1348,12 @@ def extract_rates(
 ) -> tuple[Optional[tuple[GoldRate, GoldRate]], str, dict]:
     diagnostics: dict[str, str] = {}
 
-    if ocr_mode == "prefer_blueprint":
-        attempts = [
-            ("anchor_rows", extract_anchor_rows(words)),
-            ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("smart_fallback", extract_smart_fallback(words)),
-            ("legacy_fallback", extract_legacy_fallback(words)),
-        ]
-    elif ocr_mode == "smart_fallback":
-        attempts = [
-            ("anchor_rows", extract_anchor_rows(words)),
-            ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("smart_fallback", extract_smart_fallback(words)),
-            ("legacy_fallback", extract_legacy_fallback(words)),
-        ]
-    else:
-        attempts = [
-            ("anchor_rows", extract_anchor_rows(words)),
-            ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("smart_fallback", extract_smart_fallback(words)),
-            ("legacy_fallback", extract_legacy_fallback(words)),
-        ]
+    attempts = [
+        ("anchor_rows", extract_anchor_rows(words)),
+        ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+        ("smart_fallback", extract_smart_fallback(words)),
+        ("legacy_fallback", extract_legacy_fallback(words)),
+    ]
 
     for method, result in attempts:
         if result is None:
@@ -1423,11 +1388,7 @@ def filter_words_by_region(
     right = x2 * img_w
     bottom = y2 * img_h
 
-    result = []
-    for w in words:
-        if left <= w.center_x <= right and top <= w.center_y <= bottom:
-            result.append(w)
-    return result
+    return [w for w in words if left <= w.center_x <= right and top <= w.center_y <= bottom]
 
 
 def words_to_text(words: list[OcrWord]) -> str:
@@ -1470,32 +1431,6 @@ def collect_words_near_anchor(
     return out
 
 
-def extract_day_from_header_words(words: list[OcrWord]) -> str:
-    day_anchor = find_text_anchor(words, ["اليوم", "يوم"])
-    if day_anchor is None:
-        return ""
-
-    nearby = collect_words_near_anchor(
-        words,
-        day_anchor,
-        max_dx=max(day_anchor.width * 8.0, 260.0),
-        max_dy=max(day_anchor.height * 1.8, 70.0),
-    )
-    raw = " ".join(w.text for w in nearby)
-    normalized = normalized_word_text(raw)
-
-    day_names = [
-        "الاثنين", "الثلاثاء", "الاربعاء", "الخميس",
-        "الجمعه", "السبت", "الاحد", "الأحد", "الجمعة",
-    ]
-
-    for day in day_names:
-        if normalized_word_text(day) in normalized:
-            return day
-
-    return ""
-
-
 def extract_date_from_header_words(words: list[OcrWord]) -> str:
     date_anchor = find_text_anchor(words, ["التاريخ", "تاريخ"])
     if date_anchor is None:
@@ -1516,8 +1451,7 @@ def extract_date_from_header_words(words: list[OcrWord]) -> str:
     normalized = normalize_date_text(raw)
     m = re.search(r"(20\d{2})\D{0,3}(\d{1,2})\D{0,3}(\d{1,2})", normalized)
     if m:
-        y, mm, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        return _apply_date_checksum(y, mm, dd)
+        return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
 
     return "0000/00/00"
 
@@ -1535,30 +1469,7 @@ def extract_time_from_header_words(words: list[OcrWord]) -> str:
     )
 
     raw = " ".join(w.text for w in nearby)
-    time_value = extract_time_from_raw(raw)
-    if time_value != "00:00":
-        return time_value
-
-    normalized = normalize_digits(raw)
-    is_pm = "م" in raw
-    is_am = "ص" in raw
-
-    m = re.search(r"(\d{1,2})\D{0,2}(\d{2})", normalized)
-    if not m:
-        return "00:00"
-
-    hh = int(m.group(1))
-    mm = int(m.group(2))
-
-    if hh > 23 or mm > 59:
-        return "00:00"
-
-    if is_pm and 1 <= hh <= 11:
-        hh += 12
-    elif is_am and hh == 12:
-        hh = 0
-
-    return f"{hh:02d}:{mm:02d}"
+    return extract_time_from_raw(raw)
 
 
 def evaluate_header_candidate(
@@ -1584,38 +1495,23 @@ def evaluate_header_candidate(
     header_crop_w = max(int((header_x2 - header_x1) * img.size[0]), 1)
     header_crop_h = max(int((header_y2 - header_y1) * img.size[1]), 1)
 
-    time_words = filter_words_by_region(
-        header_words,
-        (header_crop_w, header_crop_h),
-        time_x1,
-        time_y1,
-        time_x2,
-        time_y2,
-    )
-    date_words = filter_words_by_region(
-        header_words,
-        (header_crop_w, header_crop_h),
-        date_x1,
-        date_y1,
-        date_x2,
-        date_y2,
-    )
+    time_words = filter_words_by_region(header_words, (header_crop_w, header_crop_h), time_x1, time_y1, time_x2, time_y2)
+    date_words = filter_words_by_region(header_words, (header_crop_w, header_crop_h), date_x1, date_y1, date_x2, date_y2)
 
     raw_time = words_to_text(time_words)
     raw_date = words_to_text(date_words)
 
-    time_value = extract_time_from_raw(raw_time)
-    date_value = extract_date_from_raw(raw_date)
-
-    diagnostics = {
-        "candidate": candidate["name"],
-        "header_source": "full_image_word_filter",
-        "header_word_count": len(header_words),
-        "header_time_raw": raw_time,
-        "header_date_raw": raw_date,
-    }
-
-    return date_value, time_value, diagnostics
+    return (
+        extract_date_from_raw(raw_date),
+        extract_time_from_raw(raw_time),
+        {
+            "candidate": candidate["name"],
+            "header_source": "full_image_word_filter",
+            "header_word_count": len(header_words),
+            "header_time_raw": raw_time,
+            "header_date_raw": raw_date,
+        },
+    )
 
 
 def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
@@ -1624,17 +1520,13 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
 
     anchor_date = extract_date_from_header_words(words)
     anchor_time = extract_time_from_header_words(words)
-    anchor_day = extract_day_from_header_words(words)
-
-    anchor_debug = {
-        "header_source": "anchor_word_search",
-        "anchor_day": anchor_day,
-        "anchor_date": anchor_date,
-        "anchor_time": anchor_time,
-    }
 
     if anchor_date != "0000/00/00" or anchor_time != "00:00":
-        return anchor_date, anchor_time, anchor_debug
+        return anchor_date, anchor_time, {
+            "header_source": "anchor_word_search",
+            "anchor_date": anchor_date,
+            "anchor_time": anchor_time,
+        }
 
     best_date = "0000/00/00"
     best_time = "00:00"
@@ -1642,7 +1534,6 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
         "header_source": "none",
         "tried_candidates": [],
         "crop_attempts": [],
-        "anchor_day": anchor_day,
         "anchor_date": anchor_date,
         "anchor_time": anchor_time,
     }
@@ -1652,40 +1543,19 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
         diagnostics_copy = copy.deepcopy(diagnostics)
         tried_candidates.append(diagnostics_copy)
 
-        has_date = date_value != "0000/00/00"
-        has_time = time_value != "00:00"
-
-        if has_date and has_time:
+        if date_value != "0000/00/00" and time_value != "00:00":
             return date_value, time_value, {
                 **copy.deepcopy(diagnostics_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": [],
-                "anchor_day": anchor_day,
                 "anchor_date": anchor_date,
                 "anchor_time": anchor_time,
             }
 
-        if has_date and best_date == "0000/00/00":
+        if date_value != "0000/00/00" and best_date == "0000/00/00":
             best_date = date_value
-            best_debug = {
-                **copy.deepcopy(diagnostics_copy),
-                "tried_candidates": copy.deepcopy(tried_candidates),
-                "crop_attempts": [],
-                "anchor_day": anchor_day,
-                "anchor_date": anchor_date,
-                "anchor_time": anchor_time,
-            }
-
-        if has_time and best_time == "00:00":
+        if time_value != "00:00" and best_time == "00:00":
             best_time = time_value
-            best_debug = {
-                **copy.deepcopy(diagnostics_copy),
-                "tried_candidates": copy.deepcopy(tried_candidates),
-                "crop_attempts": [],
-                "anchor_day": anchor_day,
-                "anchor_date": anchor_date,
-                "anchor_time": anchor_time,
-            }
 
     for candidate in HEADER_REGION_CANDIDATES:
         header_x1, header_y1, header_x2, header_y2 = candidate["header"]
@@ -1711,49 +1581,23 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
         crop_attempt_copy = copy.deepcopy(crop_attempt)
         crop_attempts.append(crop_attempt_copy)
 
-        has_date = fallback_date != "0000/00/00"
-        has_time = fallback_time != "00:00"
-
-        if has_date and best_date == "0000/00/00":
+        if fallback_date != "0000/00/00" and best_date == "0000/00/00":
             best_date = fallback_date
-            best_debug = {
-                **copy.deepcopy(crop_attempt_copy),
-                "tried_candidates": copy.deepcopy(tried_candidates),
-                "crop_attempts": copy.deepcopy(crop_attempts),
-                "anchor_day": anchor_day,
-                "anchor_date": anchor_date,
-                "anchor_time": anchor_time,
-            }
-
-        if has_time and best_time == "00:00":
+        if fallback_time != "00:00" and best_time == "00:00":
             best_time = fallback_time
-            best_debug = {
-                **copy.deepcopy(crop_attempt_copy),
-                "tried_candidates": copy.deepcopy(tried_candidates),
-                "crop_attempts": copy.deepcopy(crop_attempts),
-                "anchor_day": anchor_day,
-                "anchor_date": anchor_date,
-                "anchor_time": anchor_time,
-            }
 
-        if has_date and has_time:
+        if fallback_date != "0000/00/00" and fallback_time != "00:00":
             return fallback_date, fallback_time, {
                 **copy.deepcopy(crop_attempt_copy),
                 "tried_candidates": copy.deepcopy(tried_candidates),
                 "crop_attempts": copy.deepcopy(crop_attempts),
-                "anchor_day": anchor_day,
                 "anchor_date": anchor_date,
                 "anchor_time": anchor_time,
             }
 
-    return best_date, best_time, {
-        **copy.deepcopy(best_debug),
-        "tried_candidates": copy.deepcopy(tried_candidates),
-        "crop_attempts": copy.deepcopy(crop_attempts),
-        "anchor_day": anchor_day,
-        "anchor_date": anchor_date,
-        "anchor_time": anchor_time,
-    }
+    best_debug["tried_candidates"] = copy.deepcopy(tried_candidates)
+    best_debug["crop_attempts"] = copy.deepcopy(crop_attempts)
+    return best_date, best_time, best_debug
 
 
 def compute_confidence(
@@ -1827,6 +1671,8 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "image_height": img.height,
         "ocr_mode": DEFAULT_OCR_MODE,
         "display_timezone": APP_TIMEZONE_NAME,
+        "paddle_enabled": _PADDLE_AVAILABLE,
+        "paddle_failure_reason": _PADDLE_FAILURE_REASON,
     }
 
     date, time, header_debug = extract_date_time_from_header(img, words)
@@ -1841,7 +1687,6 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         time = extract_time_from_raw(raw_text)
 
     blueprint = load_blueprint()
-
     rates, extraction_method, rate_diagnostics = extract_rates(words, blueprint, DEFAULT_OCR_MODE)
     debug["rate_attempts"] = rate_diagnostics
 
@@ -1889,13 +1734,10 @@ def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
     preferred_ratio = 0.90
     ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 50000.0
-
     size_bonus = 50000.0 if (
         c.width >= PREFERRED_CANDIDATE_WIDTH and c.height >= PREFERRED_CANDIDATE_HEIGHT
     ) else 0.0
-
     portrait_bonus = 15000.0 if c.height >= c.width else 0.0
-
     return area_score + size_bonus + portrait_bonus - ratio_penalty
 
 
@@ -2100,7 +1942,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="4.0.0",
+    version="4.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -2111,7 +1953,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "4.0.0",
+        "version": "4.1.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
