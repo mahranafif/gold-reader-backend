@@ -2,7 +2,7 @@ name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -16,11 +16,19 @@ jobs:
       APP_MODE: cli
       APP_TIMEZONE: Asia/Dubai
       LOG_LEVEL: INFO
+      REQUEST_TIMEOUT: "35"
       GOLD_OCR_MODE: prefer_blueprint
-      REQUEST_TIMEOUT: 35
+      GOLD_DEBUG_EXPORT: "false"
 
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
+      FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
+      FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
+      FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
+      FACEBOOK_MAX_SCROLL_STEPS: "10"
+      FACEBOOK_SCROLL_DELAY_MS: "1200"
+
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
 
     steps:
       - name: Checkout
@@ -30,15 +38,35 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
-      - name: Install system deps
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-ara
+          sudo apt-get install -y \
+            tesseract-ocr \
+            tesseract-ocr-ara \
+            libglib2.0-0 \
+            libnss3 \
+            libnspr4 \
+            libdbus-1-3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxcb1 \
+            libxkbcommon0 \
+            libatspi2.0-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libasound2t64 || sudo apt-get install -y libasound2
 
       - name: Install Python packages
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install \
             numpy \
             pytesseract \
@@ -46,29 +74,62 @@ jobs:
             uvicorn \
             beautifulsoup4 \
             fastapi \
-            paddleocr \
             pillow \
             pydantic \
-            playwright
+            playwright \
+            paddleocr \
+            paddlepaddle
 
       - name: Install Playwright Chromium
         run: python -m playwright install chromium
 
-      - name: Ensure data dir exists
-        run: mkdir -p data
+      - name: Ensure data directories exist
+        run: |
+          mkdir -p data
+          mkdir -p data/debug
 
       - name: Scrape public Facebook image
         run: python scripts/fetch_facebook_public_image.py
 
+      - name: Show scraper output
+        run: |
+          echo "facebook_latest_image.json:"
+          cat data/facebook_latest_image.json
+
       - name: Run gold OCR using scraped image
         run: python scripts/run_gold_from_facebook_json.py
 
-      - name: Commit updated files
+      - name: Show OCR output
+        run: |
+          echo "latest.json:"
+          cat data/latest.json
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-ocr-debug
+          path: |
+            data/facebook_latest_image.json
+            data/facebook_page_debug.png
+            data/latest.json
+            data/history.json
+            data/debug
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit updated data files
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/latest.json data/history.json data/facebook_latest_image.json data/debug || true
+          git add \
+            data/latest.json \
+            data/history.json \
+            data/facebook_latest_image.json \
+            data/facebook_page_debug.png \
+            data/debug || true
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
