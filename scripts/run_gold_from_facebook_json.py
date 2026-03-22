@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FACEBOOK_JSON = ROOT / "data" / "facebook_latest_image.json"
 FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
 
-MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "8"))
+MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "12"))
 
 
 def unique_preserve_order(items: list[str]) -> list[str]:
