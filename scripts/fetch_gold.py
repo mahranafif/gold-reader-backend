@@ -302,11 +302,13 @@ def load_json(path: Path, fallback):
 
 def save_json(path: Path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
-    safe_data = sanitize_for_json(data)
-    path.write_text(
-        json.dumps(safe_data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    try:
+        safe_data = sanitize_for_json(data)
+        payload = json.dumps(safe_data, ensure_ascii=False, indent=2)
+    except Exception:
+        logger.exception("Failed to serialize JSON for %s", path)
+        raise
+    path.write_text(payload, encoding="utf-8")
 
 
 # =========================================================
@@ -426,8 +428,7 @@ def extract_date_from_raw(raw: str) -> str:
             return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         if idx == 1:
             return _apply_date_checksum(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        if idx == 2:
-            return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
 
     return "0000/00/00"
 
@@ -593,85 +594,144 @@ def get_paddle_ocr():
 
 
 def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
+    """
+    Compatibility wrapper for multiple PaddleOCR versions:
+    - newer APIs may expose .predict(...)
+    - older/common APIs expose .ocr(...)
+    """
     ocr = get_paddle_ocr()
     rgb = img.convert("RGB")
     arr = np.array(rgb)
 
-    result = ocr.predict(arr)
+    result = None
+    if hasattr(ocr, "predict"):
+        result = ocr.predict(arr)
+    elif hasattr(ocr, "ocr"):
+        result = ocr.ocr(arr, cls=False)
+    else:
+        raise RuntimeError("Unsupported PaddleOCR API: neither predict() nor ocr() found")
+
     words: list[OcrWord] = []
     texts: list[str] = []
 
     if not result:
         return [], ""
 
-    for page in result:
-        payload = None
+    # Structured newer output
+    if isinstance(result, list) and result and hasattr(result[0], "json"):
+        for page in result:
+            payload = None
 
-        if hasattr(page, "json"):
             try:
                 payload = page.json
             except Exception:
                 payload = None
 
-        if payload is None and hasattr(page, "res"):
-            try:
-                payload = {"res": page.res}
-            except Exception:
-                payload = None
+            if payload is None and hasattr(page, "res"):
+                try:
+                    payload = {"res": page.res}
+                except Exception:
+                    payload = None
 
-        if payload is None:
-            try:
-                payload = dict(page)
-            except Exception:
-                payload = None
+            if payload is None:
+                try:
+                    payload = dict(page)
+                except Exception:
+                    payload = None
 
-        if not payload:
-            continue
+            if not payload:
+                continue
 
-        res = payload.get("res", payload)
+            res = payload.get("res", payload)
 
-        rec_texts = res.get("rec_texts", []) or []
-        rec_scores = res.get("rec_scores", []) or []
-        rec_polys = res.get("rec_polys", []) or []
-        rec_boxes = res.get("rec_boxes", []) or []
+            rec_texts = res.get("rec_texts", []) or []
+            rec_scores = res.get("rec_scores", []) or []
+            rec_polys = res.get("rec_polys", []) or []
+            rec_boxes = res.get("rec_boxes", []) or []
 
-        if len(rec_boxes) == len(rec_texts) and len(rec_boxes) > 0:
-            for idx, text in enumerate(rec_texts):
-                text = str(text).strip()
-                if not text:
+            if len(rec_boxes) == len(rec_texts) and rec_boxes:
+                for idx, text in enumerate(rec_texts):
+                    text = str(text).strip()
+                    if not text:
+                        continue
+
+                    score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                    box = rec_boxes[idx]
+
+                    left = int(box[0])
+                    top = int(box[1])
+                    right = int(box[2])
+                    bottom = int(box[3])
+
+                    word = OcrWord(
+                        text=text,
+                        norm=normalize_digits(text),
+                        left=left,
+                        top=top,
+                        width=max(right - left, 1),
+                        height=max(bottom - top, 1),
+                        conf=score,
+                    )
+                    words.append(word)
+                    texts.append(word.text)
+
+            elif len(rec_polys) == len(rec_texts) and rec_polys:
+                for idx, text in enumerate(rec_texts):
+                    text = str(text).strip()
+                    if not text:
+                        continue
+
+                    score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                    poly = rec_polys[idx]
+
+                    xs = [float(p[0]) for p in poly]
+                    ys = [float(p[1]) for p in poly]
+
+                    left = int(min(xs))
+                    top = int(min(ys))
+                    width = int(max(xs) - min(xs))
+                    height = int(max(ys) - min(ys))
+
+                    word = OcrWord(
+                        text=text,
+                        norm=normalize_digits(text),
+                        left=left,
+                        top=top,
+                        width=max(width, 1),
+                        height=max(height, 1),
+                        conf=score,
+                    )
+                    words.append(word)
+                    texts.append(word.text)
+
+        return words, " ".join(texts)
+
+    # Older API format:
+    # [
+    #   [
+    #     [box_points, (text, score)],
+    #     ...
+    #   ]
+    # ]
+    if isinstance(result, list):
+        for page in result:
+            if not isinstance(page, list):
+                continue
+            for line in page:
+                if not isinstance(line, list) or len(line) < 2:
+                    continue
+                box = line[0]
+                rec = line[1]
+                if not rec or len(rec) < 2:
                     continue
 
-                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
-                box = rec_boxes[idx]
-
-                left = int(box[0])
-                top = int(box[1])
-                right = int(box[2])
-                bottom = int(box[3])
-
-                word = OcrWord(
-                    text=text,
-                    norm=normalize_digits(text),
-                    left=left,
-                    top=top,
-                    width=max(right - left, 1),
-                    height=max(bottom - top, 1),
-                    conf=score,
-                )
-                words.append(word)
-                texts.append(word.text)
-
-        elif len(rec_polys) == len(rec_texts) and len(rec_polys) > 0:
-            for idx, text in enumerate(rec_texts):
-                text = str(text).strip()
+                text = str(rec[0]).strip()
                 if not text:
                     continue
+                score = float(rec[1])
 
-                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
-                poly = rec_polys[idx]
-
-                xs = [float(p[0]) for p in poly]
-                ys = [float(p[1]) for p in poly]
+                xs = [float(p[0]) for p in box]
+                ys = [float(p[1]) for p in box]
 
                 left = int(min(xs))
                 top = int(min(ys))
@@ -690,7 +750,9 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                 words.append(word)
                 texts.append(word.text)
 
-    return words, " ".join(texts)
+        return words, " ".join(texts)
+
+    return [], ""
 
 
 def tesseract_ocr_words(
@@ -1201,8 +1263,9 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: missing anchors")
         return None
 
-    if abs(anchor21.center_y - anchor18.center_y) < 40:
-        logger.info("anchor_rows: anchors too close vertically")
+    # Relaxed from 40px; 40 was too aggressive on noisy OCR layouts
+    if abs(anchor21.center_y - anchor18.center_y) < 18:
+        logger.info("anchor_rows: anchors suspiciously close vertically")
         return None
 
     row21_result = extract_row_values_for_anchor(words, anchor21, prefer_below=False)
@@ -1210,7 +1273,7 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         return None
 
     row21, row21_token_row = row21_result
-    min_sep = max(anchor18.height * 1.4, 45.0)
+    min_sep = max(anchor18.height * 1.25, 35.0)
 
     row18_result = extract_row_values_for_anchor(
         words,
@@ -1303,7 +1366,7 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
 
     valid_rows.sort(key=lambda r: (r["score"], r["syp_sell"]), reverse=True)
     best21 = valid_rows[0]
-    remaining = [r for r in valid_rows[1:] if abs(r["center_y"] - best21["center_y"]) > 35]
+    remaining = [r for r in valid_rows[1:] if abs(r["center_y"] - best21["center_y"]) > 25]
     if not remaining:
         return None
 
@@ -1455,12 +1518,12 @@ def crop_header_band(img: Image.Image) -> Image.Image:
 
 def crop_header_date_region(img: Image.Image) -> Image.Image:
     band = crop_header_band(img)
-    return crop_box(band, 0.26, 0.00, 0.58, 1.00)
+    return crop_box(band, 0.24, 0.00, 0.62, 1.00)
 
 
 def crop_header_time_region(img: Image.Image) -> Image.Image:
     band = crop_header_band(img)
-    return crop_box(band, 0.00, 0.00, 0.18, 1.00)
+    return crop_box(band, 0.00, 0.00, 0.20, 1.00)
 
 
 def extract_header_direct(img: Image.Image) -> tuple[str, str, dict]:
@@ -1648,9 +1711,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     debug["ocr_engine_full"] = ocr_engine_full
     debug["ocr_engine_table"] = ocr_engine_table
 
-    words_for_rates = words_table_mapped if len(words_table_mapped) >= 8 else words_full
     words_merged = words_full + words_table_mapped if words_table_mapped else words_full
-
     raw_text = f"{raw_text_full} {raw_text_table}".strip()
     ocr_engine = ocr_engine_table if len(words_table) >= len(words_full) else ocr_engine_full
 
@@ -1923,7 +1984,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="5.1.0",
+    version="5.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1934,7 +1995,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "5.1.0",
+        "version": "5.2.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
