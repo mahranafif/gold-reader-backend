@@ -72,24 +72,25 @@ MIN_CANDIDATE_HEIGHT = 250
 PREFERRED_CANDIDATE_WIDTH = 400
 PREFERRED_CANDIDATE_HEIGHT = 400
 
+# Table/header layout candidates for this specific gold board design.
 HEADER_REGION_CANDIDATES = [
     {
         "name": "band_a",
-        "header": (0.01, 0.24, 0.99, 0.46),
-        "time": (0.00, 0.00, 0.38, 1.00),
-        "date": (0.18, 0.00, 0.78, 1.00),
+        "header": (0.01, 0.42, 0.99, 0.56),
+        "time": (0.00, 0.00, 0.22, 1.00),
+        "date": (0.22, 0.00, 0.62, 1.00),
     },
     {
         "name": "band_b",
-        "header": (0.01, 0.28, 0.99, 0.50),
-        "time": (0.00, 0.00, 0.38, 1.00),
-        "date": (0.18, 0.00, 0.78, 1.00),
+        "header": (0.01, 0.44, 0.99, 0.58),
+        "time": (0.00, 0.00, 0.22, 1.00),
+        "date": (0.22, 0.00, 0.62, 1.00),
     },
     {
         "name": "band_c",
-        "header": (0.01, 0.32, 0.99, 0.54),
-        "time": (0.00, 0.00, 0.42, 1.00),
-        "date": (0.18, 0.00, 0.80, 1.00),
+        "header": (0.01, 0.40, 0.99, 0.54),
+        "time": (0.00, 0.00, 0.24, 1.00),
+        "date": (0.22, 0.00, 0.64, 1.00),
     },
 ]
 
@@ -347,8 +348,8 @@ def normalize_digits(text: str) -> str:
     )
     text = text.translate(arabic_indic_map)
     return (
-        text.replace("B", "3")
-        .replace("b", "3")
+        text.replace("B", "8")
+        .replace("b", "6")
         .replace("O", "0")
         .replace("o", "0")
         .replace("l", "1")
@@ -448,15 +449,21 @@ def extract_date_from_raw(raw: str) -> str:
             return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         return _apply_date_checksum(int(m.group(6)), int(m.group(5)), int(m.group(4)))
 
+    compact = re.search(rf"({year_alternation})\D{{0,2}}(\d{{1,2}})\D{{0,2}}(\d{{1,2}})", normalized)
+    if compact:
+        return _apply_date_checksum(int(compact.group(1)), int(compact.group(2)), int(compact.group(3)))
+
     return "0000/00/00"
 
 
 def extract_time_from_raw(raw: str) -> str:
     raw = normalize_digits(raw.strip())
-    is_pm = "م" in raw
-    is_am = "ص" in raw
+    is_pm = "م" in raw.lower() or "pm" in raw.lower()
+    is_am = "ص" in raw.lower() or "am" in raw.lower()
 
-    cleaned = raw.replace("م", "").replace("ص", "")
+    cleaned = re.sub(r"(?i)\b(?:pm|am)\b", "", raw)
+    cleaned = cleaned.replace("م", "").replace("ص", "")
+
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", cleaned)
     if not match:
         match = re.search(r"(\d{1,2})\D{0,2}(\d{2})", cleaned)
@@ -531,11 +538,30 @@ def extract_numeric_tokens(words: list["OcrWord"]) -> list["NumericToken"]:
 # =========================================================
 
 def preprocess_image(image_bytes: bytes) -> Image.Image:
+    """
+    Balanced preprocessing for OCR:
+    - grayscale
+    - autocontrast
+    - mild median cleanup
+    - sharpen
+    - upscale only once
+    """
     img = Image.open(BytesIO(image_bytes)).convert("L")
     img = ImageOps.autocontrast(img)
+    img = img.filter(ImageFilter.MedianFilter(size=3))
     img = img.filter(ImageFilter.SHARPEN)
     img = img.resize((img.width * 2, img.height * 2))
     return img
+
+
+def preprocess_region_for_ocr(img: Image.Image, threshold: Optional[int] = None) -> Image.Image:
+    region = img.copy()
+    region = ImageOps.autocontrast(region)
+    region = region.filter(ImageFilter.MedianFilter(size=3))
+    if threshold is not None:
+        region = region.point(lambda p: 255 if p >= threshold else 0)
+    region = region.filter(ImageFilter.SHARPEN)
+    return region
 
 
 def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
@@ -664,7 +690,7 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                 if not text:
                     continue
 
-                    score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
+                score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
                 poly = rec_polys[idx]
 
                 xs = [float(p[0]) for p in poly]
@@ -940,7 +966,7 @@ def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
         last_row = rows[-1]
         avg_y = sum(t.y for t in last_row) / len(last_row)
         avg_h = max(sum(t.height for t in last_row) / len(last_row), 1.0)
-        y_threshold = max(avg_h * 1.0, 24.0)
+        y_threshold = max(avg_h * 1.05, 24.0)
 
         if abs(token.y - avg_y) <= y_threshold:
             last_row.append(token)
@@ -1004,6 +1030,8 @@ def choose_best_anchor_local_row(
     rows: list[TokenRow],
     anchor: OcrWord,
     prefer_below: bool = False,
+    exclude_center_y: Optional[float] = None,
+    min_row_separation: float = 0.0,
 ) -> Optional[TokenRow]:
     if not rows:
         return None
@@ -1017,6 +1045,9 @@ def choose_best_anchor_local_row(
         if len(usd_values) < 2 or len(syp_values) < 2:
             continue
 
+        if exclude_center_y is not None and abs(row.center_y - exclude_center_y) < min_row_separation:
+            continue
+
         dy_signed = row.center_y - anchor.center_y
         dy = abs(dy_signed)
 
@@ -1026,7 +1057,7 @@ def choose_best_anchor_local_row(
             if dy_signed < -4:
                 score += 1200.0
             else:
-                score -= min(dy_signed, 25.0) * 6.0
+                score -= min(max(dy_signed, 0.0), 25.0) * 6.0
 
         score -= len(row.tokens) * 8.0
 
@@ -1094,40 +1125,64 @@ def extract_row_values_for_anchor(
     words: list[OcrWord],
     anchor: OcrWord,
     prefer_below: bool = False,
-) -> Optional[dict]:
+    exclude_center_y: Optional[float] = None,
+    min_row_separation: float = 0.0,
+) -> Optional[tuple[dict, TokenRow]]:
     local_rows = build_anchor_local_rows(
         words=words,
         anchor=anchor,
         max_left_dx=max(anchor.width * 14.0, 900.0),
-        max_right_dx=max(anchor.width * 0.50, 40.0),
-        max_dy=max(anchor.height * 2.2, 110.0),
+        max_right_dx=max(anchor.width * 0.55, 50.0),
+        max_dy=max(anchor.height * 2.4, 120.0),
     )
 
-    best_row = choose_best_anchor_local_row(local_rows, anchor, prefer_below=prefer_below)
+    best_row = choose_best_anchor_local_row(
+        local_rows,
+        anchor,
+        prefer_below=prefer_below,
+        exclude_center_y=exclude_center_y,
+        min_row_separation=min_row_separation,
+    )
     if best_row is None:
         return None
 
-    return extract_values_from_token_row(best_row)
+    values = extract_values_from_token_row(best_row)
+    if values is None:
+        return None
+
+    return values, best_row
 
 
 def extract_row_values_for_anchor_relaxed(
     words: list[OcrWord],
     anchor: OcrWord,
     prefer_below: bool = False,
-) -> Optional[dict]:
+    exclude_center_y: Optional[float] = None,
+    min_row_separation: float = 0.0,
+) -> Optional[tuple[dict, TokenRow]]:
     local_rows = build_anchor_local_rows(
         words=words,
         anchor=anchor,
         max_left_dx=max(anchor.width * 18.0, 1100.0),
-        max_right_dx=max(anchor.width * 0.80, 70.0),
-        max_dy=max(anchor.height * 3.0, 150.0),
+        max_right_dx=max(anchor.width * 0.90, 90.0),
+        max_dy=max(anchor.height * 3.2, 160.0),
     )
 
-    best_row = choose_best_anchor_local_row(local_rows, anchor, prefer_below=prefer_below)
+    best_row = choose_best_anchor_local_row(
+        local_rows,
+        anchor,
+        prefer_below=prefer_below,
+        exclude_center_y=exclude_center_y,
+        min_row_separation=min_row_separation,
+    )
     if best_row is None:
         return None
 
-    return extract_values_from_token_row(best_row)
+    values = extract_values_from_token_row(best_row)
+    if values is None:
+        return None
+
+    return values, best_row
 
 
 def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
@@ -1188,23 +1243,54 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: anchors too small, likely wrong image")
         return None
 
+    if abs(anchor21.center_y - anchor18.center_y) < 40:
+        logger.info("anchor_rows: anchors too close vertically, likely wrong image")
+        return None
+
     logger.info(
         "anchor21 at x=%.1f y=%.1f h=%.1f | anchor18 at x=%.1f y=%.1f h=%.1f",
         anchor21.center_x, anchor21.center_y, anchor21.height,
         anchor18.center_x, anchor18.center_y, anchor18.height,
     )
 
-    row21 = extract_row_values_for_anchor(words, anchor21, prefer_below=False)
-    row18 = extract_row_values_for_anchor(words, anchor18, prefer_below=True)
-
-    if row18 is None:
-        row18 = extract_row_values_for_anchor_relaxed(words, anchor18, prefer_below=True)
-
-    logger.info("anchor21 row=%s", row21)
-    logger.info("anchor18 row=%s", row18)
-
-    if row21 is None or row18 is None:
+    row21_result = extract_row_values_for_anchor(
+        words,
+        anchor21,
+        prefer_below=False,
+    )
+    if row21_result is None:
+        logger.info("anchor_rows: row21 not found")
         return None
+
+    row21, row21_token_row = row21_result
+
+    min_sep = max(anchor18.height * 1.4, 45.0)
+
+    row18_result = extract_row_values_for_anchor(
+        words,
+        anchor18,
+        prefer_below=True,
+        exclude_center_y=row21_token_row.center_y,
+        min_row_separation=min_sep,
+    )
+
+    if row18_result is None:
+        row18_result = extract_row_values_for_anchor_relaxed(
+            words,
+            anchor18,
+            prefer_below=True,
+            exclude_center_y=row21_token_row.center_y,
+            min_row_separation=min_sep,
+        )
+
+    logger.info("anchor21 row=%s center_y=%.1f", row21, row21_token_row.center_y)
+    logger.info("anchor18 row=%s", row18_result[0] if row18_result else None)
+
+    if row18_result is None:
+        return None
+
+    row18, row18_token_row = row18_result
+    logger.info("anchor18 center_y=%.1f", row18_token_row.center_y)
 
     k21 = GoldRate(
         ub=row21["usd_buy"],
@@ -1265,6 +1351,7 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
         valid_rows.append(
             {
                 "score": len(row),
+                "center_y": sum(t.y for t in row) / len(row),
                 "syp_sell": syp[0],
                 "syp_buy": syp[1],
                 "usd_sell": usd[0],
@@ -1279,7 +1366,11 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
     valid_rows.sort(key=lambda r: (r["score"], r["syp_sell"]), reverse=True)
 
     best21 = valid_rows[0]
-    best18 = valid_rows[1]
+    remaining = [r for r in valid_rows[1:] if abs(r["center_y"] - best21["center_y"]) > 35]
+    if not remaining:
+        return None
+
+    best18 = remaining[0]
 
     k21 = GoldRate(
         ub=best21["usd_buy"],
@@ -1318,7 +1409,7 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         expected_y = anchor.center_y + (float(ratios.get("dy", 0.0)) * max(anchor.height, 1.0))
 
         max_dx = max(anchor.width * 6.5, 140.0)
-        max_dy = max(anchor.height * 2.0, 55.0)
+        max_dy = max(anchor.height * 2.2, 60.0)
 
         candidates = []
 
@@ -1388,14 +1479,31 @@ def extract_rates(
 ) -> tuple[Optional[tuple[GoldRate, GoldRate]], str, dict]:
     diagnostics: dict[str, str] = {}
 
-    attempts = [
-        ("anchor_rows", extract_anchor_rows(words)),
-        ("blueprint", extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-        ("smart_fallback", extract_smart_fallback(words)),
-        ("legacy_fallback", extract_legacy_fallback(words)),
-    ]
+    if ocr_mode == "prefer_blueprint":
+        attempt_order = [
+            ("blueprint", lambda: extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("anchor_rows", lambda: extract_anchor_rows(words)),
+            ("smart_fallback", lambda: extract_smart_fallback(words)),
+            ("legacy_fallback", lambda: extract_legacy_fallback(words)),
+        ]
+    elif ocr_mode == "anchor_first":
+        attempt_order = [
+            ("anchor_rows", lambda: extract_anchor_rows(words)),
+            ("blueprint", lambda: extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("smart_fallback", lambda: extract_smart_fallback(words)),
+            ("legacy_fallback", lambda: extract_legacy_fallback(words)),
+        ]
+    else:
+        attempt_order = [
+            ("anchor_rows", lambda: extract_anchor_rows(words)),
+            ("blueprint", lambda: extract_with_blueprint(words, blueprint) if blueprint is not None else None),
+            ("smart_fallback", lambda: extract_smart_fallback(words)),
+            ("legacy_fallback", lambda: extract_legacy_fallback(words)),
+        ]
 
-    for method, result in attempts:
+    for method, fn in attempt_order:
+        result = fn()
+
         if result is None:
             diagnostics[method] = "no_result"
             continue
@@ -1606,6 +1714,9 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
         time_crop = crop_box(header_crop, time_x1, time_y1, time_x2, time_y2)
         date_crop = crop_box(header_crop, date_x1, date_y1, date_x2, date_y2)
 
+        time_crop = preprocess_region_for_ocr(time_crop, threshold=165)
+        date_crop = preprocess_region_for_ocr(date_crop, threshold=165)
+
         _, raw_time_crop, _ = run_ocr_with_fallback(time_crop)
         _, raw_date_crop, _ = run_ocr_with_fallback(date_crop)
 
@@ -1638,6 +1749,40 @@ def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tup
     best_debug["tried_candidates"] = copy.deepcopy(tried_candidates)
     best_debug["crop_attempts"] = copy.deepcopy(crop_attempts)
     return best_date, best_time, best_debug
+
+
+# =========================================================
+# Layout-aware table extraction
+# =========================================================
+
+def crop_main_table_region(img: Image.Image) -> Image.Image:
+    return crop_box(img, 0.02, 0.48, 0.98, 0.82)
+
+
+def extract_table_words(img: Image.Image) -> tuple[list[OcrWord], str, str]:
+    table = crop_main_table_region(img)
+    table = preprocess_region_for_ocr(table, threshold=150)
+    return run_ocr_with_fallback(table, psm=6)
+
+
+def map_table_words_to_full_image(table_words: list[OcrWord], full_img: Image.Image, table_img: Image.Image) -> list[OcrWord]:
+    x_offset = int(0.02 * full_img.width)
+    y_offset = int(0.48 * full_img.height)
+
+    mapped: list[OcrWord] = []
+    for w in table_words:
+        mapped.append(
+            OcrWord(
+                text=w.text,
+                norm=w.norm,
+                left=w.left + x_offset,
+                top=w.top + y_offset,
+                width=w.width,
+                height=w.height,
+                conf=w.conf,
+            )
+        )
+    return mapped
 
 
 def compute_confidence(
@@ -1701,12 +1846,10 @@ def load_blueprint() -> Optional[dict]:
 
 def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
     img = preprocess_image(image_bytes)
-    words, raw_text, ocr_engine = run_ocr_with_fallback(img)
 
     warnings: list[str] = []
     debug: dict = {
         "source_url": source_url,
-        "ocr_word_count": len(words),
         "image_width": img.width,
         "image_height": img.height,
         "ocr_mode": DEFAULT_OCR_MODE,
@@ -1715,7 +1858,31 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "paddle_failure_reason": _PADDLE_FAILURE_REASON,
     }
 
-    date, time, header_debug = extract_date_time_from_header(img, words)
+    # Full-image OCR for header/general fallback
+    words_full, raw_text_full, ocr_engine_full = run_ocr_with_fallback(img)
+    debug["ocr_word_count_full"] = len(words_full)
+
+    # Table-focused OCR for better anchor/price accuracy
+    table_img = crop_main_table_region(img)
+    table_img_pre = preprocess_region_for_ocr(table_img, threshold=150)
+    words_table, raw_text_table, ocr_engine_table = run_ocr_with_fallback(table_img_pre)
+    words_table_mapped = map_table_words_to_full_image(words_table, img, table_img_pre)
+
+    debug["ocr_word_count_table"] = len(words_table)
+    debug["ocr_engine_full"] = ocr_engine_full
+    debug["ocr_engine_table"] = ocr_engine_table
+
+    # Prefer table words for rates, merge with full-image words for fallback richness
+    words_for_rates = words_table_mapped if len(words_table_mapped) >= 8 else words_full
+    if len(words_table_mapped) > 0 and len(words_full) > 0:
+        words_merged = words_full + words_table_mapped
+    else:
+        words_merged = words_for_rates
+
+    raw_text = f"{raw_text_full} {raw_text_table}".strip()
+    ocr_engine = ocr_engine_table if len(words_table) >= len(words_full) else ocr_engine_full
+
+    date, time, header_debug = extract_date_time_from_header(img, words_full)
     debug["header"] = header_debug
 
     if date == "0000/00/00":
@@ -1727,21 +1894,22 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         time = extract_time_from_raw(raw_text)
 
     blueprint = load_blueprint()
-    rates, extraction_method, rate_diagnostics = extract_rates(words, blueprint, DEFAULT_OCR_MODE)
+    rates, extraction_method, rate_diagnostics = extract_rates(words_merged, blueprint, DEFAULT_OCR_MODE)
     debug["rate_attempts"] = rate_diagnostics
 
     if rates is None:
         raise ValueError("Price extraction failed")
 
     k21, k18 = rates
-    confidence = compute_confidence(extraction_method, words, date, time, warnings)
+    confidence = compute_confidence(extraction_method, words_merged, date, time, warnings)
 
     debug["has_blueprint"] = blueprint is not None
     debug["extraction_method"] = extraction_method
+    debug["ocr_word_count"] = len(words_merged)
 
     debug_overlay_path = export_debug_overlay(
         image_bytes=image_bytes,
-        words=words,
+        words=words_merged,
         source_url=source_url,
         date=date,
         time=time,
@@ -1772,13 +1940,14 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
 
 def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
-    preferred_ratio = 0.90
-    ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 50000.0
-    size_bonus = 50000.0 if (
+    preferred_ratio = 0.95
+    ratio_penalty = abs(c.aspect_ratio - preferred_ratio) * 70000.0
+    size_bonus = 70000.0 if (
         c.width >= PREFERRED_CANDIDATE_WIDTH and c.height >= PREFERRED_CANDIDATE_HEIGHT
     ) else 0.0
-    portrait_bonus = 15000.0 if c.height >= c.width else 0.0
-    return area_score + size_bonus + portrait_bonus - ratio_penalty
+    portrait_bonus = 18000.0 if c.height >= c.width else 0.0
+    wide_penalty = 180000.0 if c.width > c.height * 1.6 else 0.0
+    return area_score + size_bonus + portrait_bonus - ratio_penalty - wide_penalty
 
 
 def rank_candidates(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
@@ -1906,7 +2075,7 @@ def resolve_best_image_source(source_url: str) -> tuple[bytes, str]:
 
     last_error = None
 
-    for candidate in ranked[:8]:
+    for candidate in ranked[:12]:
         try:
             content, final_url = fetch_image_bytes(candidate.url)
             img = Image.open(BytesIO(content))
@@ -1982,7 +2151,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="4.3.0",
+    version="5.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1993,7 +2162,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "4.3.0",
+        "version": "5.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
