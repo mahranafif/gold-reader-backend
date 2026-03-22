@@ -6,6 +6,11 @@ beautifulsoup4>=4.12,<5
 pytesseract>=0.3.13,<0.4
 Pillow>=11.0,<12
 numpy>=1.26,<3
+paddleocr>=2.8,<3
+paddlepaddle>=3.0,<4
+
+# Scraping
+playwright>=1.50,<2
 
 # API
 fastapi>=0.110,<1
