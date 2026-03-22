@@ -45,41 +45,48 @@ class ImageCandidate:
 def compute_candidate_score(c: ImageCandidate) -> float:
     score = float(c.area)
 
-    # Strongly prefer feed/post images
+    # Strongly prefer actual post/feed images
     if c.in_post:
-        score += 500000
-
-    # Avoid page header / cover zone
-    if c.top > 500:
-        score += 120000
+        score += 600000
     else:
-        score -= 250000
+        score -= 150000
 
-    # Favor portrait-ish or board-like images over wide banners
+    # Heavily penalize top/header-ish images
+    if c.top < 150:
+        score -= 350000
+    elif c.top < 400:
+        score -= 180000
+    elif c.top > 500:
+        score += 180000
+
     ratio = c.aspect_ratio
-    if 0.65 <= ratio <= 1.35:
+
+    # Gold board image is close to square
+    if 0.90 <= ratio <= 1.10:
+        score += 220000
+    elif 0.75 <= ratio <= 1.25:
         score += 120000
-    elif 1.35 < ratio <= 1.9:
-        score += 40000
+    elif 1.25 < ratio <= 1.45:
+        score += 20000
     else:
-        score -= 60000
+        score -= 180000
 
-    # Prefer reasonably large images
+    # Reasonably large images
     if c.width >= 500 and c.height >= 500:
-        score += 50000
+        score += 70000
 
-    # Penalize likely avatar-like square images near the top
-    if 0.85 <= ratio <= 1.15 and c.top < 700:
-        score -= 120000
+    # Penalize banner-like shapes
+    if c.width > c.height * 1.35:
+        score -= 260000
+
+    # Penalize likely top-page square assets
+    if 0.85 <= ratio <= 1.15 and c.top < 300:
+        score -= 180000
 
     return score
 
 
 async def dismiss_login_modal(page: Page) -> bool:
-    """
-    Facebook guest pages often show a login modal overlay.
-    This tries several close-button selectors, then falls back to a JS-based click.
-    """
     selectors = [
         'div[aria-label="Close"]',
         'div[role="button"][aria-label="Close"]',
@@ -140,10 +147,11 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
         () => {
           function isInsidePost(img) {
             let el = img;
-            for (let i = 0; i < 10 && el; i++, el = el.parentElement) {
+            for (let i = 0; i < 12 && el; i++, el = el.parentElement) {
               const role = (el.getAttribute && el.getAttribute('role')) || '';
               const dataPagelet = (el.getAttribute && el.getAttribute('data-pagelet')) || '';
               const aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
+              const className = (el.className || '').toString().toLowerCase();
               const tag = (el.tagName || '').toLowerCase();
 
               if (
@@ -151,7 +159,8 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
                 role === 'article' ||
                 dataPagelet.toLowerCase().includes('feed') ||
                 dataPagelet.toLowerCase().includes('timeline') ||
-                aria.toLowerCase().includes('post')
+                aria.toLowerCase().includes('post') ||
+                className.includes('story')
               ) {
                 return true;
               }
@@ -187,12 +196,11 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
             continue
         seen.add(src)
 
-        lower = src.lower()
-
         if width < 250 or height < 250:
             continue
 
-        # Exclude obvious non-target assets
+        lower = src.lower()
+
         bad_parts = [
             "emoji",
             "static.xx",
@@ -200,6 +208,8 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
             "safe_image.php",
             "lookaside",
             "icon",
+            "logo",
+            "profile",
         ]
         if any(part in lower for part in bad_parts):
             continue
@@ -273,7 +283,6 @@ async def scrape_public_facebook_image() -> dict:
                 }
             else:
                 best = candidates[0]
-
                 result = {
                     "ok": True,
                     "page_url": page.url,
@@ -284,7 +293,7 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_height": best.height,
                     "selected_top": best.top,
                     "selected_in_post": best.in_post,
-                    "candidates": [asdict(c) for c in candidates[:10]],
+                    "candidates": [asdict(c) for c in candidates[:12]],
                 }
 
             OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
