@@ -413,6 +413,9 @@ def extract_date_from_raw(raw: str) -> str:
     max_year = now.year + 3
     year_alternation = "|".join(str(y) for y in range(min_year, max_year + 1))
 
+    def try_parse(y: int, m: int, d: int) -> str:
+        return _apply_date_checksum(y, m, d)
+
     patterns = [
         rf"({year_alternation})\s*[/\.\-]\s*(\d{{1,2}})\s*[/\.\-]\s*(\d{{1,2}})",
         rf"(\d{{1,2}})\s*[/\.\-]\s*(\d{{1,2}})\s*[/\.\-]\s*({year_alternation})",
@@ -425,10 +428,64 @@ def extract_date_from_raw(raw: str) -> str:
             continue
 
         if idx == 0:
-            return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        if idx == 1:
-            return _apply_date_checksum(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        return _apply_date_checksum(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            parsed = try_parse(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        elif idx == 1:
+            parsed = try_parse(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        else:
+            parsed = try_parse(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+        if parsed != "0000/00/00":
+            return parsed
+
+    compact = re.sub(r"[^0-9/.\-]", " ", normalized)
+    compact = re.sub(r"\s+", " ", compact).strip()
+
+    m = re.search(r"(\d{3,4})\s*[/\.\-]\s*(\d{1,2})\s*[/\.\-]\s*(\d{1,2})", compact)
+    if m:
+        y_raw = m.group(1)
+        mm = int(m.group(2))
+        dd = int(m.group(3))
+
+        candidate_years: list[int] = []
+        if len(y_raw) == 4:
+            candidate_years.append(int(y_raw))
+        elif len(y_raw) == 3:
+            candidate_years.extend([
+                int(f"2{y_raw}"),
+                int(f"20{y_raw[-2:]}"),
+            ])
+
+        for yy in candidate_years:
+            parsed = try_parse(yy, mm, dd)
+            if parsed != "0000/00/00":
+                return parsed
+
+    digit_groups = re.findall(r"\d+", normalized)
+    if len(digit_groups) >= 3:
+        y_raw, m_raw, d_raw = digit_groups[0], digit_groups[1], digit_groups[2]
+
+        candidate_years: list[int] = []
+        if len(y_raw) == 4:
+            candidate_years.append(int(y_raw))
+        elif len(y_raw) == 3:
+            candidate_years.extend([
+                int(f"2{y_raw}"),
+                int(f"20{y_raw[-2:]}"),
+            ])
+        elif len(y_raw) == 2:
+            candidate_years.append(2000 + int(y_raw))
+
+        try:
+            mm = int(m_raw)
+            dd = int(d_raw)
+        except Exception:
+            mm = 0
+            dd = 0
+
+        for yy in candidate_years:
+            parsed = try_parse(yy, mm, dd)
+            if parsed != "0000/00/00":
+                return parsed
 
     return "0000/00/00"
 
@@ -437,12 +494,22 @@ def extract_time_from_raw(raw: str) -> str:
     raw = normalize_digits(raw.strip())
     lower = raw.lower()
 
-    is_pm = "م" in raw or "pm" in lower or "p.m" in lower
-    is_am = "ص" in raw or "am" in lower or "a.m" in lower
+    is_pm = (
+        "م" in raw
+        or "pm" in lower
+        or "p.m" in lower
+        or re.search(r"\bp\s*\.?\s*m\b", lower) is not None
+    )
+    is_am = (
+        "ص" in raw
+        or "am" in lower
+        or "a.m" in lower
+        or re.search(r"\ba\s*\.?\s*m\b", lower) is not None
+    )
 
     cleaned = raw.replace("م", "").replace("ص", "")
-    cleaned = re.sub(r"(?i)p\.?m\.?", "", cleaned)
-    cleaned = re.sub(r"(?i)a\.?m\.?", "", cleaned)
+    cleaned = re.sub(r"(?i)p\s*\.?\s*m", "", cleaned)
+    cleaned = re.sub(r"(?i)a\s*\.?\s*m", "", cleaned)
 
     match = re.search(r"(\d{1,2})\s*[:;.,]\s*(\d{2})", cleaned)
     if not match:
@@ -594,11 +661,6 @@ def get_paddle_ocr():
 
 
 def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
-    """
-    Compatibility wrapper for multiple PaddleOCR versions:
-    - newer APIs may expose .predict(...)
-    - older/common APIs expose .ocr(...)
-    """
     ocr = get_paddle_ocr()
     rgb = img.convert("RGB")
     arr = np.array(rgb)
@@ -617,7 +679,6 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
     if not result:
         return [], ""
 
-    # Structured newer output
     if isinstance(result, list) and result and hasattr(result[0], "json"):
         for page in result:
             payload = None
@@ -706,13 +767,6 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
 
         return words, " ".join(texts)
 
-    # Older API format:
-    # [
-    #   [
-    #     [box_points, (text, score)],
-    #     ...
-    #   ]
-    # ]
     if isinstance(result, list):
         for page in result:
             if not isinstance(page, list):
@@ -1263,7 +1317,6 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: missing anchors")
         return None
 
-    # Relaxed from 40px; 40 was too aggressive on noisy OCR layouts
     if abs(anchor21.center_y - anchor18.center_y) < 18:
         logger.info("anchor_rows: anchors suspiciously close vertically")
         return None
@@ -1581,21 +1634,36 @@ def extract_header_direct(img: Image.Image) -> tuple[str, str, dict]:
 
 def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
     direct_date, direct_time, direct_debug = extract_header_direct(img)
-    if direct_date != "0000/00/00" or direct_time != "00:00":
-        return direct_date, direct_time, direct_debug
 
     ordered_words = sorted(words, key=lambda w: (w.top, w.left))
     raw_text = " ".join(w.text for w in ordered_words)
 
-    return (
-        extract_date_from_raw(raw_text),
-        extract_time_from_raw(raw_text),
-        {
-            "header_source": "full_text_fallback",
-            "raw_text_sample": raw_text[:300],
-            "direct_debug": direct_debug,
-        },
-    )
+    fallback_date = extract_date_from_raw(raw_text)
+    fallback_time = extract_time_from_raw(raw_text)
+
+    final_date = direct_date if direct_date != "0000/00/00" else fallback_date
+    final_time = direct_time if direct_time != "00:00" else fallback_time
+
+    if direct_time != "00:00" and fallback_time != "00:00":
+        try:
+            direct_h, direct_m = map(int, direct_time.split(":"))
+            fallback_h, fallback_m = map(int, fallback_time.split(":"))
+            if direct_m == fallback_m and direct_h != fallback_h:
+                final_time = fallback_time
+        except Exception:
+            pass
+
+    debug = {
+        "header_source": "direct_header_band" if direct_date != "0000/00/00" or direct_time != "00:00" else "full_text_fallback",
+        "direct_debug": direct_debug,
+        "raw_text_sample": raw_text[:300],
+        "fallback_date": fallback_date,
+        "fallback_time": fallback_time,
+        "final_date": final_date,
+        "final_time": final_time,
+    }
+
+    return final_date, final_time, debug
 
 
 def compute_confidence(
@@ -1984,7 +2052,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="5.2.0",
+    version="5.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -1995,7 +2063,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "5.2.0",
+        "version": "5.3.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
