@@ -1,46 +1,51 @@
 {
   "ok": true,
-  "source": "https://scontent-dfw6-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwHNusw4&_nc_oc=AdorXrt9nSmTQXzzn2A5R5b2qbgPH_aRIk47BoIjdLha1dT2EhaPMglHIAP2QIQSa0s&_nc_zt=23&_nc_ht=scontent-dfw6-1.xx&_nc_gid=Nhvy0NZrVrKuOZILu5pHfw&_nc_ss=7a30f&oh=00_Afz5X9Kw-SVD3sjTzQ7okyVfbqK8LuJx_HdZgzgJNGyeSw&oe=69C4C851",
+  "source": "https://scontent-atl3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwHHj-SM&_nc_oc=AdrxYb0TMjcIvuBrAhViukkTQjnwksn5jEfh1rohyj-5QjBmxnLH--aIeue5maACsqo&_nc_zt=23&_nc_ht=scontent-atl3-1.xx&_nc_gid=8XJ2lUaJYr8tdMds1LVAsA&_nc_ss=7a30f&oh=00_AfzbUYPj0sb8nWPhnTrhMW90BtbvZ5oOKZS06Nt6SOOtNg&oe=69C5A951",
   "date": "0000/00/00",
   "time": "00:00",
   "k21_ss": 15950,
   "k21_sb": 15600,
   "k21_us": 134,
   "k21_ub": 131,
-  "k18_ss": 13671,
-  "k18_sb": 13371,
+  "k18_ss": 13700,
+  "k18_sb": 13350,
   "k18_us": 115,
   "k18_ub": 112,
-  "raw_ocr_preview": "KH aah PF call التسعيزة اليومية لبيع‎ DNS جمعيةالصاغة بدمشق | ((إله0‎ > ان كويد د‎ Tae 8 Bs : schilc, اليؤه: التاريخ: الساعة:‎ Slee ved العيار سعر القرام‎ “a i شراع‎ fore) شراع‎ fore) * | 131 134 | 15600 15950 21 “1112 115 | 13350 13700 18 ملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.‎ )2230766(_)2248005( مقابل بنك سوريا والمهجر‎ ةقيرحلا‎ قشمد‎",
+  "raw_ocr_preview": "ay ry التسعيرة اليومية لبيع الذهب‎ الصادرة عن‎ 5 i Gens جمعية الصاغه‎ Pos & ‘ : sacl اليوم: التاريخ:‎ Esa | BENE | العيار‎ - one be حك معدي‎ 1131 134 | 15600 15950 | 21 ‘| | 112 15 | 13350 13700 18 ملاحظة : الالنزام بوضع النسعيرة على الواجية بشكل واضح‎ )2230766(_)2248005( دمشق . الحريقة . مشابل بنك سوريا والمهجر‎ لعبار “200 الث 21 0 15600 | 134 131 . 18 13700 13350 115 112",
   "source_w": 1052,
   "source_h": 1052,
   "byte_length": 51320,
-  "updated_at_utc": "2026-03-21T21:46:01.023275+00:00",
+  "updated_at_utc": "2026-03-22T12:40:02.640535+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "tesseract",
-  "extraction_method": "smart_fallback",
-  "confidence": 0.4700000000000001,
+  "extraction_method": "anchor_rows",
+  "confidence": 0.52,
   "has_blueprint": true,
-  "ocr_word_count": 65,
+  "ocr_word_count": 78,
   "warnings": [
     "header_date_failed_used_full_text_fallback",
     "header_time_failed_used_full_text_fallback"
   ],
   "debug": {
-    "source_url": "https://scontent-dfw6-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwHNusw4&_nc_oc=AdorXrt9nSmTQXzzn2A5R5b2qbgPH_aRIk47BoIjdLha1dT2EhaPMglHIAP2QIQSa0s&_nc_zt=23&_nc_ht=scontent-dfw6-1.xx&_nc_gid=Nhvy0NZrVrKuOZILu5pHfw&_nc_ss=7a30f&oh=00_Afz5X9Kw-SVD3sjTzQ7okyVfbqK8LuJx_HdZgzgJNGyeSw&oe=69C4C851",
-    "ocr_word_count": 65,
+    "source_url": "https://scontent-atl3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwHHj-SM&_nc_oc=AdrxYb0TMjcIvuBrAhViukkTQjnwksn5jEfh1rohyj-5QjBmxnLH--aIeue5maACsqo&_nc_zt=23&_nc_ht=scontent-atl3-1.xx&_nc_gid=8XJ2lUaJYr8tdMds1LVAsA&_nc_ss=7a30f&oh=00_AfzbUYPj0sb8nWPhnTrhMW90BtbvZ5oOKZS06Nt6SOOtNg&oe=69C5A951",
     "image_width": 1052,
     "image_height": 1052,
     "ocr_mode": "prefer_blueprint",
     "display_timezone": "Asia/Dubai",
+    "paddle_enabled": true,
+    "paddle_failure_reason": null,
+    "ocr_word_count_full": 63,
+    "ocr_word_count_table": 15,
+    "ocr_engine_full": "tesseract",
+    "ocr_engine_table": "tesseract",
     "header": {
       "header_source": "none",
       "tried_candidates": [
         {
           "candidate": "band_a",
           "header_source": "full_image_word_filter",
-          "header_word_count": 13,
+          "header_word_count": 8,
           "header_time_raw": "",
           "header_date_raw": ""
         },
@@ -54,7 +59,7 @@
         {
           "candidate": "band_c",
           "header_source": "full_image_word_filter",
-          "header_word_count": 17,
+          "header_word_count": 4,
           "header_time_raw": "",
           "header_date_raw": ""
         }
@@ -63,29 +68,31 @@
         {
           "candidate": "band_a",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "الل",
-          "header_date_raw_crop": "جم يرلل"
+          "header_time_raw_crop": "hone of 5 المرام‎ y",
+          "header_date_raw_crop": "٠ = لاسن‎ at tel en"
         },
         {
           "candidate": "band_b",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "8",
-          "header_date_raw_crop": "pF Fa Reo: ب‎ *- - التاريخ: الساعة:‎"
+          "header_time_raw_crop": ".الث wae‏ مر المرام 5 ews‏",
+          "header_date_raw_crop": "٠ = لاسن‎ at tel en _—y ef لمملا‎"
         },
         {
           "candidate": "band_c",
           "header_source": "crop_ocr_fallback",
-          "header_time_raw_crop": "| ١ 8 سعرالترام‎ |",
-          "header_date_raw_crop": "التاريخ: EN‏ 0 200110 سعرالقرام .سح >< |[ سعرال"
+          "header_time_raw_crop": "2. f عوراو‎ 2",
+          "header_date_raw_crop": "0 wey."
         }
-      ]
+      ],
+      "anchor_date": "0000/00/00",
+      "anchor_time": "00:00"
     },
     "rate_attempts": {
       "blueprint": "no_result",
-      "anchor_rows": "no_result",
-      "smart_fallback": "accepted"
+      "anchor_rows": "accepted"
     },
     "has_blueprint": true,
-    "extraction_method": "smart_fallback"
+    "extraction_method": "anchor_rows",
+    "ocr_word_count": 78
   }
 }
