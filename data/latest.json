@@ -1,8 +1,8 @@
 {
   "ok": true,
-  "source": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwG_vE6i&_nc_oc=AdptHqAf-fQJgZ5DE9nc5syC173JaTVH7Ehr1Sy0IwtONRoO-OJgV66injKsD9jIW_k&_nc_zt=23&_nc_ht=scontent-iad3-2.xx&_nc_gid=jn59HpawozuJEVeu8r9yoQ&_nc_ss=7a30f&oh=00_AfzAx7F_vZdyPl-57_YIHNEy5xmL8PFex8Um1r-C7CiguQ&oe=69C65211",
+  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwFAFNf7&_nc_oc=Adp42N_RYecP1D8Uas_dpwsUn2SD2MKo0phw-DoIDiPv23bp6L5smTn40H8JW91zn00&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=0zyQyFzmkJLKPSMI_mtTIg&_nc_ss=7a30f&oh=00_Afxs08yeVZXUhAWkgbSFy6Du3_ZecmQl4vu3wyRVooAwcA&oe=69C65211",
   "date": "2026/03/19",
-  "time": "03:45",
+  "time": "15:45",
   "k21_ss": 15950,
   "k21_sb": 15600,
   "k21_us": 134,
@@ -15,19 +15,17 @@
   "source_w": 1052,
   "source_h": 1052,
   "byte_length": 51320,
-  "updated_at_utc": "2026-03-22T23:20:59.684778+00:00",
+  "updated_at_utc": "2026-03-22T23:26:37.754031+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "paddleocr",
   "extraction_method": "smart_fallback",
-  "confidence": 0.72,
+  "confidence": 0.77,
   "has_blueprint": true,
   "ocr_word_count": 62,
-  "warnings": [
-    "header_date_failed_used_full_text_fallback"
-  ],
+  "warnings": [],
   "debug": {
-    "source_url": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwG_vE6i&_nc_oc=AdptHqAf-fQJgZ5DE9nc5syC173JaTVH7Ehr1Sy0IwtONRoO-OJgV66injKsD9jIW_k&_nc_zt=23&_nc_ht=scontent-iad3-2.xx&_nc_gid=jn59HpawozuJEVeu8r9yoQ&_nc_ss=7a30f&oh=00_AfzAx7F_vZdyPl-57_YIHNEy5xmL8PFex8Um1r-C7CiguQ&oe=69C65211",
+    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwFAFNf7&_nc_oc=Adp42N_RYecP1D8Uas_dpwsUn2SD2MKo0phw-DoIDiPv23bp6L5smTn40H8JW91zn00&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=0zyQyFzmkJLKPSMI_mtTIg&_nc_ss=7a30f&oh=00_Afxs08yeVZXUhAWkgbSFy6Du3_ZecmQl4vu3wyRVooAwcA&oe=69C65211",
     "image_width": 1052,
     "image_height": 1052,
     "ocr_mode": "prefer_blueprint",
@@ -40,50 +38,58 @@
     "ocr_engine_table": "paddleocr",
     "header": {
       "header_source": "direct_header_band",
-      "attempts": [
-        {
-          "kind": "date",
-          "attempt": 1,
-          "engine": "paddleocr",
-          "raw": "ملا خيرات",
-          "value": "0000/00/00"
-        },
-        {
-          "kind": "date",
-          "attempt": 2,
-          "engine": "paddleocr",
-          "raw": "ملا خيرات",
-          "value": "0000/00/00"
-        },
-        {
-          "kind": "date",
-          "attempt": 3,
-          "engine": "paddleocr",
-          "raw": "مملا :خيراتت: 206/3/1",
-          "value": "0000/00/00"
-        },
-        {
-          "kind": "time",
-          "attempt": 1,
-          "engine": "tesseract",
-          "raw": "” N e en",
-          "value": "00:00"
-        },
-        {
-          "kind": "time",
-          "attempt": 2,
-          "engine": "tesseract",
-          "raw": "pCa :",
-          "value": "00:00"
-        },
-        {
-          "kind": "time",
-          "attempt": 3,
-          "engine": "paddleocr",
-          "raw": "3:45",
-          "value": "03:45"
-        }
-      ]
+      "direct_debug": {
+        "header_source": "direct_header_band",
+        "attempts": [
+          {
+            "kind": "date",
+            "attempt": 1,
+            "engine": "paddleocr",
+            "raw": "ملا خيرات",
+            "value": "0000/00/00"
+          },
+          {
+            "kind": "date",
+            "attempt": 2,
+            "engine": "paddleocr",
+            "raw": "ملا خيرات",
+            "value": "0000/00/00"
+          },
+          {
+            "kind": "date",
+            "attempt": 3,
+            "engine": "paddleocr",
+            "raw": "مملا :خيراتت: 206/3/1",
+            "value": "0000/00/00"
+          },
+          {
+            "kind": "time",
+            "attempt": 1,
+            "engine": "tesseract",
+            "raw": "” N e en",
+            "value": "00:00"
+          },
+          {
+            "kind": "time",
+            "attempt": 2,
+            "engine": "tesseract",
+            "raw": "pCa :",
+            "value": "00:00"
+          },
+          {
+            "kind": "time",
+            "attempt": 3,
+            "engine": "paddleocr",
+            "raw": "3:45",
+            "value": "03:45"
+          }
+        ]
+      },
+      "raw_text_sample": "عيبل بهذلا ةريعسنلا ةيمويلا ةرداصلا نع ةغاصلا ةيعمج قشمدب :ةعاسلا :خيراتلا :مويلا م3:45 سيصخلا 2026/3/19 ماوفلاروعس ماوفلا روعس سال رايعلا ءارش هءارش عمم عيم 21 131 134 15950 15600 8 112 115 13700 13350 مازننالا عضاو ىلع ةظحالم لكشب ةمجاولا ةريعسنلا عضوب كنب ةفيرحلا لباقه رجهملاو قشمد 2230766 221005",
+      "fallback_date": "2026/03/19",
+      "fallback_time": "15:45",
+      "final_date": "2026/03/19",
+      "final_time": "15:45"
     },
     "rate_attempts": {
       "blueprint": "no_result",
