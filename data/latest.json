@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwFQ9Wax&_nc_oc=AdrO4ZcKfZkz8_z2YIfPQ7l50MPZK45wbYh4QwV0RuyV7UqkQB3ba0gjN2uqGfJzOSk&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=9Qar8QxtZngMWxuiyI8t7Q&_nc_ss=7a30f&oh=00_Afy1mrh8Nlf7TbMRUGZF8GmFiHcV2o7r3LvO_mPuoiJ4UQ&oe=69C73311",
+  "source": "https://scontent-ord5-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwEQGSXy&_nc_oc=AdrwE5b8YStrF-Sd2S3f9H-iC2ourn7P0FLqfp3KL8HvSy6BsatKUu2jpn1ra0T9L0I&_nc_zt=23&_nc_ht=scontent-ord5-2.xx&_nc_gid=SY4XzrXgyTK3urB1BoRcDA&_nc_ss=7a30f&oh=00_AfywnCX1Ey0Tr7GsERLHVX-UF98qG77IW7YCT_YGjvLIOg&oe=69C76B51",
   "date": "2026/03/19",
   "time": "15:45",
   "k21_ss": 15950,
@@ -15,7 +15,7 @@
   "source_w": 1052,
   "source_h": 1052,
   "byte_length": 51320,
-  "updated_at_utc": "2026-03-23T17:45:48.354547+00:00",
+  "updated_at_utc": "2026-03-23T18:46:17.258675+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "paddleocr",
@@ -25,7 +25,7 @@
   "ocr_word_count": 62,
   "warnings": [],
   "debug": {
-    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwFQ9Wax&_nc_oc=AdrO4ZcKfZkz8_z2YIfPQ7l50MPZK45wbYh4QwV0RuyV7UqkQB3ba0gjN2uqGfJzOSk&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=9Qar8QxtZngMWxuiyI8t7Q&_nc_ss=7a30f&oh=00_Afy1mrh8Nlf7TbMRUGZF8GmFiHcV2o7r3LvO_mPuoiJ4UQ&oe=69C73311",
+    "source_url": "https://scontent-ord5-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=mUkLYvaCCuMQ7kNvwEQGSXy&_nc_oc=AdrwE5b8YStrF-Sd2S3f9H-iC2ourn7P0FLqfp3KL8HvSy6BsatKUu2jpn1ra0T9L0I&_nc_zt=23&_nc_ht=scontent-ord5-2.xx&_nc_gid=SY4XzrXgyTK3urB1BoRcDA&_nc_ss=7a30f&oh=00_AfywnCX1Ey0Tr7GsERLHVX-UF98qG77IW7YCT_YGjvLIOg&oe=69C76B51",
     "image_width": 1052,
     "image_height": 1052,
     "ocr_mode": "prefer_blueprint",
