@@ -13,13 +13,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       APP_MODE: cli
       APP_TIMEZONE: Asia/Dubai
       LOG_LEVEL: INFO
       REQUEST_TIMEOUT: "35"
       GOLD_OCR_MODE: prefer_blueprint
       GOLD_DEBUG_EXPORT: "false"
-
+      
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
