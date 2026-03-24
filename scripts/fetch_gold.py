@@ -1,7 +1,5 @@
-
 import json
 import logging
-import math
 import os
 import re
 from dataclasses import dataclass
@@ -9,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
-from scripts.blueprint_validator import validate_blueprint
+
 import numpy as np
 import pytesseract
 import requests
@@ -31,6 +29,11 @@ except Exception:
     cv2 = None
     _CV2_AVAILABLE = False
 
+try:
+    from scripts.blueprint_validator import validate_blueprint
+except Exception:
+    from blueprint_validator import validate_blueprint
+
 
 # =========================================================
 # Paths / Config
@@ -44,17 +47,14 @@ LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
 BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-DEFAULT_OCR_MODE = os.getenv("GOLD_OCR_MODE", "prefer_blueprint").strip().lower()
-
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "UTC").strip() or "UTC"
 
 DEBUG_EXPORT = os.getenv("GOLD_DEBUG_EXPORT", "false").strip().lower() in {
     "1", "true", "yes", "on",
 }
 DEBUG_MAX_FILES = int(os.getenv("GOLD_DEBUG_MAX_FILES", "50"))
-
-APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "UTC").strip() or "UTC"
 
 DISABLE_PADDLE = os.getenv("DISABLE_PADDLE", "false").strip().lower() in {
     "1", "true", "yes", "on",
@@ -65,8 +65,18 @@ MAX_USD_PRICE = 800
 MIN_SYP_PRICE = 1000
 MAX_SYP_PRICE = 200000
 
-MIN_18K_TO_21K_RATIO = 0.84
-MAX_18K_TO_21K_RATIO = 0.87
+DEFAULT_USD_HARD_MIN = 50.0
+DEFAULT_USD_HARD_MAX = 400.0
+DEFAULT_USD_EXPECTED_MIN = 90.0
+DEFAULT_USD_EXPECTED_MAX = 180.0
+
+DEFAULT_SYP_HARD_MIN = 5000.0
+DEFAULT_SYP_HARD_MAX = 50000.0
+DEFAULT_SYP_EXPECTED_MIN = 12000.0
+DEFAULT_SYP_EXPECTED_MAX = 20000.0
+
+DEFAULT_MIN_18K_TO_21K_RATIO = 0.80
+DEFAULT_MAX_18K_TO_21K_RATIO = 0.90
 
 MIN_CANDIDATE_WIDTH = 250
 MIN_CANDIDATE_HEIGHT = 250
@@ -154,15 +164,6 @@ class GoldRate:
 
 
 @dataclass
-class NumericToken:
-    value: float
-    kind: str
-    x: float
-    y: float
-    height: float
-
-
-@dataclass
 class OcrWord:
     text: str
     norm: str
@@ -172,41 +173,20 @@ class OcrWord:
     height: int
     conf: float
 
-    @property
-    def center_x(self) -> float:
-        return self.left + self.width / 2.0
-
-    @property
-    def center_y(self) -> float:
-        return self.top + self.height / 2.0
-
 
 @dataclass
-class ImageCandidate:
-    url: str
-    width: int
-    height: int
-
-    @property
-    def area(self) -> int:
-        return self.width * self.height
-
-    @property
-    def aspect_ratio(self) -> float:
-        return self.width / self.height if self.height else 0.0
-
-
-@dataclass
-class TokenRow:
-    tokens: list[NumericToken]
-
-    @property
-    def center_y(self) -> float:
-        return sum(t.y for t in self.tokens) / max(len(self.tokens), 1)
-
-    @property
-    def avg_height(self) -> float:
-        return sum(t.height for t in self.tokens) / max(len(self.tokens), 1)
+class FieldOcrCandidate:
+    field_id: str
+    field_type: str
+    engine: str
+    mode: str
+    raw_text: str
+    value: Any
+    confidence: float
+    valid: bool
+    expected: bool
+    score: float
+    warning: Optional[str] = None
 
 
 @dataclass
@@ -316,17 +296,6 @@ def app_now() -> datetime:
     return datetime.now(APP_TIMEZONE)
 
 
-def clamp(value: float, low: float, high: float) -> float:
-    return max(low, min(high, value))
-
-
-def safe_float(value, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return default
-
-
 def normalize_digits(text: str) -> str:
     arabic_indic_map = str.maketrans(
         "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
@@ -351,17 +320,7 @@ def normalize_digits(text: str) -> str:
 
 def normalize_date_text(text: str) -> str:
     text = normalize_digits(text)
-    text = text.replace("م", "").replace("ص", "")
     return re.sub(r"\s+", " ", text).strip()
-
-
-def normalized_word_text(text: str) -> str:
-    text = normalize_digits(text)
-    text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-    text = text.replace("ة", "ه")
-    text = text.replace("ى", "ي")
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
 
 
 def safe_slug(text: str) -> str:
@@ -392,12 +351,6 @@ def value_changed(a, b, tolerance: float = 0.001) -> bool:
         return a != b
 
 
-def normalize_numeric_value(value: float, kind: str) -> float | int:
-    if kind == "usd":
-        return round(float(value), 2)
-    return int(round(float(value)))
-
-
 def prices_payload(k21: GoldRate, k18: GoldRate) -> dict:
     return {
         "k21_ss": int(k21.ss),
@@ -422,7 +375,6 @@ def summarize_price_changes(previous: dict, current: dict) -> dict:
         new_val = current.get(key)
         if value_changed(old_val, new_val):
             changed[key] = {"old": old_val, "new": new_val}
-
     return {"changed": bool(changed), "count": len(changed), "fields": changed}
 
 
@@ -473,14 +425,10 @@ def _apply_date_checksum(y: int, m: int, d: int) -> str:
 
 def extract_date_from_raw(raw: str) -> str:
     normalized = normalize_date_text(raw)
-
     now = app_now()
     min_year = now.year - 1
     max_year = now.year + 3
     year_alternation = "|".join(str(y) for y in range(min_year, max_year + 1))
-
-    def try_parse(y: int, m: int, d: int) -> str:
-        return _apply_date_checksum(y, m, d)
 
     patterns = [
         rf"({year_alternation})\s*[/\.\-]\s*(\d{{1,2}})\s*[/\.\-]\s*(\d{{1,2}})",
@@ -489,45 +437,25 @@ def extract_date_from_raw(raw: str) -> str:
     ]
 
     for idx, pattern in enumerate(patterns):
-        m = re.search(pattern, normalized)
-        if not m:
+        match = re.search(pattern, normalized)
+        if not match:
             continue
 
         if idx == 0:
-            parsed = try_parse(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            parsed = _apply_date_checksum(int(match.group(1)), int(match.group(2)), int(match.group(3)))
         elif idx == 1:
-            parsed = try_parse(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            parsed = _apply_date_checksum(int(match.group(3)), int(match.group(2)), int(match.group(1)))
         else:
-            parsed = try_parse(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            parsed = _apply_date_checksum(int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
         if parsed != "0000/00/00":
             return parsed
 
-    compact = re.sub(r"[^0-9/.\-]", " ", normalized)
-    compact = re.sub(r"\s+", " ", compact).strip()
-
-    m = re.search(r"(\d{3,4})\s*[/\.\-]\s*(\d{1,2})\s*[/\.\-]\s*(\d{1,2})", compact)
-    if m:
-        y_raw = m.group(1)
-        mm = int(m.group(2))
-        dd = int(m.group(3))
-
-        candidate_years: list[int] = []
-        if len(y_raw) == 4:
-            candidate_years.append(int(y_raw))
-        elif len(y_raw) == 3:
-            candidate_years.extend([int(f"2{y_raw}"), int(f"20{y_raw[-2:]}")])
-
-        for yy in candidate_years:
-            parsed = try_parse(yy, mm, dd)
-            if parsed != "0000/00/00":
-                return parsed
-
     digit_groups = re.findall(r"\d+", normalized)
     if len(digit_groups) >= 3:
         y_raw, m_raw, d_raw = digit_groups[0], digit_groups[1], digit_groups[2]
-
         candidate_years: list[int] = []
+
         if len(y_raw) == 4:
             candidate_years.append(int(y_raw))
         elif len(y_raw) == 3:
@@ -543,7 +471,7 @@ def extract_date_from_raw(raw: str) -> str:
             dd = 0
 
         for yy in candidate_years:
-            parsed = try_parse(yy, mm, dd)
+            parsed = _apply_date_checksum(yy, mm, dd)
             if parsed != "0000/00/00":
                 return parsed
 
@@ -621,56 +549,119 @@ def parse_numeric_value(text: str) -> Optional[float]:
         return None
 
 
-def classify_numeric_value(value: float) -> Optional[str]:
-    now = app_now()
-    integer_value = int(round(value))
+# =========================================================
+# Blueprint helpers
+# =========================================================
 
-    if abs(value - integer_value) < 0.0001:
-        if now.year - 1 <= integer_value <= now.year + 3:
-            return None
-        if MIN_USD_PRICE <= integer_value <= MAX_USD_PRICE:
-            return "usd"
-        if MIN_SYP_PRICE <= integer_value <= MAX_SYP_PRICE:
-            return "syp"
+def load_blueprint() -> dict:
+    global _BLUEPRINT_CACHE, _BLUEPRINT_MTIME
+
+    if not BLUEPRINT_FILE.exists():
+        raise RuntimeError(f"Blueprint file not found: {BLUEPRINT_FILE}")
+
+    mtime = BLUEPRINT_FILE.stat().st_mtime
+    if _BLUEPRINT_CACHE is not None and _BLUEPRINT_MTIME == mtime:
+        return _BLUEPRINT_CACHE
+
+    blueprint = load_json(BLUEPRINT_FILE, None)
+    if not isinstance(blueprint, dict):
+        raise RuntimeError("Blueprint file is not a valid JSON object")
+
+    validation_result = validate_blueprint(blueprint)
+    if not validation_result.ok:
+        message = "; ".join(validation_result.errors)
+        raise RuntimeError(f"Blueprint validation failed: {message}")
+
+    for warning in validation_result.warnings:
+        logger.warning("Blueprint warning: %s", warning)
+
+    _BLUEPRINT_CACHE = blueprint
+    _BLUEPRINT_MTIME = mtime
+    logger.info("Blueprint loaded successfully: %s", BLUEPRINT_FILE)
+    return blueprint
+
+
+def field_map_from_blueprint(blueprint: dict) -> dict[str, dict]:
+    fields = blueprint.get("fields") or []
+    return {
+        str(field["id"]): field
+        for field in fields
+        if isinstance(field, dict) and isinstance(field.get("id"), str)
+    }
+
+
+def validation_cfg(blueprint: dict) -> dict:
+    cfg = blueprint.get("validation") or {}
+    return {
+        "usd_hard_min": float(cfg.get("usd_hard_min", DEFAULT_USD_HARD_MIN)),
+        "usd_hard_max": float(cfg.get("usd_hard_max", DEFAULT_USD_HARD_MAX)),
+        "usd_expected_min": float(cfg.get("usd_expected_min", DEFAULT_USD_EXPECTED_MIN)),
+        "usd_expected_max": float(cfg.get("usd_expected_max", DEFAULT_USD_EXPECTED_MAX)),
+        "syp_hard_min": float(cfg.get("syp_hard_min", DEFAULT_SYP_HARD_MIN)),
+        "syp_hard_max": float(cfg.get("syp_hard_max", DEFAULT_SYP_HARD_MAX)),
+        "syp_expected_min": float(cfg.get("syp_expected_min", DEFAULT_SYP_EXPECTED_MIN)),
+        "syp_expected_max": float(cfg.get("syp_expected_max", DEFAULT_SYP_EXPECTED_MAX)),
+        "min_18k_to_21k_ratio": float(cfg.get("min_18k_to_21k_ratio", DEFAULT_MIN_18K_TO_21K_RATIO)),
+        "max_18k_to_21k_ratio": float(cfg.get("max_18k_to_21k_ratio", DEFAULT_MAX_18K_TO_21K_RATIO)),
+    }
+
+
+def get_reference_size(blueprint: dict) -> tuple[int, int]:
+    ref = blueprint.get("reference_size") or {}
+    width = int(ref.get("width", 1024))
+    height = int(ref.get("height", 1024))
+    return max(width, 1), max(height, 1)
+
+
+def get_alignment_config(blueprint: dict) -> dict:
+    cfg = blueprint.get("alignment") or {}
+    return {
+        "enabled": bool(cfg.get("enabled", True)),
+        "mode": str(cfg.get("mode", "resize_only")),
+        "min_match_count": int(cfg.get("min_match_count", 12)),
+        "good_match_percent": float(cfg.get("good_match_percent", 0.25)),
+        "reference_image": str(cfg.get("reference_image", "")).strip(),
+    }
+
+
+def resolve_reference_image_path(reference_image: str) -> Optional[Path]:
+    if not reference_image:
         return None
-
-    if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
-        return "usd"
-
+    path = Path(reference_image)
+    if not path.is_absolute():
+        path = (ROOT / reference_image).resolve()
+    if path.exists() and path.is_file():
+        return path
     return None
 
 
-def extract_numeric_tokens(words: list["OcrWord"]) -> list["NumericToken"]:
-    tokens: list[NumericToken] = []
+def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
+    w, h = img.size
+    return img.crop((
+        max(0, int(x1 * w)),
+        max(0, int(y1 * h)),
+        min(w, int(x2 * w)),
+        min(h, int(y2 * h)),
+    ))
 
-    for w in words:
-        if ":" in w.text or "/" in w.text:
-            continue
 
-        value = parse_numeric_value(w.norm)
-        if value is None:
-            continue
-
-        kind = classify_numeric_value(value)
-        if kind is None:
-            continue
-
-        tokens.append(
-            NumericToken(
-                value=float(normalize_numeric_value(value, kind)),
-                kind=kind,
-                x=w.center_x,
-                y=w.center_y,
-                height=w.height,
-            )
-        )
-
-    return tokens
+def crop_field_from_box(img: Image.Image, box: dict) -> Image.Image:
+    return crop_box(
+        img,
+        float(box["x1"]),
+        float(box["y1"]),
+        float(box["x2"]),
+        float(box["y2"]),
+    )
 
 
 # =========================================================
-# Image processing
+# OpenCV alignment + preprocessing
 # =========================================================
+
+def pil_to_cv_rgb(img: Image.Image) -> np.ndarray:
+    return np.array(img.convert("RGB"))
+
 
 def pil_to_cv_gray(img: Image.Image) -> np.ndarray:
     arr = np.array(img.convert("RGB"))
@@ -679,63 +670,109 @@ def pil_to_cv_gray(img: Image.Image) -> np.ndarray:
     return np.array(img.convert("L"))
 
 
+def cv_to_pil_rgb(arr: np.ndarray) -> Image.Image:
+    return Image.fromarray(arr)
+
+
 def cv_gray_to_pil(gray: np.ndarray) -> Image.Image:
     return Image.fromarray(gray)
 
 
-def preprocess_image_variant_pil(image_bytes: bytes) -> Image.Image:
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    gray = ImageOps.grayscale(img)
-    gray = ImageOps.autocontrast(gray, cutoff=2)
-    gray = gray.filter(ImageFilter.UnsharpMask(radius=2, percent=200, threshold=3))
-    gray = gray.resize((gray.width * 2, gray.height * 2))
-    gray = gray.point(lambda p: 255 if p > 145 else 0)
-    return gray
+def open_image_from_bytes(image_bytes: bytes) -> Image.Image:
+    return Image.open(BytesIO(image_bytes)).convert("RGB")
 
 
-def preprocess_image_variant_cv(image_bytes: bytes, mode: str = "adaptive") -> Image.Image:
+def resize_to_reference(img: Image.Image, width: int, height: int) -> Image.Image:
+    return img.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def align_to_reference_template(image_bytes: bytes, blueprint: dict) -> tuple[Image.Image, dict]:
+    src_img = open_image_from_bytes(image_bytes)
+    ref_w, ref_h = get_reference_size(blueprint)
+    align_cfg = get_alignment_config(blueprint)
+
+    debug = {
+        "opencv_available": _CV2_AVAILABLE,
+        "alignment_enabled": align_cfg["enabled"],
+        "alignment_mode": align_cfg["mode"],
+        "reference_size": {"width": ref_w, "height": ref_h},
+    }
+
+    if not align_cfg["enabled"]:
+        aligned = resize_to_reference(src_img, ref_w, ref_h)
+        debug["strategy"] = "disabled_resize_only"
+        return aligned, debug
+
     if not _CV2_AVAILABLE:
-        return preprocess_image_variant_pil(image_bytes)
+        aligned = resize_to_reference(src_img, ref_w, ref_h)
+        debug["strategy"] = "no_opencv_resize_only"
+        return aligned, debug
 
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
-    rgb = np.array(img)
-    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    if align_cfg["mode"] == "homography":
+        ref_path = resolve_reference_image_path(align_cfg["reference_image"])
+        if ref_path is not None:
+            try:
+                ref_img = Image.open(ref_path).convert("RGB")
+                src_cv = pil_to_cv_rgb(src_img)
+                ref_cv = np.array(ref_img.resize((ref_w, ref_h), Image.Resampling.LANCZOS))
 
-    gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+                src_gray = cv2.cvtColor(src_cv, cv2.COLOR_RGB2GRAY)
+                ref_gray = cv2.cvtColor(ref_cv, cv2.COLOR_RGB2GRAY)
 
-    if mode == "adaptive":
-        out = cv2.adaptiveThreshold(
-            gray, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            31, 11,
-        )
-    elif mode == "otsu":
-        _, out = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    elif mode == "contrast":
-        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
-        gray = clahe.apply(gray)
-        _, out = cv2.threshold(gray, 145, 255, cv2.THRESH_BINARY)
-    else:
-        _, out = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+                orb = cv2.ORB_create(4000)
+                kp1, des1 = orb.detectAndCompute(src_gray, None)
+                kp2, des2 = orb.detectAndCompute(ref_gray, None)
 
-    kernel = np.ones((2, 2), np.uint8)
-    out = cv2.morphologyEx(out, cv2.MORPH_CLOSE, kernel)
-    return cv_gray_to_pil(out)
+                if des1 is not None and des2 is not None and len(kp1) >= 10 and len(kp2) >= 10:
+                    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+                    matches = matcher.match(des1, des2)
+                    matches = sorted(matches, key=lambda m: m.distance)
 
+                    keep_count = max(
+                        align_cfg["min_match_count"],
+                        int(len(matches) * align_cfg["good_match_percent"]),
+                    )
+                    good_matches = matches[:keep_count]
 
-def preprocess_image(image_bytes: bytes) -> Image.Image:
-    if _CV2_AVAILABLE:
-        return preprocess_image_variant_cv(image_bytes, mode="adaptive")
-    return preprocess_image_variant_pil(image_bytes)
+                    if len(good_matches) >= align_cfg["min_match_count"]:
+                        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+                        ref_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+                        H, _mask = cv2.findHomography(src_pts, ref_pts, cv2.RANSAC, 5.0)
+                        if H is not None:
+                            warped = cv2.warpPerspective(src_cv, H, (ref_w, ref_h))
+                            rel_ref = str(ref_path)
+                            try:
+                                rel_ref = str(ref_path.relative_to(ROOT))
+                            except Exception:
+                                pass
+                            debug.update({
+                                "strategy": "homography",
+                                "reference_image": rel_ref,
+                                "matches_total": len(matches),
+                                "matches_used": len(good_matches),
+                                "homography_found": True,
+                            })
+                            return cv_to_pil_rgb(warped), debug
+
+                debug["homography_found"] = False
+                debug["strategy"] = "homography_failed_resize_only"
+            except Exception as exc:
+                logger.warning("Template alignment failed, falling back to resize: %s", exc)
+                debug["strategy"] = "homography_exception_resize_only"
+                debug["alignment_error"] = str(exc)
+        else:
+            debug["strategy"] = "missing_reference_image_resize_only"
+
+    aligned = resize_to_reference(src_img, ref_w, ref_h)
+    return aligned, debug
 
 
 def preprocess_region_for_ocr(
     img: Image.Image,
     threshold: Optional[int] = None,
     upscale: int = 2,
-    mode: str = "auto",
+    mode: str = "binary",
 ) -> Image.Image:
     if _CV2_AVAILABLE:
         gray = pil_to_cv_gray(img)
@@ -758,39 +795,72 @@ def preprocess_region_for_ocr(
                 cv2.THRESH_BINARY,
                 31, 9,
             )
-        elif mode == "otsu":
-            _, out = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        elif mode == "contrast":
+            clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
+            _, out = cv2.threshold(enhanced, threshold if threshold is not None else 145, 255, cv2.THRESH_BINARY)
+        elif mode == "soft":
+            out = cv2.equalizeHist(gray)
         else:
             t = 135 if threshold is None else threshold
             _, out = cv2.threshold(gray, t, 255, cv2.THRESH_BINARY)
 
-        kernel = np.ones((2, 2), np.uint8)
-        out = cv2.morphologyEx(out, cv2.MORPH_CLOSE, kernel)
+        if mode != "soft":
+            kernel = np.ones((2, 2), np.uint8)
+            out = cv2.morphologyEx(out, cv2.MORPH_CLOSE, kernel)
+
         return cv_gray_to_pil(out)
 
     region = img.convert("L")
     region = ImageOps.autocontrast(region)
-    region = region.filter(ImageFilter.MedianFilter(size=3))
     if upscale > 1:
         region = region.resize((region.width * upscale, region.height * upscale))
+    if mode == "soft":
+        return region.filter(ImageFilter.SHARPEN)
     if threshold is not None:
         region = region.point(lambda p: 255 if p >= threshold else 0)
-    region = region.filter(ImageFilter.SHARPEN)
-    return region
+    return region.filter(ImageFilter.SHARPEN)
 
 
-def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
-    w, h = img.size
-    return img.crop((
-        max(0, int(x1 * w)),
-        max(0, int(y1 * h)),
-        min(w, int(x2 * w)),
-        min(h, int(y2 * h)),
-    ))
+def preprocess_field_variants(field_cfg: dict, field_img: Image.Image) -> list[tuple[str, Image.Image]]:
+    field_type = str(field_cfg.get("type", ""))
+    preprocess_modes = field_cfg.get("preprocess_modes") or ["binary", "adaptive"]
+    variants: list[tuple[str, Image.Image]] = []
+    seen: set[str] = set()
+
+    if field_type in {"syp_price", "usd_price"}:
+        default_threshold = 135
+        default_upscale = 3
+    else:
+        default_threshold = 145
+        default_upscale = 3
+
+    for mode in preprocess_modes:
+        mode_name = str(mode).strip().lower() or "binary"
+        if mode_name in seen:
+            continue
+        seen.add(mode_name)
+        variants.append((
+            mode_name,
+            preprocess_region_for_ocr(
+                field_img,
+                threshold=default_threshold if mode_name != "soft" else None,
+                upscale=default_upscale,
+                mode=mode_name,
+            ),
+        ))
+
+    if not variants:
+        variants.append((
+            "binary",
+            preprocess_region_for_ocr(field_img, threshold=default_threshold, upscale=default_upscale, mode="binary"),
+        ))
+
+    return variants
 
 
 # =========================================================
-# OCR
+# OCR engines
 # =========================================================
 
 def disable_paddle(reason: str):
@@ -840,7 +910,6 @@ def get_paddle_ocr():
                         break
                     except Exception as exc:
                         last_exc = exc
-                        continue
 
                 if _PADDLE_OCR is None:
                     disable_paddle(f"init_failed: {last_exc}")
@@ -854,13 +923,12 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
     rgb = img.convert("RGB")
     arr = np.array(rgb)
 
-    result = None
     if hasattr(ocr, "predict"):
         result = ocr.predict(arr)
     elif hasattr(ocr, "ocr"):
         result = ocr.ocr(arr, cls=False)
     else:
-        raise RuntimeError("Unsupported PaddleOCR API: neither predict() nor ocr() found")
+        raise RuntimeError("Unsupported PaddleOCR API")
 
     words: list[OcrWord] = []
     texts: list[str] = []
@@ -892,7 +960,6 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                 continue
 
             res = payload.get("res", payload)
-
             rec_texts = res.get("rec_texts", []) or []
             rec_scores = res.get("rec_scores", []) or []
             rec_polys = res.get("rec_polys", []) or []
@@ -903,16 +970,13 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                     text = str(text).strip()
                     if not text:
                         continue
-
                     score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
                     box = rec_boxes[idx]
-
                     left = int(box[0])
                     top = int(box[1])
                     right = int(box[2])
                     bottom = int(box[3])
-
-                    word = OcrWord(
+                    words.append(OcrWord(
                         text=text,
                         norm=normalize_digits(text),
                         left=left,
@@ -920,39 +984,27 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                         width=max(right - left, 1),
                         height=max(bottom - top, 1),
                         conf=score,
-                    )
-                    words.append(word)
-                    texts.append(word.text)
-
+                    ))
+                    texts.append(text)
             elif len(rec_polys) == len(rec_texts) and rec_polys:
                 for idx, text in enumerate(rec_texts):
                     text = str(text).strip()
                     if not text:
                         continue
-
                     score = float(rec_scores[idx]) if idx < len(rec_scores) else -1.0
                     poly = rec_polys[idx]
-
                     xs = [float(p[0]) for p in poly]
                     ys = [float(p[1]) for p in poly]
-
-                    left = int(min(xs))
-                    top = int(min(ys))
-                    width = int(max(xs) - min(xs))
-                    height = int(max(ys) - min(ys))
-
-                    word = OcrWord(
+                    words.append(OcrWord(
                         text=text,
                         norm=normalize_digits(text),
-                        left=left,
-                        top=top,
-                        width=max(width, 1),
-                        height=max(height, 1),
+                        left=int(min(xs)),
+                        top=int(min(ys)),
+                        width=max(int(max(xs) - min(xs)), 1),
+                        height=max(int(max(ys) - min(ys)), 1),
                         conf=score,
-                    )
-                    words.append(word)
-                    texts.append(word.text)
-
+                    ))
+                    texts.append(text)
         return words, " ".join(texts)
 
     if isinstance(result, list):
@@ -966,92 +1018,399 @@ def paddle_ocr_words(img: Image.Image) -> tuple[list[OcrWord], str]:
                 rec = line[1]
                 if not rec or len(rec) < 2:
                     continue
-
                 text = str(rec[0]).strip()
                 if not text:
                     continue
                 score = float(rec[1])
-
                 xs = [float(p[0]) for p in box]
                 ys = [float(p[1]) for p in box]
-
-                left = int(min(xs))
-                top = int(min(ys))
-                width = int(max(xs) - min(xs))
-                height = int(max(ys) - min(ys))
-
-                word = OcrWord(
+                words.append(OcrWord(
                     text=text,
                     norm=normalize_digits(text),
-                    left=left,
-                    top=top,
-                    width=max(width, 1),
-                    height=max(height, 1),
+                    left=int(min(xs)),
+                    top=int(min(ys)),
+                    width=max(int(max(xs) - min(xs)), 1),
+                    height=max(int(max(ys) - min(ys)), 1),
                     conf=score,
-                )
-                words.append(word)
-                texts.append(word.text)
-
+                ))
+                texts.append(text)
         return words, " ".join(texts)
 
     return [], ""
 
 
-def tesseract_ocr_words(
+def paddle_ocr_text(img: Image.Image) -> tuple[str, float]:
+    words, raw = paddle_ocr_words(img)
+    if not words:
+        return "", -1.0
+    conf_values = [w.conf for w in words if w.conf >= 0]
+    avg_conf = float(sum(conf_values) / len(conf_values)) if conf_values else -1.0
+    return raw.strip(), avg_conf
+
+
+def tesseract_ocr_text(
     img: Image.Image,
-    psm: int = 6,
+    psm: int = 7,
     lang: str = "ara+eng",
-) -> tuple[list[OcrWord], str]:
+    whitelist: Optional[str] = None,
+) -> tuple[str, float]:
+    config = f"--oem 3 --psm {psm}"
+    if whitelist:
+        config += f' -c tessedit_char_whitelist="{whitelist}"'
+
     data = pytesseract.image_to_data(
         img,
         lang=lang,
         output_type=pytesseract.Output.DICT,
-        config=f"--oem 3 --psm {psm}",
+        config=config,
     )
 
-    words: list[OcrWord] = []
-    texts: list[str] = []
+    parts: list[str] = []
+    confs: list[float] = []
 
-    n = len(data["text"])
-    for i in range(n):
+    for i in range(len(data["text"])):
         raw = (data["text"][i] or "").strip()
         if not raw:
             continue
-
+        parts.append(raw)
         try:
             conf = float(str(data["conf"][i]).strip())
+            if conf >= 0:
+                confs.append(conf)
         except Exception:
-            conf = -1.0
+            pass
 
-        word = OcrWord(
-            text=raw,
-            norm=normalize_digits(raw),
-            left=int(data["left"][i]),
-            top=int(data["top"][i]),
-            width=int(data["width"][i]),
-            height=int(data["height"][i]),
-            conf=conf,
-        )
-        words.append(word)
-        texts.append(raw)
-
-    return words, " ".join(texts)
+    text = " ".join(parts).strip()
+    avg_conf = float(sum(confs) / len(confs)) if confs else -1.0
+    return text, avg_conf
 
 
-def run_ocr_with_fallback(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord], str, str]:
-    if _PADDLE_AVAILABLE:
+# =========================================================
+# Field parsing + validation
+# =========================================================
+
+def hard_range_for_field(field_type: str, validation: dict) -> tuple[float, float]:
+    if field_type == "usd_price":
+        return validation["usd_hard_min"], validation["usd_hard_max"]
+    if field_type == "syp_price":
+        return validation["syp_hard_min"], validation["syp_hard_max"]
+    raise RuntimeError(f"No hard range for field type '{field_type}'")
+
+
+def expected_range_for_field(field_type: str, validation: dict) -> tuple[float, float]:
+    if field_type == "usd_price":
+        return validation["usd_expected_min"], validation["usd_expected_max"]
+    if field_type == "syp_price":
+        return validation["syp_expected_min"], validation["syp_expected_max"]
+    raise RuntimeError(f"No expected range for field type '{field_type}'")
+
+
+def parse_field_value(field_type: str, raw_text: str) -> tuple[Any, bool, Optional[str]]:
+    if field_type == "date":
+        value = extract_date_from_raw(raw_text)
+        return value, value != "0000/00/00", None if value != "0000/00/00" else "date_parse_failed"
+
+    if field_type == "time":
+        value = extract_time_from_raw(raw_text)
+        return value, value != "00:00", None if value != "00:00" else "time_parse_failed"
+
+    if field_type == "arabic_text":
+        text = re.sub(r"\s+", " ", raw_text).strip()
+        return text, bool(text), None if text else "text_parse_failed"
+
+    if field_type in {"usd_price", "syp_price"}:
+        value = parse_numeric_value(raw_text)
+        if value is None:
+            return None, False, "numeric_parse_failed"
+
+        if field_type == "syp_price":
+            return int(round(value)), True, None
+        return round(float(value), 2), True, None
+
+    return raw_text.strip(), bool(raw_text.strip()), None
+
+
+def validate_field_value(field_type: str, value: Any, validation: dict) -> tuple[bool, bool, Optional[str]]:
+    if field_type in {"date", "time", "arabic_text"}:
+        return value not in {None, "", "0000/00/00", "00:00"}, True, None
+
+    if field_type in {"usd_price", "syp_price"}:
+        if value is None:
+            return False, False, "missing_value"
+
         try:
-            words, raw = paddle_ocr_words(img)
-            logger.info("PaddleOCR words=%s", len(words))
-            if words:
-                return words, raw, "paddleocr"
-            logger.warning("PaddleOCR returned 0 words, falling back to Tesseract")
-        except Exception as exc:
-            logger.warning("PaddleOCR runtime failed, falling back to Tesseract: %s", exc)
+            number = float(value)
+        except Exception:
+            return False, False, "non_numeric_value"
 
-    words, raw = tesseract_ocr_words(img, psm=psm, lang="ara+eng")
-    logger.info("Tesseract words=%s", len(words))
-    return words, raw, "tesseract"
+        hard_min, hard_max = hard_range_for_field(field_type, validation)
+        if not (hard_min <= number <= hard_max):
+            return False, False, "outside_hard_range"
+
+        exp_min, exp_max = expected_range_for_field(field_type, validation)
+        expected = exp_min <= number <= exp_max
+        return True, expected, None
+
+    return False, False, "unknown_field_type"
+
+
+def score_field_candidate(
+    field_type: str,
+    engine: str,
+    mode: str,
+    confidence: float,
+    valid: bool,
+    expected: bool,
+) -> float:
+    score = 0.0
+    if valid:
+        score += 100.0
+    if expected:
+        score += 10.0
+    if engine == "paddle":
+        score += 2.0
+    elif engine == "tesseract":
+        score += 1.0
+
+    if mode == "binary":
+        score += 1.5
+    elif mode == "adaptive":
+        score += 1.0
+    elif mode == "contrast":
+        score += 0.75
+
+    if confidence >= 0:
+        score += min(confidence, 100.0) / 10.0
+
+    if field_type in {"date", "time"} and valid:
+        score += 2.0
+
+    return score
+
+
+def extract_field_value(
+    field_id: str,
+    field_cfg: dict,
+    field_img: Image.Image,
+    validation: dict,
+) -> tuple[FieldOcrCandidate, list[FieldOcrCandidate]]:
+    field_type = str(field_cfg["type"])
+    psm = int(field_cfg.get("psm", 7))
+    whitelist = field_cfg.get("char_whitelist")
+    candidates: list[FieldOcrCandidate] = []
+
+    for mode_name, variant_img in preprocess_field_variants(field_cfg, field_img):
+        for engine in field_cfg.get("ocr_engines", ["paddle", "tesseract"]):
+            engine_name = str(engine).strip().lower()
+            try:
+                if engine_name == "paddle":
+                    if not _PADDLE_AVAILABLE:
+                        continue
+                    raw_text, engine_conf = paddle_ocr_text(variant_img)
+                elif engine_name == "tesseract":
+                    raw_text, engine_conf = tesseract_ocr_text(
+                        variant_img,
+                        psm=psm,
+                        whitelist=whitelist,
+                    )
+                else:
+                    continue
+
+                value, parsed_ok, parse_warning = parse_field_value(field_type, raw_text)
+                valid, expected, validation_warning = validate_field_value(field_type, value, validation)
+
+                candidate = FieldOcrCandidate(
+                    field_id=field_id,
+                    field_type=field_type,
+                    engine=engine_name,
+                    mode=mode_name,
+                    raw_text=raw_text,
+                    value=value,
+                    confidence=engine_conf,
+                    valid=parsed_ok and valid,
+                    expected=expected,
+                    score=score_field_candidate(
+                        field_type=field_type,
+                        engine=engine_name,
+                        mode=mode_name,
+                        confidence=engine_conf,
+                        valid=parsed_ok and valid,
+                        expected=expected,
+                    ),
+                    warning=parse_warning or validation_warning,
+                )
+                candidates.append(candidate)
+
+                if candidate.valid and candidate.expected:
+                    return candidate, candidates
+            except Exception as exc:
+                candidates.append(FieldOcrCandidate(
+                    field_id=field_id,
+                    field_type=field_type,
+                    engine=engine_name,
+                    mode=mode_name,
+                    raw_text="",
+                    value=None,
+                    confidence=-1.0,
+                    valid=False,
+                    expected=False,
+                    score=-1000.0,
+                    warning=str(exc),
+                ))
+
+    if not candidates:
+        raise ValueError(f"No OCR candidates produced for field '{field_id}'")
+
+    candidates.sort(key=lambda c: c.score, reverse=True)
+    return candidates[0], candidates
+
+
+def collect_field_results(aligned_img: Image.Image, blueprint: dict) -> tuple[dict[str, FieldOcrCandidate], dict]:
+    fields = field_map_from_blueprint(blueprint)
+    validation = validation_cfg(blueprint)
+
+    selected: dict[str, FieldOcrCandidate] = {}
+    debug_fields: dict[str, Any] = {}
+
+    for field_id, field_cfg in fields.items():
+        field_img = crop_field_from_box(aligned_img, field_cfg["box"])
+        best, candidates = extract_field_value(field_id, field_cfg, field_img, validation)
+        selected[field_id] = best
+        debug_fields[field_id] = {
+            "selected": {
+                "engine": best.engine,
+                "mode": best.mode,
+                "raw_text": best.raw_text,
+                "value": best.value,
+                "confidence": best.confidence,
+                "valid": best.valid,
+                "expected": best.expected,
+                "warning": best.warning,
+            },
+            "candidates": [
+                {
+                    "engine": c.engine,
+                    "mode": c.mode,
+                    "raw_text": c.raw_text,
+                    "value": c.value,
+                    "confidence": c.confidence,
+                    "valid": c.valid,
+                    "expected": c.expected,
+                    "score": c.score,
+                    "warning": c.warning,
+                }
+                for c in candidates[:8]
+            ],
+        }
+
+    return selected, debug_fields
+
+
+def build_gold_rates_from_fields(fields: dict[str, FieldOcrCandidate]) -> tuple[GoldRate, GoldRate]:
+    k21 = GoldRate(
+        ub=float(fields["k21_usd_buy"].value),
+        us=float(fields["k21_usd_sell"].value),
+        sb=int(fields["k21_syp_buy"].value),
+        ss=int(fields["k21_syp_sell"].value),
+    )
+    k18 = GoldRate(
+        ub=float(fields["k18_usd_buy"].value),
+        us=float(fields["k18_usd_sell"].value),
+        sb=int(fields["k18_syp_buy"].value),
+        ss=int(fields["k18_syp_sell"].value),
+    )
+    return apply_price_sanity_check(k21, k18)
+
+
+def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, GoldRate]:
+    k21_syp_sell = max(k21.ss, k21.sb)
+    k21_syp_buy = min(k21.ss, k21.sb)
+    k21_usd_sell = max(k21.us, k21.ub)
+    k21_usd_buy = min(k21.us, k21.ub)
+
+    k18_syp_sell = max(k18.ss, k18.sb)
+    k18_syp_buy = min(k18.ss, k18.sb)
+    k18_usd_sell = max(k18.us, k18.ub)
+    k18_usd_buy = min(k18.us, k18.ub)
+
+    return (
+        GoldRate(ub=round(float(k21_usd_buy), 2), us=round(float(k21_usd_sell), 2), sb=int(k21_syp_buy), ss=int(k21_syp_sell)),
+        GoldRate(ub=round(float(k18_usd_buy), 2), us=round(float(k18_usd_sell), 2), sb=int(k18_syp_buy), ss=int(k18_syp_sell)),
+    )
+
+
+def validate_price_relationships(k21: GoldRate, k18: GoldRate, validation: dict) -> tuple[bool, list[str]]:
+    warnings: list[str] = []
+
+    if not (k21.sb < k21.ss):
+        warnings.append("k21_syp_sell_not_greater_than_buy")
+    if not (k18.sb < k18.ss):
+        warnings.append("k18_syp_sell_not_greater_than_buy")
+    if not (k21.ub < k21.us):
+        warnings.append("k21_usd_sell_not_greater_than_buy")
+    if not (k18.ub < k18.us):
+        warnings.append("k18_usd_sell_not_greater_than_buy")
+
+    if not (k21.ss > k18.ss and k21.sb > k18.sb):
+        warnings.append("k21_syp_not_greater_than_k18_syp")
+    if not (k21.us > k18.us and k21.ub > k18.ub):
+        warnings.append("k21_usd_not_greater_than_k18_usd")
+
+    ratios = [
+        k18.ss / max(k21.ss, 1),
+        k18.sb / max(k21.sb, 1),
+        k18.us / max(k21.us, 0.0001),
+        k18.ub / max(k21.ub, 0.0001),
+    ]
+
+    min_ratio = validation["min_18k_to_21k_ratio"]
+    max_ratio = validation["max_18k_to_21k_ratio"]
+    if any(not (min_ratio <= ratio <= max_ratio) for ratio in ratios):
+        warnings.append("18k_to_21k_ratio_out_of_range")
+
+    return len(warnings) == 0, warnings
+
+
+def compute_confidence(
+    field_results: dict[str, FieldOcrCandidate],
+    relationship_ok: bool,
+    relationship_warnings: list[str],
+    date: str,
+    time: str,
+) -> float:
+    if not field_results:
+        return 0.0
+
+    total = 0.0
+    max_total = 0.0
+
+    for result in field_results.values():
+        max_total += 10.0
+        if result.valid:
+            total += 6.0
+        if result.expected:
+            total += 2.0
+        if result.engine == "paddle":
+            total += 1.0
+        elif result.engine == "tesseract":
+            total += 0.5
+        if result.confidence >= 0:
+            total += min(result.confidence, 100.0) / 100.0
+
+    if relationship_ok:
+        total += 5.0
+    else:
+        total -= min(len(relationship_warnings), 4) * 1.5
+
+    max_total += 5.0
+
+    if date != "0000/00/00":
+        total += 1.5
+    if time != "00:00":
+        total += 1.0
+    max_total += 2.5
+
+    return max(0.0, min(total / max(max_total, 1.0), 1.0))
 
 
 # =========================================================
@@ -1059,34 +1418,30 @@ def run_ocr_with_fallback(img: Image.Image, psm: int = 6) -> tuple[list[OcrWord]
 # =========================================================
 
 def export_debug_overlay(
-    image_bytes: bytes,
-    words: list[OcrWord],
+    aligned_img: Image.Image,
+    blueprint: dict,
     source_url: str,
     date: str,
     time: str,
     extraction_method: str,
-    ocr_image_size: tuple[int, int],
 ) -> Optional[str]:
     if not DEBUG_EXPORT:
         return None
 
     try:
         DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        ocr_w, ocr_h = ocr_image_size
-
-        scale_x = img.width / max(ocr_w, 1)
-        scale_y = img.height / max(ocr_h, 1)
-
+        img = aligned_img.convert("RGB").copy()
         draw = ImageDraw.Draw(img)
 
-        for w in words:
-            x1 = int(w.left * scale_x)
-            y1 = int(w.top * scale_y)
-            x2 = int((w.left + w.width) * scale_x)
-            y2 = int((w.top + w.height) * scale_y)
+        fields = field_map_from_blueprint(blueprint)
+        for field_id, field_cfg in fields.items():
+            box = field_cfg["box"]
+            x1 = int(float(box["x1"]) * img.width)
+            y1 = int(float(box["y1"]) * img.height)
+            x2 = int(float(box["x2"]) * img.width)
+            y2 = int(float(box["y2"]) * img.height)
             draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=2)
+            draw.text((x1 + 2, y1 + 2), field_id, fill=(255, 0, 0))
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         source_name = safe_slug(urlparse(source_url).path.split("/")[-1] or "image")
@@ -1100,9 +1455,7 @@ def export_debug_overlay(
             "date": date,
             "time": time,
             "extraction_method": extraction_method,
-            "ocr_word_count": len(words),
             "saved_at_utc": datetime.now(timezone.utc).isoformat(),
-            "ocr_image_size": {"width": ocr_w, "height": ocr_h},
             "display_timezone": APP_TIMEZONE_NAME,
         })
 
@@ -1111,6 +1464,94 @@ def export_debug_overlay(
     except Exception as exc:
         logger.warning("Failed to export debug overlay: %s", exc)
         return None
+
+
+# =========================================================
+# Main extraction pipeline
+# =========================================================
+
+def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
+    blueprint = load_blueprint()
+    validation = validation_cfg(blueprint)
+
+    aligned_img, alignment_debug = align_to_reference_template(image_bytes, blueprint)
+    field_results, field_debug = collect_field_results(aligned_img, blueprint)
+
+    missing_required = [
+        field_id for field_id, field_cfg in field_map_from_blueprint(blueprint).items()
+        if bool(field_cfg.get("required", False)) and (field_id not in field_results or not field_results[field_id].valid)
+    ]
+    if missing_required:
+        raise ValueError(f"Missing required valid fields: {missing_required}")
+
+    date = str(field_results["date"].value)
+    time = str(field_results["time"].value)
+
+    k21, k18 = build_gold_rates_from_fields(field_results)
+    relationship_ok, relationship_warnings = validate_price_relationships(k21, k18, validation)
+
+    warnings = list(relationship_warnings)
+    if field_results["day"].warning:
+        warnings.append(f"day_warning:{field_results['day'].warning}")
+    if date == "0000/00/00":
+        warnings.append("header_date_failed")
+    if time == "00:00":
+        warnings.append("header_time_failed")
+
+    confidence = compute_confidence(field_results, relationship_ok, relationship_warnings, date, time)
+
+    raw_ocr_parts = []
+    for field_id in [
+        "day", "date", "time",
+        "k21_syp_sell", "k21_syp_buy", "k21_usd_sell", "k21_usd_buy",
+        "k18_syp_sell", "k18_syp_buy", "k18_usd_sell", "k18_usd_buy",
+    ]:
+        if field_id in field_results:
+            raw_ocr_parts.append(f"{field_id}={field_results[field_id].raw_text}")
+    raw_ocr = " | ".join(raw_ocr_parts)
+
+    debug = {
+        "source_url": source_url,
+        "image_width": aligned_img.width,
+        "image_height": aligned_img.height,
+        "display_timezone": APP_TIMEZONE_NAME,
+        "opencv_available": _CV2_AVAILABLE,
+        "paddle_enabled": _PADDLE_AVAILABLE,
+        "paddle_failure_reason": _PADDLE_FAILURE_REASON,
+        "alignment": alignment_debug,
+        "fields": field_debug,
+        "relationship_ok": relationship_ok,
+        "relationship_warnings": relationship_warnings,
+        "validation": validation,
+        "ocr_word_count": sum(1 for r in field_results.values() if r.raw_text),
+        "has_blueprint": True,
+        "extraction_method": "template_fields",
+    }
+
+    debug_overlay_path = export_debug_overlay(
+        aligned_img=aligned_img,
+        blueprint=blueprint,
+        source_url=source_url,
+        date=date,
+        time=time,
+        extraction_method="template_fields",
+    )
+    if debug_overlay_path:
+        debug["debug_overlay_path"] = debug_overlay_path
+
+    return ExtractionResult(
+        date=date,
+        time=time,
+        k21=k21,
+        k18=k18,
+        extraction_method="template_fields",
+        ocr_engine="paddle+tesseract",
+        confidence=confidence,
+        warnings=warnings,
+        raw_ocr=raw_ocr,
+        raw_ocr_preview=raw_ocr[:500],
+        debug=debug,
+    )
 
 
 # =========================================================
@@ -1213,931 +1654,23 @@ def snapshot_changed(latest: dict, snapshot: dict) -> bool:
 
 
 # =========================================================
-# Extraction helpers
-# =========================================================
-
-def group_rows(tokens: list[NumericToken]) -> list[list[NumericToken]]:
-    sorted_tokens = sorted(tokens, key=lambda t: t.y)
-    if not sorted_tokens:
-        return []
-
-    rows: list[list[NumericToken]] = []
-
-    for token in sorted_tokens:
-        if not rows:
-            rows.append([token])
-            continue
-
-        last_row = rows[-1]
-        avg_y = sum(t.y for t in last_row) / len(last_row)
-        avg_h = max(sum(t.height for t in last_row) / len(last_row), 1.0)
-        y_threshold = max(avg_h * 1.05, 24.0)
-
-        if abs(token.y - avg_y) <= y_threshold:
-            last_row.append(token)
-        else:
-            rows.append([token])
-
-    for row in rows:
-        row.sort(key=lambda t: t.x)
-
-    return rows
-
-
-def build_anchor_local_rows(
-    words: list[OcrWord],
-    anchor: OcrWord,
-    max_left_dx: float,
-    max_right_dx: float,
-    max_dy: float,
-) -> list[TokenRow]:
-    tokens: list[NumericToken] = []
-
-    for w in words:
-        if w is anchor:
-            continue
-
-        value = parse_numeric_value(w.norm)
-        if value is None:
-            continue
-
-        kind = classify_numeric_value(value)
-        if kind is None:
-            continue
-
-        dx = w.center_x - anchor.center_x
-        dy = abs(w.center_y - anchor.center_y)
-
-        if dx < -max_left_dx or dx > max_right_dx:
-            continue
-        if dy > max_dy:
-            continue
-
-        tokens.append(
-            NumericToken(
-                value=float(normalize_numeric_value(value, kind)),
-                kind=kind,
-                x=w.center_x,
-                y=w.center_y,
-                height=w.height,
-            )
-        )
-
-    if not tokens:
-        return []
-
-    raw_rows = group_rows(tokens)
-    return [TokenRow(tokens=row) for row in raw_rows if row]
-
-
-def choose_best_anchor_local_row(
-    rows: list[TokenRow],
-    anchor: OcrWord,
-    prefer_below: bool = False,
-    exclude_center_y: Optional[float] = None,
-    min_row_separation: float = 0.0,
-) -> Optional[TokenRow]:
-    if not rows:
-        return None
-
-    scored: list[tuple[float, TokenRow]] = []
-
-    for row in rows:
-        usd_values = sorted({round(float(t.value), 2) for t in row.tokens if t.kind == "usd"})
-        syp_values = sorted({int(round(float(t.value))) for t in row.tokens if t.kind == "syp"})
-
-        if len(usd_values) < 2 or len(syp_values) < 2:
-            continue
-
-        if exclude_center_y is not None and abs(row.center_y - exclude_center_y) < min_row_separation:
-            continue
-
-        dy_signed = row.center_y - anchor.center_y
-        dy = abs(dy_signed)
-        score = dy * 14.0
-
-        if prefer_below:
-            if dy_signed < -4:
-                score += 1200.0
-            else:
-                score -= min(max(dy_signed, 0.0), 25.0) * 6.0
-
-        score -= len(row.tokens) * 8.0
-        score += abs(row.avg_height - anchor.height) * 2.0
-        scored.append((score, row))
-
-    if not scored:
-        return None
-
-    scored.sort(key=lambda x: x[0])
-    return scored[0][1]
-
-
-def extract_values_from_token_row(row: TokenRow) -> Optional[dict]:
-    usd_values = sorted({round(float(t.value), 2) for t in row.tokens if t.kind == "usd"})
-    syp_values = sorted({int(round(float(t.value))) for t in row.tokens if t.kind == "syp"})
-
-    if len(usd_values) < 2 or len(syp_values) < 2:
-        return None
-
-    return {
-        "usd_buy": usd_values[-2],
-        "usd_sell": usd_values[-1],
-        "syp_buy": syp_values[-2],
-        "syp_sell": syp_values[-1],
-    }
-
-
-def find_anchor_word(words: list[OcrWord], target: str) -> Optional[OcrWord]:
-    candidates: list[OcrWord] = []
-
-    for w in words:
-        text = normalize_digits(w.text)
-        digits = re.sub(r"[^0-9]", "", text)
-
-        if digits == target:
-            candidates.append(w)
-            continue
-
-        if target == "21" and digits in {"21", "2", "1"}:
-            candidates.append(w)
-        elif target == "18" and digits in {"18", "1", "8"}:
-            candidates.append(w)
-
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda w: (w.center_x, w.height, w.conf))
-
-
-def extract_row_values_for_anchor(
-    words: list[OcrWord],
-    anchor: OcrWord,
-    prefer_below: bool = False,
-    exclude_center_y: Optional[float] = None,
-    min_row_separation: float = 0.0,
-) -> Optional[tuple[dict, TokenRow]]:
-    local_rows = build_anchor_local_rows(
-        words=words,
-        anchor=anchor,
-        max_left_dx=max(anchor.width * 14.0, 900.0),
-        max_right_dx=max(anchor.width * 0.55, 50.0),
-        max_dy=max(anchor.height * 2.4, 120.0),
-    )
-
-    best_row = choose_best_anchor_local_row(
-        local_rows,
-        anchor,
-        prefer_below=prefer_below,
-        exclude_center_y=exclude_center_y,
-        min_row_separation=min_row_separation,
-    )
-    if best_row is None:
-        return None
-
-    values = extract_values_from_token_row(best_row)
-    if values is None:
-        return None
-
-    return values, best_row
-
-
-def extract_row_values_for_anchor_relaxed(
-    words: list[OcrWord],
-    anchor: OcrWord,
-    prefer_below: bool = False,
-    exclude_center_y: Optional[float] = None,
-    min_row_separation: float = 0.0,
-) -> Optional[tuple[dict, TokenRow]]:
-    local_rows = build_anchor_local_rows(
-        words=words,
-        anchor=anchor,
-        max_left_dx=max(anchor.width * 18.0, 1100.0),
-        max_right_dx=max(anchor.width * 0.90, 90.0),
-        max_dy=max(anchor.height * 3.2, 160.0),
-    )
-
-    best_row = choose_best_anchor_local_row(
-        local_rows,
-        anchor,
-        prefer_below=prefer_below,
-        exclude_center_y=exclude_center_y,
-        min_row_separation=min_row_separation,
-    )
-    if best_row is None:
-        return None
-
-    values = extract_values_from_token_row(best_row)
-    if values is None:
-        return None
-
-    return values, best_row
-
-
-def is_reasonable_extraction(k21: GoldRate, k18: GoldRate) -> bool:
-    values = [k21.ss, k21.sb, k21.us, k21.ub, k18.ss, k18.sb, k18.us, k18.ub]
-    if min(values) <= 0:
-        return False
-
-    if not (k21.sb < k21.ss and k18.sb < k18.ss):
-        return False
-    if not (k21.ub < k21.us and k18.ub < k18.us):
-        return False
-
-    if not (k21.ss > k18.ss and k21.sb > k18.sb):
-        return False
-    if not (k21.us > k18.us and k21.ub > k18.ub):
-        return False
-
-    ratios = [
-        k18.ss / k21.ss,
-        k18.sb / k21.sb,
-        k18.us / k21.us,
-        k18.ub / k21.ub,
-    ]
-
-    for ratio in ratios:
-        if not (MIN_18K_TO_21K_RATIO < ratio < MAX_18K_TO_21K_RATIO):
-            return False
-
-    return True
-
-
-def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, GoldRate]:
-    k21_syp_sell = max(k21.ss, k21.sb)
-    k21_syp_buy = min(k21.ss, k21.sb)
-    k21_usd_sell = max(k21.us, k21.ub)
-    k21_usd_buy = min(k21.us, k21.ub)
-
-    k18_syp_sell = max(k18.ss, k18.sb)
-    k18_syp_buy = min(k18.ss, k18.sb)
-    k18_usd_sell = max(k18.us, k18.ub)
-    k18_usd_buy = min(k18.us, k18.ub)
-
-    return (
-        GoldRate(ub=round(float(k21_usd_buy), 2), us=round(float(k21_usd_sell), 2), sb=int(k21_syp_buy), ss=int(k21_syp_sell)),
-        GoldRate(ub=round(float(k18_usd_buy), 2), us=round(float(k18_usd_sell), 2), sb=int(k18_syp_buy), ss=int(k18_syp_sell)),
-    )
-
-
-def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    anchor21 = find_anchor_word(words, "21")
-    anchor18 = find_anchor_word(words, "18")
-
-    if anchor21 is None or anchor18 is None:
-        logger.info("anchor_rows: missing anchors")
-        return None
-
-    close_threshold = max(min(anchor21.height, anchor18.height) * 0.55, 10.0)
-    if abs(anchor21.center_y - anchor18.center_y) < close_threshold:
-        logger.info("anchor_rows: anchors suspiciously close vertically")
-        return None
-
-    row21_result = extract_row_values_for_anchor(words, anchor21, prefer_below=False)
-    if row21_result is None:
-        return None
-
-    row21, row21_token_row = row21_result
-    min_sep = max(anchor18.height * 1.25, 35.0)
-
-    row18_result = extract_row_values_for_anchor(
-        words,
-        anchor18,
-        prefer_below=True,
-        exclude_center_y=row21_token_row.center_y,
-        min_row_separation=min_sep,
-    )
-
-    if row18_result is None:
-        row18_result = extract_row_values_for_anchor_relaxed(
-            words,
-            anchor18,
-            prefer_below=True,
-            exclude_center_y=row21_token_row.center_y,
-            min_row_separation=min_sep,
-        )
-
-    if row18_result is None:
-        return None
-
-    row18, _ = row18_result
-
-    k21 = GoldRate(ub=row21["usd_buy"], us=row21["usd_sell"], sb=row21["syp_buy"], ss=row21["syp_sell"])
-    k18 = GoldRate(ub=row18["usd_buy"], us=row18["usd_sell"], sb=row18["syp_buy"], ss=row18["syp_sell"])
-
-    fixed21, fixed18 = apply_price_sanity_check(k21, k18)
-    if not is_reasonable_extraction(fixed21, fixed18):
-        logger.warning("anchor_rows sanity check failed; returning relaxed result")
-    return fixed21, fixed18
-
-
-def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    tokens = extract_numeric_tokens(words)
-    syp_prices = sorted([int(round(t.value)) for t in tokens if t.kind == "syp"], reverse=True)
-    usd_prices = sorted([round(float(t.value), 2) for t in tokens if t.kind == "usd"], reverse=True)
-
-    if len(syp_prices) < 4 or len(usd_prices) < 4:
-        return None
-
-    result = (
-        GoldRate(ub=usd_prices[1], us=usd_prices[0], sb=syp_prices[1], ss=syp_prices[0]),
-        GoldRate(ub=usd_prices[3], us=usd_prices[2], sb=syp_prices[3], ss=syp_prices[2]),
-    )
-
-    fixed = apply_price_sanity_check(result[0], result[1])
-    return fixed
-
-
-def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
-    cleaned = extract_numeric_tokens(words)
-    if not cleaned:
-        return None
-
-    rows = group_rows(cleaned)
-    valid_rows: list[dict] = []
-
-    for row in rows:
-        syp = sorted({int(round(t.value)) for t in row if t.kind == "syp"}, reverse=True)
-        usd = sorted({round(float(t.value), 2) for t in row if t.kind == "usd"}, reverse=True)
-
-        if len(syp) < 2 or len(usd) < 2:
-            continue
-
-        valid_rows.append(
-            {
-                "score": len(row),
-                "center_y": sum(t.y for t in row) / len(row),
-                "syp_sell": syp[0],
-                "syp_buy": syp[1],
-                "usd_sell": usd[0],
-                "usd_buy": usd[1],
-            }
-        )
-
-    if len(valid_rows) < 2:
-        return None
-
-    valid_rows.sort(key=lambda r: (r["score"], r["syp_sell"]), reverse=True)
-    best21 = valid_rows[0]
-    remaining = [r for r in valid_rows[1:] if abs(r["center_y"] - best21["center_y"]) > 25]
-    if not remaining:
-        return None
-
-    best18 = remaining[0]
-
-    k21 = GoldRate(ub=best21["usd_buy"], us=best21["usd_sell"], sb=best21["syp_buy"], ss=best21["syp_sell"])
-    k18 = GoldRate(ub=best18["usd_buy"], us=best18["usd_sell"], sb=best18["syp_buy"], ss=best18["syp_sell"])
-
-    return apply_price_sanity_check(k21, k18)
-
-
-def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tuple[GoldRate, GoldRate]]:
-    required = [
-        "21_SYP_Sell", "21_SYP_Buy", "21_USD_Sell", "21_USD_Buy",
-        "18_SYP_Sell", "18_SYP_Buy", "18_USD_Sell", "18_USD_Buy",
-    ]
-    if not all(k in blueprint for k in required):
-        return None
-
-    anchor21 = find_anchor_word(words, "21")
-    anchor18 = find_anchor_word(words, "18")
-    if anchor21 is None or anchor18 is None:
-        return None
-
-    used_ids: set[int] = set()
-
-    def get_candidates(ratios: dict, anchor: OcrWord, expected_kind: str) -> list[tuple[float, OcrWord, int]]:
-        expected_x = anchor.center_x + (float(ratios.get("dx", 0.0)) * max(anchor.width, 1.0))
-        expected_y = anchor.center_y + (float(ratios.get("dy", 0.0)) * max(anchor.height, 1.0))
-
-        max_dx = max(anchor.width * 6.5, 140.0)
-        max_dy = max(anchor.height * 2.2, 60.0)
-
-        candidates = []
-        for idx, w in enumerate(words):
-            if w is anchor21 or w is anchor18:
-                continue
-            if ":" in w.text or "/" in w.text:
-                continue
-
-            value = parse_numeric_value(w.norm)
-            if value is None:
-                continue
-
-            kind = classify_numeric_value(value)
-            if kind != expected_kind:
-                continue
-
-            dx = w.center_x - expected_x
-            dy = w.center_y - expected_y
-            if abs(dx) > max_dx or abs(dy) > max_dy:
-                continue
-
-            reuse_penalty = 100000 if idx in used_ids else 0
-            dist = math.sqrt(dx * dx + dy * dy) + reuse_penalty
-            candidates.append((dist, w, idx))
-
-        candidates.sort(key=lambda x: x[0])
-        return candidates
-
-    def get_closest_unique(ratios: dict, anchor: OcrWord, expected_kind: str):
-        candidates = get_candidates(ratios, anchor, expected_kind)
-        if not candidates:
-            return 0
-
-        _, chosen, idx = candidates[0]
-        used_ids.add(idx)
-
-        value = parse_numeric_value(chosen.norm)
-        if value is None:
-            return 0
-
-        return normalize_numeric_value(value, expected_kind)
-
-    values = {
-        "21_ss": get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp"),
-        "21_sb": get_closest_unique(blueprint["21_SYP_Buy"], anchor21, "syp"),
-        "21_us": get_closest_unique(blueprint["21_USD_Sell"], anchor21, "usd"),
-        "21_ub": get_closest_unique(blueprint["21_USD_Buy"], anchor21, "usd"),
-        "18_ss": get_closest_unique(blueprint["18_SYP_Sell"], anchor18, "syp"),
-        "18_sb": get_closest_unique(blueprint["18_SYP_Buy"], anchor18, "syp"),
-        "18_us": get_closest_unique(blueprint["18_USD_Sell"], anchor18, "usd"),
-        "18_ub": get_closest_unique(blueprint["18_USD_Buy"], anchor18, "usd"),
-    }
-
-    if any(v == 0 for v in values.values()):
-        return None
-
-    result = (
-        GoldRate(ub=float(values["21_ub"]), us=float(values["21_us"]), sb=int(values["21_sb"]), ss=int(values["21_ss"])),
-        GoldRate(ub=float(values["18_ub"]), us=float(values["18_us"]), sb=int(values["18_sb"]), ss=int(values["18_ss"])),
-    )
-
-    return apply_price_sanity_check(result[0], result[1])
-
-
-def extract_rates(
-    words: list[OcrWord],
-    blueprint: Optional[dict],
-    ocr_mode: str,
-) -> tuple[Optional[tuple[GoldRate, GoldRate]], str, dict]:
-    diagnostics: dict[str, str] = {}
-
-    if ocr_mode == "prefer_blueprint":
-        attempt_order = [
-            ("blueprint", lambda: extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("anchor_rows", lambda: extract_anchor_rows(words)),
-            ("smart_fallback", lambda: extract_smart_fallback(words)),
-            ("legacy_fallback", lambda: extract_legacy_fallback(words)),
-        ]
-    else:
-        attempt_order = [
-            ("anchor_rows", lambda: extract_anchor_rows(words)),
-            ("blueprint", lambda: extract_with_blueprint(words, blueprint) if blueprint is not None else None),
-            ("smart_fallback", lambda: extract_smart_fallback(words)),
-            ("legacy_fallback", lambda: extract_legacy_fallback(words)),
-        ]
-
-    best_result = None
-    best_method = "none"
-
-    for method, fn in attempt_order:
-        result = fn()
-        if result is None:
-            diagnostics[method] = "no_result"
-            continue
-
-        fixed = apply_price_sanity_check(result[0], result[1])
-        if is_reasonable_extraction(fixed[0], fixed[1]):
-            diagnostics[method] = "accepted"
-            return fixed, method, diagnostics
-
-        diagnostics[method] = "accepted_relaxed"
-        if best_result is None:
-            best_result = fixed
-            best_method = method
-
-    if best_result is not None:
-        return best_result, best_method, diagnostics
-
-    return None, "none", diagnostics
-
-
-# =========================================================
-# Header extraction
-# =========================================================
-
-def crop_header_band(img: Image.Image) -> Image.Image:
-    return crop_box(img, 0.02, 0.43, 0.98, 0.53)
-
-
-def crop_header_date_region(img: Image.Image) -> Image.Image:
-    band = crop_header_band(img)
-    return crop_box(band, 0.22, 0.00, 0.64, 1.00)
-
-
-def crop_header_time_region(img: Image.Image) -> Image.Image:
-    band = crop_header_band(img)
-    return crop_box(band, 0.00, 0.00, 0.24, 1.00)
-
-
-def extract_header_direct(img: Image.Image) -> tuple[str, str, dict]:
-    date_crop = crop_header_date_region(img)
-    time_crop = crop_header_time_region(img)
-
-    date_versions = [
-        preprocess_region_for_ocr(date_crop, threshold=135, upscale=3, mode="adaptive"),
-        preprocess_region_for_ocr(date_crop, threshold=145, upscale=3, mode="otsu"),
-        preprocess_region_for_ocr(date_crop, threshold=None, upscale=3, mode="binary"),
-    ]
-    time_versions = [
-        preprocess_region_for_ocr(time_crop, threshold=135, upscale=3, mode="adaptive"),
-        preprocess_region_for_ocr(time_crop, threshold=145, upscale=3, mode="otsu"),
-        preprocess_region_for_ocr(time_crop, threshold=None, upscale=3, mode="binary"),
-    ]
-
-    best_date = "0000/00/00"
-    best_time = "00:00"
-    debug_versions: list[dict] = []
-
-    for idx, version in enumerate(date_versions, start=1):
-        _, raw, engine = run_ocr_with_fallback(version, psm=7)
-        value = extract_date_from_raw(raw)
-        debug_versions.append({"kind": "date", "attempt": idx, "engine": engine, "raw": raw, "value": value})
-        if value != "0000/00/00":
-            best_date = value
-            break
-
-    for idx, version in enumerate(time_versions, start=1):
-        _, raw, engine = run_ocr_with_fallback(version, psm=7)
-        value = extract_time_from_raw(raw)
-        debug_versions.append({"kind": "time", "attempt": idx, "engine": engine, "raw": raw, "value": value})
-        if value != "00:00":
-            best_time = value
-            break
-
-    return best_date, best_time, {"header_source": "direct_header_band", "attempts": debug_versions}
-
-
-def extract_date_time_from_header(img: Image.Image, words: list[OcrWord]) -> tuple[str, str, dict]:
-    direct_date, direct_time, direct_debug = extract_header_direct(img)
-
-    ordered_words = sorted(words, key=lambda w: (w.top, w.left))
-    raw_text = " ".join(w.text for w in ordered_words)
-
-    fallback_date = extract_date_from_raw(raw_text)
-    fallback_time = extract_time_from_raw(raw_text)
-
-    final_date = direct_date if direct_date != "0000/00/00" else fallback_date
-    final_time = direct_time if direct_time != "00:00" else fallback_time
-
-    if direct_time != "00:00" and fallback_time != "00:00":
-        try:
-            direct_h, direct_m = map(int, direct_time.split(":"))
-            fallback_h, fallback_m = map(int, fallback_time.split(":"))
-            if direct_m == fallback_m and direct_h != fallback_h:
-                final_time = fallback_time
-        except Exception:
-            pass
-
-    debug = {
-        "header_source": "direct_header_band" if direct_date != "0000/00/00" or direct_time != "00:00" else "full_text_fallback",
-        "direct_debug": direct_debug,
-        "raw_text_sample": raw_text[:300],
-        "fallback_date": fallback_date,
-        "fallback_time": fallback_time,
-        "final_date": final_date,
-        "final_time": final_time,
-    }
-
-    return final_date, final_time, debug
-
-
-def compute_confidence(method: str, words: list[OcrWord], date: str, time: str, warnings: list[str]) -> float:
-    score = 0.45
-
-    if method == "blueprint":
-        score += 0.30
-    elif method == "anchor_rows":
-        score += 0.25
-    elif method == "smart_fallback":
-        score += 0.10
-    elif method == "legacy_fallback":
-        score += 0.05
-
-    if len(words) >= 20:
-        score += 0.10
-    if len(words) >= 40:
-        score += 0.05
-
-    if date != "0000/00/00":
-        score += 0.07
-    else:
-        score -= 0.10
-
-    if time != "00:00":
-        score += 0.05
-    else:
-        score -= 0.08
-
-    score -= min(len(warnings) * 0.05, 0.25)
-    return max(0.0, min(score, 1.0))
-
-
-def load_blueprint() -> Optional[dict]:
-    global _BLUEPRINT_CACHE, _BLUEPRINT_MTIME
-
-    if not BLUEPRINT_FILE.exists():
-        _BLUEPRINT_CACHE = None
-        _BLUEPRINT_MTIME = None
-        logger.warning("Blueprint file not found: %s", BLUEPRINT_FILE)
-        return None
-
-    try:
-        mtime = BLUEPRINT_FILE.stat().st_mtime
-        if _BLUEPRINT_CACHE is not None and _BLUEPRINT_MTIME == mtime:
-            return _BLUEPRINT_CACHE
-
-        blueprint = load_json(BLUEPRINT_FILE, None)
-        if not isinstance(blueprint, dict):
-            logger.warning("Blueprint file is not a valid JSON object")
-            return None
-
-        validation_result = validate_blueprint(blueprint)
-
-        if not validation_result.ok:
-            logger.error("Blueprint validation failed")
-            for err in validation_result.errors:
-                logger.error("Blueprint error: %s", err)
-            return None
-
-        for warning in validation_result.warnings:
-            logger.warning("Blueprint warning: %s", warning)
-
-        _BLUEPRINT_CACHE = blueprint
-        _BLUEPRINT_MTIME = mtime
-        logger.info("Blueprint loaded successfully: %s", BLUEPRINT_FILE)
-        return blueprint
-
-    except Exception as exc:
-        logger.warning("Failed to load blueprint cache: %s", exc)
-
-    return None
-
-
-def compute_relative_ratios(anchor: OcrWord, target: OcrWord) -> dict:
-    anchor_w = max(anchor.width, 1)
-    anchor_h = max(anchor.height, 1)
-    return {
-        "dx": round((target.center_x - anchor.center_x) / anchor_w, 4),
-        "dy": round((target.center_y - anchor.center_y) / anchor_h, 4),
-    }
-
-
-def choose_nearest_token_word(
-    words: list[OcrWord],
-    anchor: OcrWord,
-    expected_value: float,
-    expected_kind: str,
-) -> Optional[OcrWord]:
-    scored: list[tuple[float, OcrWord]] = []
-
-    for w in words:
-        if w is anchor or ":" in w.text or "/" in w.text:
-            continue
-
-        value = parse_numeric_value(w.norm)
-        if value is None:
-            continue
-
-        kind = classify_numeric_value(value)
-        if kind != expected_kind:
-            continue
-
-        diff = abs(float(value) - float(expected_value))
-        dist = abs(w.center_y - anchor.center_y) + abs(w.center_x - anchor.center_x) * 0.02
-        score = diff * 100.0 + dist
-        scored.append((score, w))
-
-    if not scored:
-        return None
-
-    scored.sort(key=lambda x: x[0])
-    return scored[0][1]
-
-
-def learn_blueprint_from_extraction(words: list[OcrWord], k21: GoldRate, k18: GoldRate, extraction_method: str):
-    if extraction_method not in {"anchor_rows", "blueprint"}:
-        return
-
-    anchor21 = find_anchor_word(words, "21")
-    anchor18 = find_anchor_word(words, "18")
-    if anchor21 is None or anchor18 is None:
-        return
-
-    target_map = {
-        "21_SYP_Sell": (anchor21, k21.ss, "syp"),
-        "21_SYP_Buy": (anchor21, k21.sb, "syp"),
-        "21_USD_Sell": (anchor21, k21.us, "usd"),
-        "21_USD_Buy": (anchor21, k21.ub, "usd"),
-        "18_SYP_Sell": (anchor18, k18.ss, "syp"),
-        "18_SYP_Buy": (anchor18, k18.sb, "syp"),
-        "18_USD_Sell": (anchor18, k18.us, "usd"),
-        "18_USD_Buy": (anchor18, k18.ub, "usd"),
-    }
-
-    learned: dict[str, dict] = {}
-    for key, (anchor, expected_value, expected_kind) in target_map.items():
-        target_word = choose_nearest_token_word(words, anchor, expected_value, expected_kind)
-        if target_word is None:
-            return
-        learned[key] = compute_relative_ratios(anchor, target_word)
-
-    learned["_meta"] = {
-        "learned_at_utc": datetime.now(timezone.utc).isoformat(),
-        "source": "auto_learned",
-        "method": extraction_method,
-    }
-
-    save_json(BLUEPRINT_FILE, learned)
-
-    global _BLUEPRINT_CACHE, _BLUEPRINT_MTIME
-    _BLUEPRINT_CACHE = learned
-    try:
-        _BLUEPRINT_MTIME = BLUEPRINT_FILE.stat().st_mtime
-    except Exception:
-        _BLUEPRINT_MTIME = None
-
-    logger.info("Blueprint auto-learned and saved to %s", BLUEPRINT_FILE)
-
-
-# =========================================================
-# Main extraction
-# =========================================================
-
-def crop_main_table_region(img: Image.Image) -> Image.Image:
-    return crop_box(img, 0.02, 0.46, 0.98, 0.84)
-
-
-def map_table_words_to_full_image(table_words: list[OcrWord], full_img: Image.Image) -> list[OcrWord]:
-    x_offset = int(0.02 * full_img.width)
-    y_offset = int(0.46 * full_img.height)
-
-    mapped: list[OcrWord] = []
-    for w in table_words:
-        mapped.append(
-            OcrWord(
-                text=w.text,
-                norm=w.norm,
-                left=w.left + x_offset,
-                top=w.top + y_offset,
-                width=w.width,
-                height=w.height,
-                conf=w.conf,
-            )
-        )
-    return mapped
-
-
-def try_extract_with_variants(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
-    variants: list[tuple[str, Image.Image]] = []
-
-    if _CV2_AVAILABLE:
-        variants.extend([
-            ("cv_adaptive", preprocess_image_variant_cv(image_bytes, "adaptive")),
-            ("cv_otsu", preprocess_image_variant_cv(image_bytes, "otsu")),
-            ("cv_contrast", preprocess_image_variant_cv(image_bytes, "contrast")),
-        ])
-
-    variants.append(("pil_binary", preprocess_image_variant_pil(image_bytes)))
-
-    best_result: Optional[ExtractionResult] = None
-    best_score = -1.0
-    failures: list[dict] = []
-
-    for variant_name, img in variants:
-        try:
-            warnings: list[str] = []
-            debug: dict = {
-                "source_url": source_url,
-                "image_width": img.width,
-                "image_height": img.height,
-                "ocr_mode": DEFAULT_OCR_MODE,
-                "display_timezone": APP_TIMEZONE_NAME,
-                "paddle_enabled": _PADDLE_AVAILABLE,
-                "paddle_failure_reason": _PADDLE_FAILURE_REASON,
-                "preprocess_variant": variant_name,
-                "opencv_available": _CV2_AVAILABLE,
-            }
-
-            words_full, raw_text_full, ocr_engine_full = run_ocr_with_fallback(img)
-
-            table_img = crop_main_table_region(img)
-            table_attempts = [
-                preprocess_region_for_ocr(table_img, threshold=135, upscale=2, mode="adaptive"),
-                preprocess_region_for_ocr(table_img, threshold=145, upscale=2, mode="otsu"),
-                preprocess_region_for_ocr(table_img, threshold=130, upscale=3, mode="binary"),
-            ]
-
-            best_table_words: list[OcrWord] = []
-            best_table_raw = ""
-            best_table_engine = ocr_engine_full
-
-            for attempt in table_attempts:
-                words_table, raw_text_table, ocr_engine_table = run_ocr_with_fallback(attempt)
-                if len(words_table) > len(best_table_words):
-                    best_table_words = words_table
-                    best_table_raw = raw_text_table
-                    best_table_engine = ocr_engine_table
-
-            words_table_mapped = map_table_words_to_full_image(best_table_words, img)
-
-            debug["ocr_word_count_full"] = len(words_full)
-            debug["ocr_word_count_table"] = len(best_table_words)
-            debug["ocr_engine_full"] = ocr_engine_full
-            debug["ocr_engine_table"] = best_table_engine
-
-            words_merged = words_full + words_table_mapped if words_table_mapped else words_full
-            raw_text = f"{raw_text_full} {best_table_raw}".strip()
-            ocr_engine = best_table_engine if len(best_table_words) >= len(words_full) else ocr_engine_full
-
-            date, time, header_debug = extract_date_time_from_header(img, words_full)
-            debug["header"] = header_debug
-
-            if date == "0000/00/00":
-                warnings.append("header_date_failed_used_full_text_fallback")
-                date = extract_date_from_raw(raw_text)
-
-            if time == "00:00":
-                warnings.append("header_time_failed_used_full_text_fallback")
-                time = extract_time_from_raw(raw_text)
-
-            blueprint = load_blueprint()
-            rates, extraction_method, rate_diagnostics = extract_rates(words_merged, blueprint, DEFAULT_OCR_MODE)
-            debug["rate_attempts"] = rate_diagnostics
-
-            if rates is None:
-                raise ValueError("Price extraction failed")
-
-            k21, k18 = rates
-            confidence = compute_confidence(extraction_method, words_merged, date, time, warnings)
-
-            debug["has_blueprint"] = blueprint is not None
-            debug["extraction_method"] = extraction_method
-            debug["ocr_word_count"] = len(words_merged)
-
-            learn_blueprint_from_extraction(words_merged, k21, k18, extraction_method)
-
-            debug_overlay_path = export_debug_overlay(
-                image_bytes=image_bytes,
-                words=words_merged,
-                source_url=source_url,
-                date=date,
-                time=time,
-                extraction_method=extraction_method,
-                ocr_image_size=img.size,
-            )
-            if debug_overlay_path:
-                debug["debug_overlay_path"] = debug_overlay_path
-
-            result = ExtractionResult(
-                date=date,
-                time=time,
-                k21=k21,
-                k18=k18,
-                extraction_method=extraction_method,
-                ocr_engine=ocr_engine,
-                confidence=confidence,
-                warnings=warnings,
-                raw_ocr=raw_text,
-                raw_ocr_preview=raw_text[:500],
-                debug=debug,
-            )
-
-            if confidence > best_score:
-                best_score = confidence
-                best_result = result
-
-            if confidence >= 0.74:
-                return result
-
-        except Exception as exc:
-            failures.append({"variant": variant_name, "error": str(exc)})
-
-    if best_result is not None:
-        best_result.debug["retry_failures"] = failures
-        return best_result
-
-    raise ValueError(f"Price extraction failed across all variants: {failures}")
-
-
-def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
-    return try_extract_with_variants(image_bytes, source_url)
-
-
-# =========================================================
 # Image source resolution
 # =========================================================
+
+@dataclass
+class ImageCandidate:
+    url: str
+    width: int
+    height: int
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
+    @property
+    def aspect_ratio(self) -> float:
+        return self.width / self.height if self.height else 0.0
+
 
 def candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
@@ -2305,9 +1838,6 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     latest_dict = latest if isinstance(latest, dict) else {}
     change_summary = summarize_price_changes(latest_dict, current_prices)
 
-    should_notify = bool(change_summary["changed"])
-    change_key = build_change_key(result.date, result.time, current_prices)
-
     snapshot = {
         "ok": True,
         "source": source_url,
@@ -2320,7 +1850,6 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "byte_length": len(image_bytes),
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
-        "ocr_mode": DEFAULT_OCR_MODE,
         "ocr_engine": result.ocr_engine,
         "extraction_method": result.extraction_method,
         "confidence": result.confidence,
@@ -2328,9 +1857,9 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "ocr_word_count": result.debug.get("ocr_word_count", 0),
         "warnings": result.warnings,
         "debug": result.debug,
-        "should_notify": should_notify,
+        "should_notify": bool(change_summary["changed"]),
         "change_summary": change_summary,
-        "change_key": change_key,
+        "change_key": build_change_key(result.date, result.time, current_prices),
         "previous_values": {
             "k21_ss": latest_dict.get("k21_ss"),
             "k21_sb": latest_dict.get("k21_sb"),
@@ -2355,7 +1884,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="5.5.0",
+    version="6.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -2366,11 +1895,12 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "5.5.0",
+        "version": "6.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
         "opencv_available": _CV2_AVAILABLE,
         "paddle_enabled": _PADDLE_AVAILABLE,
+        "blueprint_exists": BLUEPRINT_FILE.exists(),
     }
 
 
