@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -42,16 +43,57 @@ class ImageCandidate:
         return self.width / self.height if self.height else 0.0
 
 
+def is_bad_url(url: str) -> bool:
+    lower = url.lower()
+    bad_parts = [
+        "emoji",
+        "static.xx",
+        "profile_pic",
+        "safe_image.php",
+        "lookaside",
+        "icon",
+        "logo",
+        "profile",
+    ]
+    return any(part in lower for part in bad_parts)
+
+
+def thumbnail_penalty(url: str) -> float:
+    lower = url.lower()
+
+    # Facebook preview sizes often contain p526x296 / p320x320, etc.
+    m = re.search(r"_p(\d+)x(\d+)", lower)
+    if m:
+        w = int(m.group(1))
+        h = int(m.group(2))
+        area = w * h
+        if area <= 250000:
+            return 450000.0
+        if area <= 500000:
+            return 220000.0
+
+    # Some variants use s960x960 etc; those are usually much better
+    m2 = re.search(r"_s(\d+)x(\d+)", lower)
+    if m2:
+        w = int(m2.group(1))
+        h = int(m2.group(2))
+        area = w * h
+        if area >= 700000:
+            return -120000.0
+        if area >= 400000:
+            return -60000.0
+
+    return 0.0
+
+
 def compute_candidate_score(c: ImageCandidate) -> float:
     score = float(c.area)
 
-    # Strongly prefer actual post/feed images
     if c.in_post:
         score += 600000
     else:
         score -= 150000
 
-    # Heavily penalize top/header-ish images
     if c.top < 150:
         score -= 350000
     elif c.top < 400:
@@ -61,27 +103,28 @@ def compute_candidate_score(c: ImageCandidate) -> float:
 
     ratio = c.aspect_ratio
 
-    # Gold board image is close to square
-    if 0.90 <= ratio <= 1.10:
+    # Gold board is often square-ish, but allow portrait-ish boards too
+    if 0.88 <= ratio <= 1.12:
         score += 220000
-    elif 0.75 <= ratio <= 1.25:
+    elif 0.72 <= ratio <= 1.28:
         score += 120000
-    elif 1.25 < ratio <= 1.45:
-        score += 20000
+    elif 0.55 <= ratio <= 1.45:
+        score += 40000
     else:
         score -= 180000
 
-    # Reasonably large images
-    if c.width >= 500 and c.height >= 500:
+    if c.width >= 700 and c.height >= 700:
+        score += 120000
+    elif c.width >= 500 and c.height >= 500:
         score += 70000
 
-    # Penalize banner-like shapes
     if c.width > c.height * 1.35:
         score -= 260000
 
-    # Penalize likely top-page square assets
     if 0.85 <= ratio <= 1.15 and c.top < 300:
         score -= 180000
+
+    score -= thumbnail_penalty(c.src)
 
     return score
 
@@ -168,10 +211,32 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
             return false;
           }
 
+          function parseSrcset(srcset) {
+            const out = [];
+            for (const part of (srcset || '').split(',')) {
+              const item = part.trim();
+              if (!item) continue;
+              const pieces = item.split(/\\s+/);
+              const url = pieces[0] || '';
+              let width = 0;
+              for (const p of pieces.slice(1)) {
+                if (p.endsWith('w')) {
+                  const n = parseInt(p.slice(0, -1), 10);
+                  if (!isNaN(n)) width = n;
+                }
+              }
+              if (url) out.push({ url, width });
+            }
+            return out;
+          }
+
           return Array.from(document.images).map(img => {
             const rect = img.getBoundingClientRect();
+            const srcsetItems = parseSrcset(img.getAttribute('srcset') || '');
             return {
-              src: img.currentSrc || img.src || '',
+              currentSrc: img.currentSrc || '',
+              src: img.src || '',
+              srcset: srcsetItems,
               width: img.naturalWidth || 0,
               height: img.naturalHeight || 0,
               top: rect.top + window.scrollY,
@@ -185,35 +250,16 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
     out: list[ImageCandidate] = []
     seen: set[str] = set()
 
-    for item in raw or []:
-        src = str(item.get("src") or "").strip()
-        width = int(item.get("width") or 0)
-        height = int(item.get("height") or 0)
-        top = float(item.get("top") or 0)
-        in_post = bool(item.get("in_post") or False)
-
+    def add_candidate(src: str, width: int, height: int, top: float, in_post: bool):
+        src = (src or "").strip()
         if not src or src in seen:
-            continue
-        seen.add(src)
-
+            return
+        if is_bad_url(src):
+            return
         if width < 250 or height < 250:
-            continue
+            return
 
-        lower = src.lower()
-
-        bad_parts = [
-            "emoji",
-            "static.xx",
-            "profile_pic",
-            "safe_image.php",
-            "lookaside",
-            "icon",
-            "logo",
-            "profile",
-        ]
-        if any(part in lower for part in bad_parts):
-            continue
-
+        seen.add(src)
         candidate = ImageCandidate(
             src=src,
             width=width,
@@ -223,6 +269,36 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
         )
         candidate.score = compute_candidate_score(candidate)
         out.append(candidate)
+
+    for item in raw or []:
+        width = int(item.get("width") or 0)
+        height = int(item.get("height") or 0)
+        top = float(item.get("top") or 0)
+        in_post = bool(item.get("in_post") or False)
+
+        current_src = str(item.get("currentSrc") or "").strip()
+        src = str(item.get("src") or "").strip()
+
+        # Add visible current src and raw src first
+        add_candidate(current_src, width, height, top, in_post)
+        add_candidate(src, width, height, top, in_post)
+
+        # Add srcset candidates; prefer larger declared width items
+        srcset_items = item.get("srcset") or []
+        if isinstance(srcset_items, list):
+            ordered = sorted(
+                srcset_items,
+                key=lambda x: int(x.get("width") or 0),
+                reverse=True,
+            )
+            for entry in ordered[:4]:
+                candidate_url = str(entry.get("url") or "").strip()
+                declared_width = int(entry.get("width") or 0)
+                approx_w = max(width, declared_width) if declared_width > 0 else width
+                approx_h = height
+                if approx_w > 0 and height > 0 and width > 0:
+                    approx_h = max(int(height * (approx_w / width)), height)
+                add_candidate(candidate_url, approx_w, approx_h, top, in_post)
 
     out.sort(key=lambda c: c.score, reverse=True)
     return out
@@ -293,7 +369,7 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_height": best.height,
                     "selected_top": best.top,
                     "selected_in_post": best.in_post,
-                    "candidates": [asdict(c) for c in candidates[:12]],
+                    "candidates": [asdict(c) for c in candidates[:20]],
                 }
 
             OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
