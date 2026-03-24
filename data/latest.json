@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-ord5-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=OI8badn0UEIQ7kNvwF4NYqC&_nc_oc=Adolb34SDL8x9hzZGHuT0Px-cODgKzz9O_UmBITwzkK3tWrl4SLLA3ZSg3MDyU4Ajck&_nc_zt=23&_nc_ht=scontent-ord5-2.xx&_nc_gid=BkwR4WPU_kYR3sxDfmpLJw&_nc_ss=7a30f&oh=00_AfwampQ2PQG7788S9_ed2ghXXnSNztI_BXwuCbfHvWmuDQ&oe=69C84C51",
+  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=OI8badn0UEIQ7kNvwHE4x4D&_nc_oc=AdrVcZjrbKMrH-0xGyDqnTJZTfmZ87ou-zaZPCAPzil9qjk_9A7xW8Sg3e1ykJUND_w&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=IBMi04nxAN4TaGfEZ6RL6g&_nc_ss=7a30f&oh=00_AfyF1BlkwJMHzGtMyw1vGx7teHwFeID_oXrvO1CDEczfJw&oe=69C8BCD1",
   "date": "2026/03/01",
   "time": "15:45",
   "k21_ss": 15950,
@@ -15,7 +15,7 @@
   "source_w": 1052,
   "source_h": 1052,
   "byte_length": 51320,
-  "updated_at_utc": "2026-03-24T12:45:37.714970+00:00",
+  "updated_at_utc": "2026-03-24T21:31:23.201008+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_mode": "prefer_blueprint",
   "ocr_engine": "paddleocr",
@@ -25,7 +25,7 @@
   "ocr_word_count": 62,
   "warnings": [],
   "debug": {
-    "source_url": "https://scontent-ord5-2.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=OI8badn0UEIQ7kNvwF4NYqC&_nc_oc=Adolb34SDL8x9hzZGHuT0Px-cODgKzz9O_UmBITwzkK3tWrl4SLLA3ZSg3MDyU4Ajck&_nc_zt=23&_nc_ht=scontent-ord5-2.xx&_nc_gid=BkwR4WPU_kYR3sxDfmpLJw&_nc_ss=7a30f&oh=00_AfwampQ2PQG7788S9_ed2ghXXnSNztI_BXwuCbfHvWmuDQ&oe=69C84C51",
+    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/653725289_122177432600861173_6630501115696873658_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=OI8badn0UEIQ7kNvwHE4x4D&_nc_oc=AdrVcZjrbKMrH-0xGyDqnTJZTfmZ87ou-zaZPCAPzil9qjk_9A7xW8Sg3e1ykJUND_w&_nc_zt=23&_nc_ht=scontent-sjc3-1.xx&_nc_gid=IBMi04nxAN4TaGfEZ6RL6g&_nc_ss=7a30f&oh=00_AfyF1BlkwJMHzGtMyw1vGx7teHwFeID_oXrvO1CDEczfJw&oe=69C8BCD1",
     "image_width": 1052,
     "image_height": 1052,
     "ocr_mode": "prefer_blueprint",
@@ -98,6 +98,8 @@
     },
     "has_blueprint": true,
     "extraction_method": "smart_fallback",
-    "ocr_word_count": 62
-  }
+    "ocr_word_count": 62,
+    "debug_overlay_path": "data/debug/20260324T213123_smart_fallback_653725289_122177432600861173_6630501115696873658_n.jpg.png"
+  },
+  "raw_ocr": "بهذلا عيبل ةيمويلا ةريعسنلا نع ةرداصلا قشمدب ةغاصلا ةيعمج م3:45 :ةعاسلا 2026/3/19 :خيراتلا سيصخلا :مويلا ماوفلاروعس سال ماوفلا روعس رايعلا هءارش عمم ءارش عيم 21 131 134 15600 15950 8 112 115 13350 13700 عضاو لكشب ةمجاولا ىلع ةريعسنلا عضوب مازننالا ةظحالم 2230766 221005 رجهملاو ابروس كنب لباقه ةفيرحلا قشمد ةعاسلا خيراتلا مويلا رابعلا 21 13 1 5600 15950 1 8 112 115 13350 13700"
 }
