@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
-
+from scripts.blueprint_validator import validate_blueprint
 import numpy as np
 import pytesseract
 import requests
@@ -1850,6 +1850,7 @@ def load_blueprint() -> Optional[dict]:
     if not BLUEPRINT_FILE.exists():
         _BLUEPRINT_CACHE = None
         _BLUEPRINT_MTIME = None
+        logger.warning("Blueprint file not found: %s", BLUEPRINT_FILE)
         return None
 
     try:
@@ -1858,10 +1859,26 @@ def load_blueprint() -> Optional[dict]:
             return _BLUEPRINT_CACHE
 
         blueprint = load_json(BLUEPRINT_FILE, None)
-        if isinstance(blueprint, dict):
-            _BLUEPRINT_CACHE = blueprint
-            _BLUEPRINT_MTIME = mtime
-            return blueprint
+        if not isinstance(blueprint, dict):
+            logger.warning("Blueprint file is not a valid JSON object")
+            return None
+
+        validation_result = validate_blueprint(blueprint)
+
+        if not validation_result.ok:
+            logger.error("Blueprint validation failed")
+            for err in validation_result.errors:
+                logger.error("Blueprint error: %s", err)
+            return None
+
+        for warning in validation_result.warnings:
+            logger.warning("Blueprint warning: %s", warning)
+
+        _BLUEPRINT_CACHE = blueprint
+        _BLUEPRINT_MTIME = mtime
+        logger.info("Blueprint loaded successfully: %s", BLUEPRINT_FILE)
+        return blueprint
+
     except Exception as exc:
         logger.warning("Failed to load blueprint cache: %s", exc)
 
