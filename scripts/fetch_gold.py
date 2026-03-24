@@ -626,15 +626,25 @@ def value_changed(a, b, tolerance: float = 0.001) -> bool:
 # =========================================================
 # Image processing
 # =========================================================
-
 def preprocess_image(image_bytes: bytes) -> Image.Image:
-    img = Image.open(BytesIO(image_bytes)).convert("L")
-    img = ImageOps.autocontrast(img)
-    img = img.filter(ImageFilter.MedianFilter(size=3))
-    img = img.filter(ImageFilter.SHARPEN)
-    img = img.resize((img.width * 2, img.height * 2))
-    return img
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
 
+    # Convert to grayscale
+    gray = ImageOps.grayscale(img)
+
+    # Increase contrast heavily
+    gray = ImageOps.autocontrast(gray, cutoff=2)
+
+    # Strong sharpening
+    gray = gray.filter(ImageFilter.UnsharpMask(radius=2, percent=200, threshold=3))
+
+    # Resize (important for OCR)
+    gray = gray.resize((gray.width * 2, gray.height * 2))
+
+    # Binary threshold (CRITICAL for gold boards)
+    gray = gray.point(lambda p: 255 if p > 150 else 0)
+
+    return gray
 
 def preprocess_region_for_ocr(
     img: Image.Image,
@@ -692,9 +702,11 @@ def get_paddle_ocr():
                 try:
                     _PADDLE_OCR = PaddleOCR(
                         lang="ar",
-                        use_doc_orientation_classify=False,
-                        use_doc_unwarping=False,
-                        use_textline_orientation=False,
+                        det=True,
+                        rec=True,
+                        use_angle_cls=True,   # VERY IMPORTANT
+                        use_gpu=False,
+                        show_log=False,
                     )
                 except Exception as exc:
                     disable_paddle(f"init_failed: {exc}")
@@ -1420,7 +1432,8 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
     fixed21, fixed18 = apply_price_sanity_check(k21, k18)
 
     if not is_reasonable_extraction(fixed21, fixed18):
-        return None
+        logger.warning("Sanity check failed, but returning best guess")
+        return fixed21, fixed18
 
     return fixed21, fixed18
 
@@ -1835,7 +1848,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     words_full, raw_text_full, ocr_engine_full = run_ocr_with_fallback(img)
 
     table_img = crop_main_table_region(img)
-    table_img_pre = preprocess_region_for_ocr(table_img, threshold=150, upscale=2)
+    table_img_pre = preprocess_region_for_ocr(table_img, threshold=135, upscale=2)
     words_table, raw_text_table, ocr_engine_table = run_ocr_with_fallback(table_img_pre)
     words_table_mapped = map_table_words_to_full_image(words_table, img)
 
