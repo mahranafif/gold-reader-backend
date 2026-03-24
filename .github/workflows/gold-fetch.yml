@@ -19,7 +19,7 @@ jobs:
       LOG_LEVEL: INFO
       REQUEST_TIMEOUT: "35"
       GOLD_OCR_MODE: prefer_blueprint
-      GOLD_DEBUG_EXPORT: "false"
+      GOLD_DEBUG_EXPORT: "true"
       
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
@@ -28,7 +28,7 @@ jobs:
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
       FACEBOOK_MAX_SCROLL_STEPS: "10"
       FACEBOOK_SCROLL_DELAY_MS: "1200"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "12"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "20"
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       DISABLE_PADDLE: "false"
