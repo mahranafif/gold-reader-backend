@@ -146,15 +146,15 @@ SESSION = build_session()
 
 @dataclass
 class GoldRate:
-    ub: int
-    us: int
+    ub: float
+    us: float
     sb: int
     ss: int
 
 
 @dataclass
 class NumericToken:
-    value: int
+    value: float
     kind: str
     x: float
     y: float
@@ -241,13 +241,13 @@ class ExtractResponse(BaseModel):
 
     k21_ss: int
     k21_sb: int
-    k21_us: int
-    k21_ub: int
+    k21_us: float
+    k21_ub: float
 
     k18_ss: int
     k18_sb: int
-    k18_us: int
-    k18_ub: int
+    k18_us: float
+    k18_ub: float
 
     extraction_method: str
     ocr_engine: str
@@ -336,6 +336,8 @@ def normalize_digits(text: str) -> str:
         .replace("s", "5")
         .replace("Z", "2")
         .replace("G", "6")
+        .replace("٫", ".")
+        .replace("،", ",")
     )
 
 
@@ -531,24 +533,58 @@ def extract_time_from_raw(raw: str) -> str:
     return f"{hh:02d}:{mm:02d}"
 
 
-def parse_numeric_value(text: str) -> Optional[int]:
-    digits = re.sub(r"[^0-9]", "", normalize_digits(text))
+def normalize_numeric_value(value: float, kind: str) -> float | int:
+    if kind == "usd":
+        return round(float(value), 2)
+    return int(round(float(value)))
+
+
+def parse_numeric_value(text: str) -> Optional[float]:
+    raw = normalize_digits(text).strip()
+    if not raw:
+        return None
+
+    raw = re.sub(r"\s+", "", raw)
+    core = re.sub(r"^[^0-9]+|[^0-9.,]+$", "", raw)
+    if not core:
+        return None
+
+    decimal_match = re.fullmatch(r"(\d+)[.,](\d{1,2})", core)
+    if decimal_match:
+        float_candidate = float(f"{decimal_match.group(1)}.{decimal_match.group(2)}")
+        if MIN_USD_PRICE <= float_candidate <= MAX_USD_PRICE:
+            return round(float_candidate, 2)
+
+        int_candidate = int(re.sub(r"[^0-9]", "", core))
+        if MIN_SYP_PRICE <= int_candidate <= MAX_SYP_PRICE:
+            return float(int_candidate)
+
+    digits = re.sub(r"[^0-9]", "", core)
     if not digits:
         return None
+
     try:
-        return int(digits)
+        return float(int(digits))
     except Exception:
         return None
 
 
-def classify_numeric_value(value: int) -> Optional[str]:
+def classify_numeric_value(value: float) -> Optional[str]:
     now = app_now()
-    if now.year - 1 <= value <= now.year + 3:
+    integer_value = int(round(value))
+
+    if abs(value - integer_value) < 0.0001:
+        if now.year - 1 <= integer_value <= now.year + 3:
+            return None
+        if MIN_USD_PRICE <= integer_value <= MAX_USD_PRICE:
+            return "usd"
+        if MIN_SYP_PRICE <= integer_value <= MAX_SYP_PRICE:
+            return "syp"
         return None
+
     if MIN_USD_PRICE <= value <= MAX_USD_PRICE:
         return "usd"
-    if MIN_SYP_PRICE <= value <= MAX_SYP_PRICE:
-        return "syp"
+
     return None
 
 
@@ -569,7 +605,7 @@ def extract_numeric_tokens(words: list["OcrWord"]) -> list["NumericToken"]:
 
         tokens.append(
             NumericToken(
-                value=value,
+                value=float(normalize_numeric_value(value, kind)),
                 kind=kind,
                 x=w.center_x,
                 y=w.center_y,
@@ -578,6 +614,13 @@ def extract_numeric_tokens(words: list["OcrWord"]) -> list["NumericToken"]:
         )
 
     return tokens
+
+
+def value_changed(a, b, tolerance: float = 0.001) -> bool:
+    try:
+        return abs(float(a) - float(b)) > tolerance
+    except Exception:
+        return a != b
 
 
 # =========================================================
@@ -969,7 +1012,7 @@ def has_meaningful_value_difference(a: dict, b: dict) -> bool:
         "k21_ss", "k21_us", "k21_sb", "k21_ub",
         "k18_ss", "k18_us", "k18_sb", "k18_ub",
     ]
-    return any(int(a.get(k, 0)) != int(b.get(k, 0)) for k in keys)
+    return any(value_changed(a.get(k, 0), b.get(k, 0)) for k in keys)
 
 
 def parse_to_datetime(date_str: str, time_str: str) -> datetime:
@@ -1036,7 +1079,7 @@ def snapshot_changed(latest: dict, snapshot: dict) -> bool:
         "k18_ss", "k18_sb", "k18_us", "k18_ub",
         "date", "time",
     ]
-    return any(latest.get(k) != snapshot.get(k) for k in keys)
+    return any(value_changed(latest.get(k), snapshot.get(k)) for k in keys)
 
 
 # =========================================================
@@ -1102,7 +1145,7 @@ def build_anchor_local_rows(
 
         tokens.append(
             NumericToken(
-                value=value,
+                value=float(normalize_numeric_value(value, kind)),
                 kind=kind,
                 x=w.center_x,
                 y=w.center_y,
@@ -1130,8 +1173,8 @@ def choose_best_anchor_local_row(
     scored: list[tuple[float, TokenRow]] = []
 
     for row in rows:
-        usd_values = sorted({t.value for t in row.tokens if t.kind == "usd"})
-        syp_values = sorted({t.value for t in row.tokens if t.kind == "syp"})
+        usd_values = sorted({round(float(t.value), 2) for t in row.tokens if t.kind == "usd"})
+        syp_values = sorted({int(round(float(t.value))) for t in row.tokens if t.kind == "syp"})
 
         if len(usd_values) < 2 or len(syp_values) < 2:
             continue
@@ -1163,8 +1206,8 @@ def choose_best_anchor_local_row(
 
 
 def extract_values_from_token_row(row: TokenRow) -> Optional[dict]:
-    usd_values = sorted({t.value for t in row.tokens if t.kind == "usd"})
-    syp_values = sorted({t.value for t in row.tokens if t.kind == "syp"})
+    usd_values = sorted({round(float(t.value), 2) for t in row.tokens if t.kind == "usd"})
+    syp_values = sorted({int(round(float(t.value))) for t in row.tokens if t.kind == "syp"})
 
     if len(usd_values) < 2 or len(syp_values) < 2:
         return None
@@ -1304,8 +1347,18 @@ def apply_price_sanity_check(k21: GoldRate, k18: GoldRate) -> tuple[GoldRate, Go
     k18_usd_buy = min(k18.us, k18.ub)
 
     return (
-        GoldRate(ub=k21_usd_buy, us=k21_usd_sell, sb=k21_syp_buy, ss=k21_syp_sell),
-        GoldRate(ub=k18_usd_buy, us=k18_usd_sell, sb=k18_syp_buy, ss=k18_syp_sell),
+        GoldRate(
+            ub=round(float(k21_usd_buy), 2),
+            us=round(float(k21_usd_sell), 2),
+            sb=int(k21_syp_buy),
+            ss=int(k21_syp_sell),
+        ),
+        GoldRate(
+            ub=round(float(k18_usd_buy), 2),
+            us=round(float(k18_usd_sell), 2),
+            sb=int(k18_syp_buy),
+            ss=int(k18_syp_sell),
+        ),
     )
 
 
@@ -1317,7 +1370,8 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
         logger.info("anchor_rows: missing anchors")
         return None
 
-    if abs(anchor21.center_y - anchor18.center_y) < 18:
+    close_threshold = max(min(anchor21.height, anchor18.height) * 0.55, 10.0)
+    if abs(anchor21.center_y - anchor18.center_y) < close_threshold:
         logger.info("anchor_rows: anchors suspiciously close vertically")
         return None
 
@@ -1373,8 +1427,14 @@ def extract_anchor_rows(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRa
 
 def extract_legacy_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, GoldRate]]:
     tokens = extract_numeric_tokens(words)
-    syp_prices = sorted([t.value for t in tokens if t.kind == "syp"], reverse=True)
-    usd_prices = sorted([t.value for t in tokens if t.kind == "usd"], reverse=True)
+    syp_prices = sorted(
+        [int(round(t.value)) for t in tokens if t.kind == "syp"],
+        reverse=True,
+    )
+    usd_prices = sorted(
+        [round(float(t.value), 2) for t in tokens if t.kind == "usd"],
+        reverse=True,
+    )
 
     if len(syp_prices) < 4 or len(usd_prices) < 4:
         return None
@@ -1397,8 +1457,8 @@ def extract_smart_fallback(words: list[OcrWord]) -> Optional[tuple[GoldRate, Gol
     valid_rows: list[dict] = []
 
     for row in rows:
-        syp = sorted({t.value for t in row if t.kind == "syp"}, reverse=True)
-        usd = sorted({t.value for t in row if t.kind == "usd"}, reverse=True)
+        syp = sorted({int(round(t.value)) for t in row if t.kind == "syp"}, reverse=True)
+        usd = sorted({round(float(t.value), 2) for t in row if t.kind == "usd"}, reverse=True)
 
         if len(syp) < 2 or len(usd) < 2:
             continue
@@ -1491,14 +1551,19 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         candidates.sort(key=lambda x: x[0])
         return candidates
 
-    def get_closest_unique(ratios: dict, anchor: OcrWord, expected_kind: str) -> int:
+    def get_closest_unique(ratios: dict, anchor: OcrWord, expected_kind: str):
         candidates = get_candidates(ratios, anchor, expected_kind)
         if not candidates:
             return 0
 
         _, chosen, idx = candidates[0]
         used_ids.add(idx)
-        return parse_numeric_value(chosen.norm) or 0
+
+        value = parse_numeric_value(chosen.norm)
+        if value is None:
+            return 0
+
+        return normalize_numeric_value(value, expected_kind)
 
     values = {
         "21_ss": get_closest_unique(blueprint["21_SYP_Sell"], anchor21, "syp"),
@@ -1515,8 +1580,8 @@ def extract_with_blueprint(words: list[OcrWord], blueprint: dict) -> Optional[tu
         return None
 
     result = (
-        GoldRate(ub=values["21_ub"], us=values["21_us"], sb=values["21_sb"], ss=values["21_ss"]),
-        GoldRate(ub=values["18_ub"], us=values["18_us"], sb=values["18_sb"], ss=values["18_ss"]),
+        GoldRate(ub=float(values["21_ub"]), us=float(values["21_us"]), sb=int(values["21_sb"]), ss=int(values["21_ss"])),
+        GoldRate(ub=float(values["18_ub"]), us=float(values["18_us"]), sb=int(values["18_sb"]), ss=int(values["18_ss"])),
     )
 
     fixed = apply_price_sanity_check(result[0], result[1])
@@ -1571,12 +1636,12 @@ def crop_header_band(img: Image.Image) -> Image.Image:
 
 def crop_header_date_region(img: Image.Image) -> Image.Image:
     band = crop_header_band(img)
-    return crop_box(band, 0.24, 0.00, 0.62, 1.00)
+    return crop_box(band, 0.22, 0.00, 0.64, 1.00)
 
 
 def crop_header_time_region(img: Image.Image) -> Image.Image:
     band = crop_header_band(img)
-    return crop_box(band, 0.00, 0.00, 0.20, 1.00)
+    return crop_box(band, 0.00, 0.00, 0.24, 1.00)
 
 
 def extract_header_direct(img: Image.Image) -> tuple[str, str, dict]:
@@ -1730,12 +1795,12 @@ def load_blueprint() -> Optional[dict]:
 # =========================================================
 
 def crop_main_table_region(img: Image.Image) -> Image.Image:
-    return crop_box(img, 0.02, 0.48, 0.98, 0.82)
+    return crop_box(img, 0.02, 0.46, 0.98, 0.84)
 
 
 def map_table_words_to_full_image(table_words: list[OcrWord], full_img: Image.Image) -> list[OcrWord]:
     x_offset = int(0.02 * full_img.width)
-    y_offset = int(0.48 * full_img.height)
+    y_offset = int(0.46 * full_img.height)
 
     mapped: list[OcrWord] = []
     for w in table_words:
@@ -2052,7 +2117,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
 
 app = FastAPI(
     title="Gold OCR Service",
-    version="5.3.0",
+    version="5.4.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -2063,7 +2128,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr",
-        "version": "5.3.0",
+        "version": "5.4.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
