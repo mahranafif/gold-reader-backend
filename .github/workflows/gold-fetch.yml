@@ -91,6 +91,11 @@ jobs:
           echo "facebook_latest_image.json:"
           cat data/facebook_latest_image.json || true
 
+      - name: Show blueprint
+        run: |
+          echo "blueprint.json:"
+          cat data/blueprint.json || true
+    
       - name: Run gold OCR using scraped image candidates
         run: python scripts/run_gold_from_facebook_json.py
 
