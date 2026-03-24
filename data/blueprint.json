@@ -1,11 +1,152 @@
 {
-  "21_SYP_Sell": { "dx": -7.2, "dy": 0.3 },
-  "21_SYP_Buy":  { "dx": -10.1, "dy": 0.3 },
-  "21_USD_Sell": { "dx": -14.7, "dy": 0.3 },
-  "21_USD_Buy":  { "dx": -17.2, "dy": 0.3 },
-
-  "18_SYP_Sell": { "dx": -7.2, "dy": 2.3 },
-  "18_SYP_Buy":  { "dx": -10.1, "dy": 2.3 },
-  "18_USD_Sell": { "dx": -14.7, "dy": 2.3 },
-  "18_USD_Buy":  { "dx": -17.2, "dy": 2.3 }
+  "template_name": "damascus_gold_board_v1",
+  "version": 1,
+  "is_active": true,
+  "updated_at": "2026-03-25T12:00:00Z",
+  "updated_by": "user",
+  "reference_size": {
+    "width": 1024,
+    "height": 1024
+  },
+  "alignment": {
+    "enabled": true,
+    "mode": "homography",
+    "min_match_count": 12,
+    "good_match_percent": 0.25
+  },
+  "validation": {
+    "usd_hard_min": 50,
+    "usd_hard_max": 400,
+    "usd_expected_min": 90,
+    "usd_expected_max": 180,
+    "syp_hard_min": 5000,
+    "syp_hard_max": 50000,
+    "syp_expected_min": 12000,
+    "syp_expected_max": 20000,
+    "min_18k_to_21k_ratio": 0.80,
+    "max_18k_to_21k_ratio": 0.90
+  },
+  "fields": [
+    {
+      "id": "day",
+      "label": "Day",
+      "type": "arabic_text",
+      "required": true,
+      "box": { "x1": 0.72, "y1": 0.43, "x2": 0.96, "y2": 0.51 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["adaptive", "soft"],
+      "psm": 7,
+      "char_whitelist": null
+    },
+    {
+      "id": "date",
+      "label": "Date",
+      "type": "date",
+      "required": true,
+      "box": { "x1": 0.33, "y1": 0.43, "x2": 0.61, "y2": 0.51 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["adaptive", "binary"],
+      "psm": 7,
+      "char_whitelist": "0123456789/.-"
+    },
+    {
+      "id": "time",
+      "label": "Time",
+      "type": "time",
+      "required": true,
+      "box": { "x1": 0.02, "y1": 0.43, "x2": 0.24, "y2": 0.51 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["adaptive", "binary"],
+      "psm": 7,
+      "char_whitelist": "0123456789:.;,مصAPMapm "
+    },
+    {
+      "id": "k21_syp_sell",
+      "label": "21K SYP Sell",
+      "type": "syp_price",
+      "required": true,
+      "box": { "x1": 0.49, "y1": 0.58, "x2": 0.63, "y2": 0.69 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789"
+    },
+    {
+      "id": "k21_syp_buy",
+      "label": "21K SYP Buy",
+      "type": "syp_price",
+      "required": true,
+      "box": { "x1": 0.33, "y1": 0.58, "x2": 0.49, "y2": 0.69 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789"
+    },
+    {
+      "id": "k21_usd_sell",
+      "label": "21K USD Sell",
+      "type": "usd_price",
+      "required": true,
+      "box": { "x1": 0.18, "y1": 0.58, "x2": 0.31, "y2": 0.69 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789.,"
+    },
+    {
+      "id": "k21_usd_buy",
+      "label": "21K USD Buy",
+      "type": "usd_price",
+      "required": true,
+      "box": { "x1": 0.03, "y1": 0.58, "x2": 0.16, "y2": 0.69 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789.,"
+    },
+    {
+      "id": "k18_syp_sell",
+      "label": "18K SYP Sell",
+      "type": "syp_price",
+      "required": true,
+      "box": { "x1": 0.49, "y1": 0.70, "x2": 0.63, "y2": 0.80 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789"
+    },
+    {
+      "id": "k18_syp_buy",
+      "label": "18K SYP Buy",
+      "type": "syp_price",
+      "required": true,
+      "box": { "x1": 0.33, "y1": 0.70, "x2": 0.49, "y2": 0.80 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789"
+    },
+    {
+      "id": "k18_usd_sell",
+      "label": "18K USD Sell",
+      "type": "usd_price",
+      "required": true,
+      "box": { "x1": 0.18, "y1": 0.70, "x2": 0.31, "y2": 0.80 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789.,"
+    },
+    {
+      "id": "k18_usd_buy",
+      "label": "18K USD Buy",
+      "type": "usd_price",
+      "required": true,
+      "box": { "x1": 0.03, "y1": 0.70, "x2": 0.16, "y2": 0.80 },
+      "ocr_engines": ["paddle", "tesseract"],
+      "preprocess_modes": ["binary", "adaptive", "contrast"],
+      "psm": 7,
+      "char_whitelist": "0123456789.,"
+    }
+  ]
 }
