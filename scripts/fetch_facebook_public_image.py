@@ -23,6 +23,8 @@ SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page
 REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "10"))
 SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1200"))
+MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "8"))
+MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "8"))
 
 
 @dataclass
@@ -32,6 +34,8 @@ class ImageCandidate:
     height: int
     top: float
     in_post: bool
+    post_index: int
+    post_top: float
     score: float = 0.0
 
     @property
@@ -54,6 +58,8 @@ def is_bad_url(url: str) -> bool:
         "icon",
         "logo",
         "profile",
+        "cover_photo",
+        "scontent.xx.fbcdn.net/m1/",
     ]
     return any(part in lower for part in bad_parts)
 
@@ -61,27 +67,28 @@ def is_bad_url(url: str) -> bool:
 def thumbnail_penalty(url: str) -> float:
     lower = url.lower()
 
-    # Facebook preview sizes often contain p526x296 / p320x320, etc.
+    # Penalize obvious thumbnail variants very heavily.
     m = re.search(r"_p(\d+)x(\d+)", lower)
     if m:
         w = int(m.group(1))
         h = int(m.group(2))
         area = w * h
-        if area <= 250000:
-            return 450000.0
+        if area <= 300000:
+            return 700000.0
         if area <= 500000:
-            return 220000.0
+            return 400000.0
+        return 200000.0
 
-    # Some variants use s960x960 etc; those are usually much better
+    # Reward larger square-ish source variants.
     m2 = re.search(r"_s(\d+)x(\d+)", lower)
     if m2:
         w = int(m2.group(1))
         h = int(m2.group(2))
         area = w * h
         if area >= 700000:
-            return -120000.0
+            return -180000.0
         if area >= 400000:
-            return -60000.0
+            return -90000.0
 
     return 0.0
 
@@ -89,43 +96,36 @@ def thumbnail_penalty(url: str) -> float:
 def compute_candidate_score(c: ImageCandidate) -> float:
     score = float(c.area)
 
+    # Strongly prefer images that are actually inside a post.
     if c.in_post:
-        score += 600000
+        score += 900000.0
     else:
-        score -= 150000
+        score -= 400000.0
 
-    if c.top < 150:
-        score -= 350000
-    elif c.top < 400:
-        score -= 180000
-    elif c.top > 500:
-        score += 180000
+    # Strongly prefer the earliest post in feed order.
+    score -= float(c.post_index) * 1000000.0
+
+    # Prefer images near the top of their post.
+    relative_top = max(c.top - c.post_top, 0.0)
+    score -= min(relative_top, 1500.0) * 120.0
 
     ratio = c.aspect_ratio
-
-    # Gold board is often square-ish, but allow portrait-ish boards too
-    if 0.88 <= ratio <= 1.12:
-        score += 220000
-    elif 0.72 <= ratio <= 1.28:
-        score += 120000
-    elif 0.55 <= ratio <= 1.45:
-        score += 40000
+    if 0.80 <= ratio <= 1.20:
+        score += 180000.0
+    elif 0.60 <= ratio <= 1.45:
+        score += 80000.0
     else:
-        score -= 180000
+        score -= 160000.0
 
     if c.width >= 700 and c.height >= 700:
-        score += 120000
+        score += 120000.0
     elif c.width >= 500 and c.height >= 500:
-        score += 70000
+        score += 50000.0
 
     if c.width > c.height * 1.35:
-        score -= 260000
-
-    if 0.85 <= ratio <= 1.15 and c.top < 300:
-        score -= 180000
+        score -= 180000.0
 
     score -= thumbnail_penalty(c.src)
-
     return score
 
 
@@ -161,7 +161,7 @@ async def dismiss_login_modal(page: Page) -> bool:
 
                 const nearTopRight =
                   rect.top >= 0 &&
-                  rect.top < window.innerHeight * 0.4 &&
+                  rect.top < window.innerHeight * 0.45 &&
                   rect.left > window.innerWidth * 0.55 &&
                   rect.width > 10 &&
                   rect.height > 10;
@@ -186,71 +186,120 @@ async def dismiss_login_modal(page: Page) -> bool:
 
 async def extract_candidates(page: Page) -> list[ImageCandidate]:
     raw = await page.evaluate(
-        """
-        () => {
-          function isInsidePost(img) {
-            let el = img;
-            for (let i = 0; i < 12 && el; i++, el = el.parentElement) {
-              const role = (el.getAttribute && el.getAttribute('role')) || '';
-              const dataPagelet = (el.getAttribute && el.getAttribute('data-pagelet')) || '';
-              const aria = (el.getAttribute && el.getAttribute('aria-label')) || '';
-              const className = (el.className || '').toString().toLowerCase();
-              const tag = (el.tagName || '').toLowerCase();
-
-              if (
-                tag === 'article' ||
-                role === 'article' ||
-                dataPagelet.toLowerCase().includes('feed') ||
-                dataPagelet.toLowerCase().includes('timeline') ||
-                aria.toLowerCase().includes('post') ||
-                className.includes('story')
-              ) {
-                return true;
-              }
-            }
-            return false;
-          }
-
-          function parseSrcset(srcset) {
+        f"""
+        () => {{
+          function parseSrcset(srcset) {{
             const out = [];
-            for (const part of (srcset || '').split(',')) {
+            for (const part of (srcset || '').split(',')) {{
               const item = part.trim();
               if (!item) continue;
               const pieces = item.split(/\\s+/);
               const url = pieces[0] || '';
               let width = 0;
-              for (const p of pieces.slice(1)) {
-                if (p.endsWith('w')) {
+              for (const p of pieces.slice(1)) {{
+                if (p.endsWith('w')) {{
                   const n = parseInt(p.slice(0, -1), 10);
                   if (!isNaN(n)) width = n;
-                }
-              }
-              if (url) out.push({ url, width });
-            }
+                }}
+              }}
+              if (url) out.push({{ url, width }});
+            }}
             return out;
-          }
+          }}
 
-          return Array.from(document.images).map(img => {
-            const rect = img.getBoundingClientRect();
-            const srcsetItems = parseSrcset(img.getAttribute('srcset') || '');
-            return {
-              currentSrc: img.currentSrc || '',
-              src: img.src || '',
-              srcset: srcsetItems,
-              width: img.naturalWidth || 0,
-              height: img.naturalHeight || 0,
-              top: rect.top + window.scrollY,
-              in_post: isInsidePost(img),
-            };
-          });
-        }
+          function looksLikePostContainer(el) {{
+            if (!el || !el.getBoundingClientRect) return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width < 200 || rect.height < 180) return false;
+
+            const role = (el.getAttribute('role') || '').toLowerCase();
+            const dataPagelet = (el.getAttribute('data-pagelet') || '').toLowerCase();
+            const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+            const className = (el.className || '').toString().toLowerCase();
+            const tag = (el.tagName || '').toLowerCase();
+            const text = (el.innerText || '').trim();
+
+            if (
+              tag === 'article' ||
+              role === 'article' ||
+              dataPagelet.includes('feed') ||
+              dataPagelet.includes('timeline') ||
+              aria.includes('post') ||
+              className.includes('story')
+            ) {{
+              return true;
+            }}
+
+            if (text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 250) {{
+              return true;
+            }}
+
+            return false;
+          }}
+
+          function collectPostContainers() {{
+            const all = Array.from(document.querySelectorAll('article, div, section'));
+            const posts = [];
+            for (const el of all) {{
+              if (!looksLikePostContainer(el)) continue;
+              const rect = el.getBoundingClientRect();
+              const top = rect.top + window.scrollY;
+              const imageCount = el.querySelectorAll('img').length;
+              if (imageCount === 0) continue;
+              posts.push({{ el, top }});
+            }}
+
+            posts.sort((a, b) => a.top - b.top);
+
+            const deduped = [];
+            for (const post of posts) {{
+              const parentAlreadyIncluded = deduped.some(p => p.el.contains(post.el));
+              if (parentAlreadyIncluded) continue;
+              deduped.push(post);
+            }}
+
+            return deduped.slice(0, {MAX_POSTS_TO_SCAN});
+          }}
+
+          const posts = collectPostContainers();
+
+          return posts.map((post, postIndex) => {{
+            const imgs = Array.from(post.el.querySelectorAll('img')).map(img => {{
+              const rect = img.getBoundingClientRect();
+              return {{
+                currentSrc: img.currentSrc || '',
+                src: img.src || '',
+                srcset: parseSrcset(img.getAttribute('srcset') || ''),
+                width: img.naturalWidth || 0,
+                height: img.naturalHeight || 0,
+                top: rect.top + window.scrollY,
+                in_post: true,
+                post_index: postIndex,
+                post_top: post.top,
+              }};
+            }});
+            return {{
+              post_index: postIndex,
+              post_top: post.top,
+              images: imgs,
+            }};
+          }});
+        }}
         """
     )
 
-    out: list[ImageCandidate] = []
+    candidates: list[ImageCandidate] = []
     seen: set[str] = set()
 
-    def add_candidate(src: str, width: int, height: int, top: float, in_post: bool):
+    def add_candidate(
+        src: str,
+        width: int,
+        height: int,
+        top: float,
+        in_post: bool,
+        post_index: int,
+        post_top: float,
+    ) -> None:
         src = (src or "").strip()
         if not src or src in seen:
             return
@@ -266,42 +315,76 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
             height=height,
             top=top,
             in_post=in_post,
+            post_index=post_index,
+            post_top=post_top,
         )
         candidate.score = compute_candidate_score(candidate)
-        out.append(candidate)
+        candidates.append(candidate)
 
-    for item in raw or []:
-        width = int(item.get("width") or 0)
-        height = int(item.get("height") or 0)
-        top = float(item.get("top") or 0)
-        in_post = bool(item.get("in_post") or False)
+    if isinstance(raw, list):
+        for post in raw:
+            post_index = int(post.get("post_index") or 0)
+            post_top = float(post.get("post_top") or 0.0)
+            images = post.get("images") or []
 
-        current_src = str(item.get("currentSrc") or "").strip()
-        src = str(item.get("src") or "").strip()
+            local_added = 0
+            for item in images:
+                width = int(item.get("width") or 0)
+                height = int(item.get("height") or 0)
+                top = float(item.get("top") or 0.0)
+                in_post = bool(item.get("in_post") or False)
 
-        # Add visible current src and raw src first
-        add_candidate(current_src, width, height, top, in_post)
-        add_candidate(src, width, height, top, in_post)
+                current_src = str(item.get("currentSrc") or "").strip()
+                src = str(item.get("src") or "").strip()
 
-        # Add srcset candidates; prefer larger declared width items
-        srcset_items = item.get("srcset") or []
-        if isinstance(srcset_items, list):
-            ordered = sorted(
-                srcset_items,
-                key=lambda x: int(x.get("width") or 0),
-                reverse=True,
-            )
-            for entry in ordered[:4]:
-                candidate_url = str(entry.get("url") or "").strip()
-                declared_width = int(entry.get("width") or 0)
-                approx_w = max(width, declared_width) if declared_width > 0 else width
-                approx_h = height
-                if approx_w > 0 and height > 0 and width > 0:
-                    approx_h = max(int(height * (approx_w / width)), height)
-                add_candidate(candidate_url, approx_w, approx_h, top, in_post)
+                before = len(candidates)
+                add_candidate(current_src, width, height, top, in_post, post_index, post_top)
+                add_candidate(src, width, height, top, in_post, post_index, post_top)
+                local_added += len(candidates) - before
 
-    out.sort(key=lambda c: c.score, reverse=True)
-    return out
+                srcset_items = item.get("srcset") or []
+                if isinstance(srcset_items, list):
+                    ordered = sorted(
+                        srcset_items,
+                        key=lambda x: int(x.get("width") or 0),
+                        reverse=True,
+                    )
+                    for entry in ordered[:4]:
+                        candidate_url = str(entry.get("url") or "").strip()
+                        declared_width = int(entry.get("width") or 0)
+                        approx_w = max(width, declared_width) if declared_width > 0 else width
+                        approx_h = height
+                        if approx_w > 0 and height > 0 and width > 0:
+                            approx_h = max(int(height * (approx_w / max(width, 1))), height)
+                        before = len(candidates)
+                        add_candidate(
+                            candidate_url,
+                            approx_w,
+                            approx_h,
+                            top,
+                            in_post,
+                            post_index,
+                            post_top,
+                        )
+                        local_added += len(candidates) - before
+
+                if local_added >= MAX_CANDIDATES_PER_POST:
+                    break
+
+    candidates.sort(key=lambda c: (c.post_index, -c.score, c.top))
+
+    # Final pass: pick from earliest real post first.
+    grouped: dict[int, list[ImageCandidate]] = {}
+    for candidate in candidates:
+        grouped.setdefault(candidate.post_index, []).append(candidate)
+
+    ordered_final: list[ImageCandidate] = []
+    for post_index in sorted(grouped):
+        group = grouped[post_index]
+        group.sort(key=lambda c: c.score, reverse=True)
+        ordered_final.extend(group)
+
+    return ordered_final
 
 
 async def scrape_public_facebook_image() -> dict:
@@ -355,6 +438,8 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_height": 0,
                     "selected_top": 0,
                     "selected_in_post": False,
+                    "selected_post_index": -1,
+                    "selected_post_top": 0,
                     "candidates": [],
                 }
             else:
@@ -369,6 +454,8 @@ async def scrape_public_facebook_image() -> dict:
                     "selected_height": best.height,
                     "selected_top": best.top,
                     "selected_in_post": best.in_post,
+                    "selected_post_index": best.post_index,
+                    "selected_post_top": best.post_top,
                     "candidates": [asdict(c) for c in candidates[:20]],
                 }
 
