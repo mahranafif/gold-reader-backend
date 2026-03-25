@@ -11,16 +11,18 @@ permissions:
 jobs:
   fetch-gold:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
       APP_MODE: cli
       APP_TIMEZONE: Asia/Dubai
       LOG_LEVEL: INFO
       REQUEST_TIMEOUT: "35"
       GOLD_OCR_MODE: prefer_blueprint
       GOLD_DEBUG_EXPORT: "true"
-      
+
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
@@ -29,10 +31,15 @@ jobs:
       FACEBOOK_MAX_SCROLL_STEPS: "3"
       FACEBOOK_SCROLL_DELAY_MS: "1200"
       FACEBOOK_MAX_CANDIDATES_TO_TRY: "10"
-      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-      DISABLE_PADDLE: "false"
       FACEBOOK_MAX_CANDIDATES_PER_POST: "12"
       FACEBOOK_MAX_POST_GROUPS: "4"
+
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+      DISABLE_PADDLE: "false"
+
+      CNN_POSTER_MIN_CONFIDENCE: "0.70"
+      CNN_LAYOUT_MIN_CONFIDENCE: "0.50"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,6 +80,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
+          pip install torch torchvision pillow
 
       - name: Install Playwright Chromium
         run: python -m playwright install chromium
@@ -81,6 +89,14 @@ jobs:
         run: |
           mkdir -p data
           mkdir -p data/debug
+          mkdir -p models
+
+      - name: Verify CNN model files
+        run: |
+          echo "Checking model files..."
+          ls -lah models || true
+          test -f models/gold_poster_classifier.pt || (echo "Missing models/gold_poster_classifier.pt" && exit 1)
+          test -f models/gold_layout_classifier.pt || (echo "Missing models/gold_layout_classifier.pt" && exit 1)
 
       - name: Scrape public Facebook image
         run: python scripts/fetch_facebook_public_image.py
@@ -92,10 +108,11 @@ jobs:
           cat data/facebook_latest_image.json || true
 
       - name: Show blueprint
+        if: always()
         run: |
           echo "blueprint.json:"
           cat data/blueprint.json || true
-    
+
       - name: Run gold OCR using scraped image candidates
         run: python scripts/run_gold_from_facebook_json.py
 
