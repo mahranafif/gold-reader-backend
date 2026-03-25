@@ -1,8 +1,8 @@
 {
   "ok": true,
-  "source": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-2.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHp_y0i&_nc_gid=2pWba0RN-E-DV83p03gzBA&ccb=1-7&_nc_sid=7b2446&oh=00_AfzKVgjF5RKQ_ISR-o_j9dXDsdROQy45Kw8cjFiZEFK9rg&oe=69C95CEE",
+  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFM8r26&_nc_gid=BnSDSru0AJbtGf1RpbTXbQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfxJGpN0rbE2KNkO7IUtgJcJTSWUwd0FY4RIF73AwMLMFg&oe=69C971D0",
   "date": "0000/00/00",
-  "time": "13:21",
+  "time": "02:30",
   "k21_ss": 16700,
   "k21_sb": 16350,
   "k21_us": 141.0,
@@ -11,23 +11,23 @@
   "k18_sb": 13950,
   "k18_us": 121.0,
   "k18_ub": 118.0,
-  "raw_ocr_preview": "day=مويلا | date=خيرات | time=1 | k21_syp_sell=1 6700 | k21_syp_buy=16350 | k21_usd_sell=141 | k21_usd_buy=1 38 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=1 21 | k18_usd_buy=1 18",
+  "raw_ocr_preview": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118",
   "source_w": 1024,
   "source_h": 1024,
-  "byte_length": 22566,
-  "updated_at_utc": "2026-03-25T06:39:27.321475+00:00",
+  "byte_length": 23106,
+  "updated_at_utc": "2026-03-25T07:48:54.544907+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields",
-  "confidence": 0.7152261916830185,
+  "confidence": 0.8033663734146889,
   "has_blueprint": true,
   "ocr_word_count": 11,
   "warnings": [
-    "missing_required_fields:date,time",
+    "missing_required_fields:date",
     "header_date_failed"
   ],
   "debug": {
-    "source_url": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-2.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHp_y0i&_nc_gid=2pWba0RN-E-DV83p03gzBA&ccb=1-7&_nc_sid=7b2446&oh=00_AfzKVgjF5RKQ_ISR-o_j9dXDsdROQy45Kw8cjFiZEFK9rg&oe=69C95CEE",
+    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFM8r26&_nc_gid=BnSDSru0AJbtGf1RpbTXbQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfxJGpN0rbE2KNkO7IUtgJcJTSWUwd0FY4RIF73AwMLMFg&oe=69C971D0",
     "image_width": 1024,
     "image_height": 1024,
     "display_timezone": "Asia/Dubai",
@@ -46,13 +46,13 @@
     "fields": {
       "day": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063921583003_day_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074851168978_day_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:adaptive",
-          "raw_text": "مويلا",
-          "value": "مويلا",
-          "confidence": 0.988207221031189,
+          "raw_text": "مويلا هتتالا",
+          "value": "مويلا هتتالا",
+          "confidence": 0.8048549592494965,
           "valid": true,
           "expected": true,
           "warning": null
@@ -61,25 +61,25 @@
           {
             "engine": "paddle",
             "mode": "base:adaptive",
-            "raw_text": "مويلا",
-            "value": "مويلا",
-            "confidence": 0.988207221031189,
+            "raw_text": "مويلا هتتالا",
+            "value": "مويلا هتتالا",
+            "confidence": 0.8048549592494965,
             "valid": true,
             "expected": true,
-            "score": 113.09882072210311,
+            "score": 113.08048549592495,
             "warning": null
           }
         ]
       },
       "date": {
-        "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T063923787396_date_up.png",
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260325T074853479318_date_base.png",
         "selected": {
           "engine": "paddle",
-          "mode": "up:binary",
+          "mode": "base:binary",
           "raw_text": "خيرات",
           "value": "0000/00/00",
-          "confidence": 0.9255827069282532,
+          "confidence": 0.955923855304718,
           "valid": false,
           "expected": true,
           "warning": "date_parse_failed"
@@ -87,35 +87,24 @@
         "candidates": [
           {
             "engine": "paddle",
-            "mode": "up:binary",
-            "raw_text": "خيرات",
-            "value": "0000/00/00",
-            "confidence": 0.9255827069282532,
-            "valid": false,
-            "expected": true,
-            "score": 13.592558270692825,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "paddle",
             "mode": "base:binary",
             "raw_text": "خيرات",
             "value": "0000/00/00",
-            "confidence": 0.9086055755615234,
+            "confidence": 0.955923855304718,
             "valid": false,
             "expected": true,
-            "score": 13.590860557556152,
+            "score": 13.595592385530471,
             "warning": "date_parse_failed"
           },
           {
             "engine": "paddle",
-            "mode": "down:binary",
+            "mode": "up:binary",
             "raw_text": "خيرات",
             "value": "0000/00/00",
-            "confidence": 0.908004105091095,
+            "confidence": 0.9511386752128601,
             "valid": false,
             "expected": true,
-            "score": 13.59080041050911,
+            "score": 13.595113867521286,
             "warning": "date_parse_failed"
           },
           {
@@ -123,171 +112,105 @@
             "mode": "pad_s:binary",
             "raw_text": "خبرات",
             "value": "0000/00/00",
-            "confidence": 0.8942834734916687,
+            "confidence": 0.9307509660720825,
             "valid": false,
             "expected": true,
-            "score": 13.589428347349166,
+            "score": 13.593075096607208,
+            "warning": "date_parse_failed"
+          },
+          {
+            "engine": "paddle",
+            "mode": "down:binary",
+            "raw_text": "خيرات",
+            "value": "0000/00/00",
+            "confidence": 0.9249533414840698,
+            "valid": false,
+            "expected": true,
+            "score": 13.592495334148406,
             "warning": "date_parse_failed"
           },
           {
             "engine": "paddle",
             "mode": "pad_h:binary",
-            "raw_text": "خبراتت",
+            "raw_text": "خيراتل",
             "value": "0000/00/00",
-            "confidence": 0.8474740982055664,
+            "confidence": 0.8649336695671082,
             "valid": false,
             "expected": true,
-            "score": 13.584747409820556,
+            "score": 13.586493366956711,
             "warning": "date_parse_failed"
           },
           {
             "engine": "paddle",
-            "mode": "pad_s:adaptive",
-            "raw_text": "خبراات",
+            "mode": "down:adaptive",
+            "raw_text": "خبرات ?//",
             "value": "0000/00/00",
-            "confidence": 0.8500824570655823,
+            "confidence": 0.8131760954856873,
             "valid": false,
             "expected": true,
-            "score": 13.085008245706558,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "خبراات",
-            "value": "0000/00/00",
-            "confidence": 0.7844109535217285,
-            "valid": false,
-            "expected": true,
-            "score": 13.078441095352172,
+            "score": 13.081317609548568,
             "warning": "date_parse_failed"
           },
           {
             "engine": "paddle",
             "mode": "up:adaptive",
-            "raw_text": "cZoy. خبرات",
+            "raw_text": "خبرات ?i/",
             "value": "0000/00/00",
-            "confidence": 0.7313315272331238,
+            "confidence": 0.8052211701869965,
             "valid": false,
             "expected": true,
-            "score": 13.073133152723312,
+            "score": 13.080522117018699,
+            "warning": "date_parse_failed"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "خيرات ?//",
+            "value": "0000/00/00",
+            "confidence": 0.7892093360424042,
+            "valid": false,
+            "expected": true,
+            "score": 13.078920933604241,
             "warning": "date_parse_failed"
           }
         ]
       },
       "time": {
-        "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T063925878874_time_pad_h.png",
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260325T074853598640_time_base.png",
         "selected": {
-          "engine": "tesseract",
-          "mode": "pad_h:binary",
-          "raw_text": "1",
-          "value": "00:00",
-          "confidence": 85.0,
-          "valid": false,
+          "engine": "paddle",
+          "mode": "base:adaptive",
+          "raw_text": ":ةع TZ 30!",
+          "value": "02:30",
+          "confidence": 0.6661682724952698,
+          "valid": true,
           "expected": true,
-          "warning": "time_parse_failed"
+          "warning": null
         },
         "candidates": [
           {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "1",
-            "value": "00:00",
-            "confidence": 85.0,
-            "valid": false,
-            "expected": true,
-            "score": 21.0,
-            "warning": "time_parse_failed"
-          },
-          {
             "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "ةع",
-            "value": "00:00",
-            "confidence": 0.9929097294807434,
-            "valid": false,
+            "mode": "base:adaptive",
+            "raw_text": ":ةع TZ 30!",
+            "value": "02:30",
+            "confidence": 0.6661682724952698,
+            "valid": true,
             "expected": true,
-            "score": 13.599290972948074,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "up:binary",
-            "raw_text": "ةع",
-            "value": "00:00",
-            "confidence": 0.9838778972625732,
-            "valid": false,
-            "expected": true,
-            "score": 13.598387789726257,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "pad_s:binary",
-            "raw_text": "ةع",
-            "value": "00:00",
-            "confidence": 0.9772285223007202,
-            "valid": false,
-            "expected": true,
-            "score": 13.597722852230072,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "down:binary",
-            "raw_text": ":ةع",
-            "value": "00:00",
-            "confidence": 0.8415617942810059,
-            "valid": false,
-            "expected": true,
-            "score": 13.584156179428101,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "pad_h:binary",
-            "raw_text": ":ةع",
-            "value": "00:00",
-            "confidence": 0.8142258524894714,
-            "valid": false,
-            "expected": true,
-            "score": 13.581422585248948,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "pad_h:adaptive",
-            "raw_text": "ةعا",
-            "value": "00:00",
-            "confidence": 0.9389623999595642,
-            "valid": false,
-            "expected": true,
-            "score": 13.093896239995956,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "pad_s:adaptive",
-            "raw_text": "ةع",
-            "value": "00:00",
-            "confidence": 0.9039969444274902,
-            "valid": false,
-            "expected": true,
-            "score": 13.090399694442748,
-            "warning": "time_parse_failed"
+            "score": 115.06661682724953,
+            "warning": null
           }
         ]
       },
       "k21_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926329162_k21_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074853690542_k21_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
-          "mode": "base:contrast",
+          "mode": "base:binary",
           "raw_text": "1 6700",
           "value": 16700,
-          "confidence": 0.8825275897979736,
+          "confidence": 0.8833385109901428,
           "valid": true,
           "expected": true,
           "warning": null
@@ -295,70 +218,26 @@
         "candidates": [
           {
             "engine": "paddle",
-            "mode": "base:contrast",
+            "mode": "base:binary",
             "raw_text": "1 6700",
             "value": 16700,
-            "confidence": 0.8825275897979736,
+            "confidence": 0.8833385109901428,
             "valid": true,
             "expected": true,
-            "score": 112.83825275897979,
+            "score": 113.58833385109901,
             "warning": null
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "1 55",
-            "value": 155,
-            "confidence": 68.5,
-            "valid": false,
-            "expected": false,
-            "score": 9.35,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "278",
-            "value": 278,
-            "confidence": 50.0,
-            "valid": false,
-            "expected": false,
-            "score": 7.0,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "1 700",
-            "value": 1700,
-            "confidence": 0.8745454549789429,
-            "valid": false,
-            "expected": false,
-            "score": 3.587454545497894,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "1600",
-            "value": 1600,
-            "confidence": 0.7785354256629944,
-            "valid": false,
-            "expected": false,
-            "score": 3.0778535425662996,
-            "warning": "outside_hard_range"
           }
         ]
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926606541_k21_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074853786144_k21_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
-          "mode": "base:adaptive",
-          "raw_text": "16350",
+          "mode": "base:binary",
+          "raw_text": "1 6350",
           "value": 16350,
-          "confidence": 0.82685786485672,
+          "confidence": 0.9208712577819824,
           "valid": true,
           "expected": true,
           "warning": null
@@ -366,48 +245,26 @@
         "candidates": [
           {
             "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "16350",
+            "mode": "base:binary",
+            "raw_text": "1 6350",
             "value": 16350,
-            "confidence": 0.82685786485672,
+            "confidence": 0.9208712577819824,
             "valid": true,
             "expected": true,
-            "score": 113.08268578648567,
+            "score": 113.59208712577819,
             "warning": null
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "1 55",
-            "value": 155,
-            "confidence": 80.0,
-            "valid": false,
-            "expected": false,
-            "score": 10.5,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "1 350",
-            "value": 1350,
-            "confidence": 0.9405474662780762,
-            "valid": false,
-            "expected": false,
-            "score": 3.5940547466278074,
-            "warning": "outside_hard_range"
           }
         ]
       },
       "k21_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926692535_k21_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074853875151_k21_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "141",
           "value": 141.0,
-          "confidence": 0.9089374542236328,
+          "confidence": 0.7967247366905212,
           "valid": true,
           "expected": true,
           "warning": null
@@ -418,23 +275,23 @@
             "mode": "base:binary",
             "raw_text": "141",
             "value": 141.0,
-            "confidence": 0.9089374542236328,
+            "confidence": 0.7967247366905212,
             "valid": true,
             "expected": true,
-            "score": 113.59089374542236,
+            "score": 113.57967247366905,
             "warning": null
           }
         ]
       },
       "k21_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926758703_k21_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074853942575_k21_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
-          "raw_text": "1 38",
+          "raw_text": "138",
           "value": 138.0,
-          "confidence": 0.8063061833381653,
+          "confidence": 0.9069077372550964,
           "valid": true,
           "expected": true,
           "warning": null
@@ -443,25 +300,25 @@
           {
             "engine": "paddle",
             "mode": "base:binary",
-            "raw_text": "1 38",
+            "raw_text": "138",
             "value": 138.0,
-            "confidence": 0.8063061833381653,
+            "confidence": 0.9069077372550964,
             "valid": true,
             "expected": true,
-            "score": 113.58063061833381,
+            "score": 113.59069077372551,
             "warning": null
           }
         ]
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926847518_k18_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074854032851_k18_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "1 4300",
           "value": 14300,
-          "confidence": 0.9499147534370422,
+          "confidence": 0.9390172362327576,
           "valid": true,
           "expected": true,
           "warning": null
@@ -472,23 +329,23 @@
             "mode": "base:binary",
             "raw_text": "1 4300",
             "value": 14300,
-            "confidence": 0.9499147534370422,
+            "confidence": 0.9390172362327576,
             "valid": true,
             "expected": true,
-            "score": 113.5949914753437,
+            "score": 113.59390172362328,
             "warning": null
           }
         ]
       },
       "k18_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063926938910_k18_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074854127215_k18_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "13950",
           "value": 13950,
-          "confidence": 0.9818331599235535,
+          "confidence": 0.9098199605941772,
           "valid": true,
           "expected": true,
           "warning": null
@@ -499,23 +356,23 @@
             "mode": "base:binary",
             "raw_text": "13950",
             "value": 13950,
-            "confidence": 0.9818331599235535,
+            "confidence": 0.9098199605941772,
             "valid": true,
             "expected": true,
-            "score": 113.59818331599236,
+            "score": 113.59098199605941,
             "warning": null
           }
         ]
       },
       "k18_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063927024773_k18_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074854213166_k18_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
-          "raw_text": "1 21",
+          "raw_text": "121",
           "value": 121.0,
-          "confidence": 0.8339545130729675,
+          "confidence": 0.9188335537910461,
           "valid": true,
           "expected": true,
           "warning": null
@@ -524,25 +381,25 @@
           {
             "engine": "paddle",
             "mode": "base:binary",
-            "raw_text": "1 21",
+            "raw_text": "121",
             "value": 121.0,
-            "confidence": 0.8339545130729675,
+            "confidence": 0.9188335537910461,
             "valid": true,
             "expected": true,
-            "score": 113.5833954513073,
+            "score": 113.59188335537911,
             "warning": null
           }
         ]
       },
       "k18_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T063927088486_k18_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T074854277723_k18_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
-          "raw_text": "1 18",
+          "raw_text": "118",
           "value": 118.0,
-          "confidence": 0.8036308288574219,
+          "confidence": 0.8524275422096252,
           "valid": true,
           "expected": true,
           "warning": null
@@ -551,12 +408,12 @@
           {
             "engine": "paddle",
             "mode": "base:binary",
-            "raw_text": "1 18",
+            "raw_text": "118",
             "value": 118.0,
-            "confidence": 0.8036308288574219,
+            "confidence": 0.8524275422096252,
             "valid": true,
             "expected": true,
-            "score": 113.58036308288574,
+            "score": 113.58524275422096,
             "warning": null
           }
         ]
@@ -579,7 +436,7 @@
     "ocr_word_count": 11,
     "has_blueprint": true,
     "extraction_method": "template_fields",
-    "debug_overlay_path": "data/debug/20260325T063927_template_fields_651789084_122177269742861173_8640508007092135418_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260325T074854_template_fields_651690656_122177052974861173_886124130613687903_n.jpg.png"
   },
   "should_notify": false,
   "change_summary": {
@@ -587,7 +444,7 @@
     "count": 0,
     "fields": {}
   },
-  "change_key": "0000/00/00|13:21|16700|16350|141.0|138.0|14300|13950|121.0|118.0",
+  "change_key": "0000/00/00|02:30|16700|16350|141.0|138.0|14300|13950|121.0|118.0",
   "previous_values": {
     "k21_ss": 16700,
     "k21_sb": 16350,
@@ -598,5 +455,5 @@
     "k18_us": 121.0,
     "k18_ub": 118.0
   },
-  "raw_ocr": "day=مويلا | date=خيرات | time=1 | k21_syp_sell=1 6700 | k21_syp_buy=16350 | k21_usd_sell=141 | k21_usd_buy=1 38 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=1 21 | k18_usd_buy=1 18"
+  "raw_ocr": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118"
 }
