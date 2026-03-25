@@ -24,7 +24,8 @@ REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "10"))
 SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1200"))
 MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "8"))
-MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "8"))
+MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "12"))
+MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "3"))
 
 
 @dataclass
@@ -67,19 +68,19 @@ def is_bad_url(url: str) -> bool:
 def thumbnail_penalty(url: str) -> float:
     lower = url.lower()
 
-    # Penalize obvious thumbnail variants very heavily.
+    # Penalize obvious preview/thumbnail variants, but keep them as fallback candidates.
     m = re.search(r"_p(\d+)x(\d+)", lower)
     if m:
         w = int(m.group(1))
         h = int(m.group(2))
         area = w * h
         if area <= 300000:
-            return 700000.0
+            return 300000.0
         if area <= 500000:
-            return 400000.0
-        return 200000.0
+            return 180000.0
+        return 100000.0
 
-    # Reward larger square-ish source variants.
+    # Reward larger source variants such as s960x960.
     m2 = re.search(r"_s(\d+)x(\d+)", lower)
     if m2:
         w = int(m2.group(1))
@@ -96,16 +97,16 @@ def thumbnail_penalty(url: str) -> float:
 def compute_candidate_score(c: ImageCandidate) -> float:
     score = float(c.area)
 
-    # Strongly prefer images that are actually inside a post.
+    # Prefer images inside real posts.
     if c.in_post:
         score += 900000.0
     else:
         score -= 400000.0
 
-    # Strongly prefer the earliest post in feed order.
+    # Strongly prefer earlier posts, but still allow fallbacks from the next posts.
     score -= float(c.post_index) * 1000000.0
 
-    # Prefer images near the top of their post.
+    # Prefer images near the top of their own post container.
     relative_top = max(c.top - c.post_top, 0.0)
     score -= min(relative_top, 1500.0) * 120.0
 
@@ -371,15 +372,12 @@ async def extract_candidates(page: Page) -> list[ImageCandidate]:
                 if local_added >= MAX_CANDIDATES_PER_POST:
                     break
 
-    candidates.sort(key=lambda c: (c.post_index, -c.score, c.top))
-
-    # Final pass: pick from earliest real post first.
     grouped: dict[int, list[ImageCandidate]] = {}
     for candidate in candidates:
         grouped.setdefault(candidate.post_index, []).append(candidate)
 
     ordered_final: list[ImageCandidate] = []
-    for post_index in sorted(grouped):
+    for post_index in sorted(grouped)[:MAX_POST_GROUPS]:
         group = grouped[post_index]
         group.sort(key=lambda c: c.score, reverse=True)
         ordered_final.extend(group)
