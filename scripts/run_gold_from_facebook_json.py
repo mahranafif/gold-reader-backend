@@ -3,13 +3,35 @@ import os
 import re
 import subprocess
 import sys
+from io import BytesIO
 from pathlib import Path
+
+import pytesseract
+import requests
+from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 FACEBOOK_JSON = ROOT / "data" / "facebook_latest_image.json"
 FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "20"))
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+}
+
+GOLD_POSTER_REQUIRED_KEYWORDS = [
+    "العيار",
+    "سعر",
+    "غرام",
+    "جمعية",
+]
 
 
 def unique_preserve_order(items: list[str]) -> list[str]:
@@ -63,16 +85,15 @@ def parse_url_quality(url: str) -> tuple[int, str]:
     if "_p" not in lower:
         score -= 120
 
-    # Slight reward for jpg/webp direct asset urls
-    if ".jpg" in lower or ".jpeg" in lower or ".webp" in lower:
+    # Slight reward for direct asset urls
+    if ".jpg" in lower or ".jpeg" in lower or ".webp" in lower or ".png" in lower:
         score -= 20
 
     return score, url
 
 
 def sort_candidate_urls(urls: list[str]) -> list[str]:
-    ranked = sorted(urls, key=parse_url_quality)
-    return ranked
+    return sorted(urls, key=parse_url_quality)
 
 
 def build_candidate_urls(payload: dict) -> list[str]:
@@ -90,6 +111,46 @@ def build_candidate_urls(payload: dict) -> list[str]:
     urls = unique_preserve_order(urls)
     urls = sort_candidate_urls(urls)
     return urls[:MAX_CANDIDATES_TO_TRY]
+
+
+def download_image_bytes(image_url: str) -> bytes:
+    response = requests.get(image_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return response.content
+
+
+def quick_ocr_text(img: Image.Image) -> str:
+    gray = ImageOps.grayscale(img)
+    gray = ImageOps.autocontrast(gray)
+    gray = gray.resize((gray.width * 2, gray.height * 2))
+    text = pytesseract.image_to_string(
+        gray,
+        lang="ara+eng",
+        config="--oem 3 --psm 6",
+    )
+    return text.lower()
+
+
+def classify_gold_poster(img: Image.Image) -> tuple[bool, dict]:
+    """
+    Fast classifier before running the heavy OCR pipeline.
+    """
+    text = quick_ocr_text(img)
+    score = 0
+    matched_keywords: list[str] = []
+
+    for keyword in GOLD_POSTER_REQUIRED_KEYWORDS:
+        if keyword in text:
+            score += 1
+            matched_keywords.append(keyword)
+
+    is_gold = score >= 2
+
+    return is_gold, {
+        "classifier_score": score,
+        "matched_keywords": matched_keywords,
+        "ocr_preview": text[:500],
+    }
 
 
 def run_fetch_gold_for_url(image_url: str) -> tuple[bool, str]:
@@ -137,6 +198,41 @@ def main():
         print(image_url)
         print(f"Quality score: {quality_score}")
 
+        try:
+            image_bytes = download_image_bytes(image_url)
+            img = Image.open(BytesIO(image_bytes)).convert("RGB")
+            is_gold, classifier_debug = classify_gold_poster(img)
+
+            print(
+                "Classifier:",
+                json.dumps(classifier_debug, ensure_ascii=False)
+            )
+
+            if not is_gold:
+                print("Skipped candidate: classifier says this is not a gold price poster")
+                failures.append(
+                    {
+                        "index": index,
+                        "url": image_url,
+                        "quality_score": quality_score,
+                        "skipped_by_classifier": True,
+                        "classifier": classifier_debug,
+                    }
+                )
+                continue
+        except Exception as exc:
+            failures.append(
+                {
+                    "index": index,
+                    "url": image_url,
+                    "quality_score": quality_score,
+                    "download_or_classification_error": str(exc),
+                }
+            )
+            print("\nCandidate failed during download/classification:")
+            print(str(exc))
+            continue
+
         ok, output = run_fetch_gold_for_url(image_url)
 
         if ok:
@@ -149,6 +245,7 @@ def main():
                 "index": index,
                 "url": image_url,
                 "quality_score": quality_score,
+                "skipped_by_classifier": False,
                 "output_tail": output[-4000:] if output else "",
             }
         )
