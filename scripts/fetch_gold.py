@@ -655,6 +655,50 @@ def crop_field_from_box(img: Image.Image, box: dict) -> Image.Image:
     )
 
 
+def crop_field_variants_from_box(img: Image.Image, box: dict, field_type: str) -> list[tuple[str, Image.Image]]:
+    x1 = float(box["x1"])
+    y1 = float(box["y1"])
+    x2 = float(box["x2"])
+    y2 = float(box["y2"])
+
+    width = max(x2 - x1, 0.001)
+    height = max(y2 - y1, 0.001)
+
+    if field_type in {"date", "time", "arabic_text"}:
+        variants_cfg = [
+            ("base", 0.00, 0.00, 0.00, 0.00),
+            ("pad_s", -0.01, -0.01, 0.01, 0.01),
+            ("pad_h", -0.02, -0.015, 0.02, 0.015),
+            ("down", 0.00, 0.01, 0.00, 0.02),
+            ("up", 0.00, -0.015, 0.00, 0.005),
+        ]
+    else:
+        variants_cfg = [
+            ("base", 0.00, 0.00, 0.00, 0.00),
+            ("pad_s", -0.01, -0.01, 0.01, 0.01),
+            ("pad_m", -0.02, -0.015, 0.02, 0.015),
+            ("pad_w", -0.03, -0.015, 0.03, 0.015),
+            ("down", -0.01, 0.01, 0.01, 0.025),
+            ("up", -0.01, -0.02, 0.01, 0.005),
+        ]
+
+    variants: list[tuple[str, Image.Image]] = []
+    seen: set[tuple[int, int, int, int]] = set()
+    for name, dl, dt, dr, db in variants_cfg:
+        nx1 = max(0.0, x1 + dl * width)
+        ny1 = max(0.0, y1 + dt * height)
+        nx2 = min(1.0, x2 + dr * width)
+        ny2 = min(1.0, y2 + db * height)
+        if nx2 <= nx1 or ny2 <= ny1:
+            continue
+        key = (round(nx1 * 10000), round(ny1 * 10000), round(nx2 * 10000), round(ny2 * 10000))
+        if key in seen:
+            continue
+        seen.add(key)
+        variants.append((name, crop_box(img, nx1, ny1, nx2, ny2)))
+    return variants
+
+
 # =========================================================
 # OpenCV alignment + preprocessing
 # =========================================================
@@ -1265,6 +1309,61 @@ def extract_field_value(
     return candidates[0], candidates
 
 
+def extract_field_value_with_crop_variants(
+    field_id: str,
+    field_cfg: dict,
+    aligned_img: Image.Image,
+    validation: dict,
+) -> tuple[FieldOcrCandidate, list[FieldOcrCandidate], Image.Image, str]:
+    field_type = str(field_cfg.get("type", ""))
+    crop_variants = crop_field_variants_from_box(aligned_img, field_cfg["box"], field_type)
+
+    all_candidates: list[FieldOcrCandidate] = []
+    best_candidate: Optional[FieldOcrCandidate] = None
+    best_img: Optional[Image.Image] = None
+    best_crop_name = "base"
+
+    for crop_name, crop_img in crop_variants:
+        best_for_crop, candidates = extract_field_value(field_id, field_cfg, crop_img, validation)
+        for candidate in candidates:
+            candidate.mode = f"{crop_name}:{candidate.mode}"
+        all_candidates.extend(candidates)
+
+        crop_best = max(candidates, key=lambda c: c.score)
+        if best_candidate is None or crop_best.score > best_candidate.score:
+            best_candidate = crop_best
+            best_img = crop_img
+            best_crop_name = crop_name
+
+        if crop_best.valid and crop_best.expected:
+            best_candidate = crop_best
+            best_img = crop_img
+            best_crop_name = crop_name
+            break
+
+    if best_candidate is None or best_img is None:
+        raise ValueError(f"No OCR candidates produced for field '{field_id}'")
+
+    all_candidates.sort(key=lambda c: c.score, reverse=True)
+    return best_candidate, all_candidates, best_img, best_crop_name
+
+
+def export_debug_field_crop(field_id: str, crop_name: str, field_img: Image.Image) -> Optional[str]:
+    if not DEBUG_EXPORT:
+        return None
+    try:
+        field_dir = DEBUG_DIR / "fields"
+        field_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        output_path = field_dir / f"{timestamp}_{safe_slug(field_id)}_{safe_slug(crop_name)}.png"
+        field_img.save(output_path)
+        cleanup_old_debug_files(field_dir, DEBUG_MAX_FILES * 4)
+        return str(output_path.relative_to(ROOT))
+    except Exception as exc:
+        logger.warning("Failed to export debug field crop for %s: %s", field_id, exc)
+        return None
+
+
 def collect_field_results(aligned_img: Image.Image, blueprint: dict) -> tuple[dict[str, FieldOcrCandidate], dict]:
     fields = field_map_from_blueprint(blueprint)
     validation = validation_cfg(blueprint)
@@ -1273,10 +1372,12 @@ def collect_field_results(aligned_img: Image.Image, blueprint: dict) -> tuple[di
     debug_fields: dict[str, Any] = {}
 
     for field_id, field_cfg in fields.items():
-        field_img = crop_field_from_box(aligned_img, field_cfg["box"])
-        best, candidates = extract_field_value(field_id, field_cfg, field_img, validation)
+        best, candidates, field_img, crop_name = extract_field_value_with_crop_variants(field_id, field_cfg, aligned_img, validation)
         selected[field_id] = best
+        crop_debug_path = export_debug_field_crop(field_id, crop_name, field_img)
         debug_fields[field_id] = {
+            "crop_variant": crop_name,
+            "crop_debug_path": crop_debug_path,
             "selected": {
                 "engine": best.engine,
                 "mode": best.mode,
@@ -1481,24 +1582,6 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         field_id for field_id, field_cfg in field_map_from_blueprint(blueprint).items()
         if bool(field_cfg.get("required", False)) and (field_id not in field_results or not field_results[field_id].valid)
     ]
-    if missing_required:
-        raise ValueError(f"Missing required valid fields: {missing_required}")
-
-    date = str(field_results["date"].value)
-    time = str(field_results["time"].value)
-
-    k21, k18 = build_gold_rates_from_fields(field_results)
-    relationship_ok, relationship_warnings = validate_price_relationships(k21, k18, validation)
-
-    warnings = list(relationship_warnings)
-    if field_results["day"].warning:
-        warnings.append(f"day_warning:{field_results['day'].warning}")
-    if date == "0000/00/00":
-        warnings.append("header_date_failed")
-    if time == "00:00":
-        warnings.append("header_time_failed")
-
-    confidence = compute_confidence(field_results, relationship_ok, relationship_warnings, date, time)
 
     raw_ocr_parts = []
     for field_id in [
@@ -1508,7 +1591,40 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     ]:
         if field_id in field_results:
             raw_ocr_parts.append(f"{field_id}={field_results[field_id].raw_text}")
-    raw_ocr = " | ".join(raw_ocr_parts)
+    merged_raw_text = " | ".join(raw_ocr_parts)
+
+    date = str(field_results.get("date").value) if field_results.get("date") and field_results["date"].valid else extract_date_from_raw(merged_raw_text)
+    time = str(field_results.get("time").value) if field_results.get("time") and field_results["time"].valid else extract_time_from_raw(merged_raw_text)
+
+    price_field_ids = [
+        "k21_syp_sell", "k21_syp_buy", "k21_usd_sell", "k21_usd_buy",
+        "k18_syp_sell", "k18_syp_buy", "k18_usd_sell", "k18_usd_buy",
+    ]
+    missing_price_fields = [
+        field_id for field_id in price_field_ids
+        if field_id not in field_results or field_results[field_id].value is None
+    ]
+    if missing_price_fields:
+        raise ValueError(f"Missing required valid fields: {missing_required or missing_price_fields}")
+
+    k21, k18 = build_gold_rates_from_fields(field_results)
+    relationship_ok, relationship_warnings = validate_price_relationships(k21, k18, validation)
+
+    warnings = list(relationship_warnings)
+    if "day" in field_results and field_results["day"].warning:
+        warnings.append(f"day_warning:{field_results['day'].warning}")
+    if missing_required:
+        warnings.append(f"missing_required_fields:{','.join(missing_required)}")
+    if date == "0000/00/00":
+        warnings.append("header_date_failed")
+    if time == "00:00":
+        warnings.append("header_time_failed")
+
+    confidence = compute_confidence(field_results, relationship_ok, relationship_warnings, date, time)
+    if missing_required:
+        confidence = max(0.0, confidence - min(len(missing_required) * 0.04, 0.25))
+
+    raw_ocr = merged_raw_text
 
     debug = {
         "source_url": source_url,
