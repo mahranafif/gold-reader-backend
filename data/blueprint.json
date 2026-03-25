@@ -4,28 +4,35 @@
   "is_active": true,
   "updated_at": "2026-03-25T12:00:00Z",
   "updated_by": "user",
+
   "reference_size": {
     "width": 1024,
     "height": 1024
   },
+
   "alignment": {
     "enabled": true,
-    "mode": "homography",
+    "mode": "resize_only",
+    "reference_image": null,
     "min_match_count": 12,
     "good_match_percent": 0.25
   },
+
   "validation": {
     "usd_hard_min": 50,
     "usd_hard_max": 400,
     "usd_expected_min": 90,
     "usd_expected_max": 180,
+
     "syp_hard_min": 5000,
     "syp_hard_max": 50000,
     "syp_expected_min": 12000,
     "syp_expected_max": 20000,
+
     "min_18k_to_21k_ratio": 0.80,
     "max_18k_to_21k_ratio": 0.90
   },
+
   "fields": [
     {
       "id": "day",
@@ -60,6 +67,7 @@
       "psm": 7,
       "char_whitelist": "0123456789:.;,مصAPMapm "
     },
+
     {
       "id": "k21_syp_sell",
       "label": "21K SYP Sell",
@@ -104,6 +112,7 @@
       "psm": 7,
       "char_whitelist": "0123456789.,"
     },
+
     {
       "id": "k18_syp_sell",
       "label": "18K SYP Sell",
