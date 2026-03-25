@@ -1908,5 +1908,464 @@
       "k18_ub": 112.0
     },
     "raw_ocr": "day=مويلا | date=خيرات | time=1 | k21_syp_sell=1 6700 | k21_syp_buy=16350 | k21_usd_sell=141 | k21_usd_buy=1 38 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=1 21 | k18_usd_buy=1 18"
+  },
+  {
+    "ok": true,
+    "source": "https://scontent-ord5-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ord5-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFkQJxh&_nc_gid=ZZpBI47mwYxfEe_bvhu2VA&ccb=1-7&_nc_sid=7b2446&oh=00_AfwTe7dqkp5N92XQOn_Tbc5SrlFZx2pQY7b_vAy-GDH0pg&oe=69C93990",
+    "date": "0000/00/00",
+    "time": "02:30",
+    "k21_ss": 16700,
+    "k21_sb": 16350,
+    "k21_us": 141.0,
+    "k21_ub": 138.0,
+    "k18_ss": 14300,
+    "k18_sb": 13950,
+    "k18_us": 121.0,
+    "k18_ub": 118.0,
+    "raw_ocr_preview": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118",
+    "source_w": 1024,
+    "source_h": 1024,
+    "byte_length": 23106,
+    "updated_at_utc": "2026-03-25T03:58:45.221968+00:00",
+    "display_timezone": "Asia/Dubai",
+    "ocr_engine": "paddle+tesseract",
+    "extraction_method": "template_fields",
+    "confidence": 0.8033663734146889,
+    "has_blueprint": true,
+    "ocr_word_count": 11,
+    "warnings": [
+      "missing_required_fields:date",
+      "header_date_failed"
+    ],
+    "debug": {
+      "source_url": "https://scontent-ord5-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ord5-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFkQJxh&_nc_gid=ZZpBI47mwYxfEe_bvhu2VA&ccb=1-7&_nc_sid=7b2446&oh=00_AfwTe7dqkp5N92XQOn_Tbc5SrlFZx2pQY7b_vAy-GDH0pg&oe=69C93990",
+      "image_width": 1024,
+      "image_height": 1024,
+      "display_timezone": "Asia/Dubai",
+      "opencv_available": true,
+      "paddle_enabled": true,
+      "paddle_failure_reason": null,
+      "alignment": {
+        "opencv_available": true,
+        "alignment_enabled": true,
+        "alignment_mode": "resize_only",
+        "reference_size": {
+          "width": 1024,
+          "height": 1024
+        }
+      },
+      "fields": {
+        "day": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035841794071_day_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "مويلا هتتالا",
+            "value": "مويلا هتتالا",
+            "confidence": 0.8048549592494965,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:adaptive",
+              "raw_text": "مويلا هتتالا",
+              "value": "مويلا هتتالا",
+              "confidence": 0.8048549592494965,
+              "valid": true,
+              "expected": true,
+              "score": 113.08048549592495,
+              "warning": null
+            }
+          ]
+        },
+        "date": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844185116_date_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "خيرات",
+            "value": "0000/00/00",
+            "confidence": 0.955923855304718,
+            "valid": false,
+            "expected": true,
+            "warning": "date_parse_failed"
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "خيرات",
+              "value": "0000/00/00",
+              "confidence": 0.955923855304718,
+              "valid": false,
+              "expected": true,
+              "score": 13.595592385530471,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "up:binary",
+              "raw_text": "خيرات",
+              "value": "0000/00/00",
+              "confidence": 0.9511386752128601,
+              "valid": false,
+              "expected": true,
+              "score": 13.595113867521286,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "pad_s:binary",
+              "raw_text": "خبرات",
+              "value": "0000/00/00",
+              "confidence": 0.9307509660720825,
+              "valid": false,
+              "expected": true,
+              "score": 13.593075096607208,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "down:binary",
+              "raw_text": "خيرات",
+              "value": "0000/00/00",
+              "confidence": 0.9249533414840698,
+              "valid": false,
+              "expected": true,
+              "score": 13.592495334148406,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "pad_h:binary",
+              "raw_text": "خيراتل",
+              "value": "0000/00/00",
+              "confidence": 0.8649336695671082,
+              "valid": false,
+              "expected": true,
+              "score": 13.586493366956711,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "down:adaptive",
+              "raw_text": "خبرات ?//",
+              "value": "0000/00/00",
+              "confidence": 0.8131760954856873,
+              "valid": false,
+              "expected": true,
+              "score": 13.081317609548568,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "up:adaptive",
+              "raw_text": "خبرات ?i/",
+              "value": "0000/00/00",
+              "confidence": 0.8052211701869965,
+              "valid": false,
+              "expected": true,
+              "score": 13.080522117018699,
+              "warning": "date_parse_failed"
+            },
+            {
+              "engine": "paddle",
+              "mode": "base:adaptive",
+              "raw_text": "خيرات ?//",
+              "value": "0000/00/00",
+              "confidence": 0.7892093360424042,
+              "valid": false,
+              "expected": true,
+              "score": 13.078920933604241,
+              "warning": "date_parse_failed"
+            }
+          ]
+        },
+        "time": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844306798_time_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": ":ةع TZ 30!",
+            "value": "02:30",
+            "confidence": 0.6661682724952698,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:adaptive",
+              "raw_text": ":ةع TZ 30!",
+              "value": "02:30",
+              "confidence": 0.6661682724952698,
+              "valid": true,
+              "expected": true,
+              "score": 115.06661682724953,
+              "warning": null
+            }
+          ]
+        },
+        "k21_syp_sell": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844399492_k21_syp_sell_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "1 6700",
+            "value": 16700,
+            "confidence": 0.8833385109901428,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "1 6700",
+              "value": 16700,
+              "confidence": 0.8833385109901428,
+              "valid": true,
+              "expected": true,
+              "score": 113.58833385109901,
+              "warning": null
+            }
+          ]
+        },
+        "k21_syp_buy": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844494900_k21_syp_buy_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "1 6350",
+            "value": 16350,
+            "confidence": 0.9208712577819824,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "1 6350",
+              "value": 16350,
+              "confidence": 0.9208712577819824,
+              "valid": true,
+              "expected": true,
+              "score": 113.59208712577819,
+              "warning": null
+            }
+          ]
+        },
+        "k21_usd_sell": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844584465_k21_usd_sell_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "141",
+            "value": 141.0,
+            "confidence": 0.7967247366905212,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "141",
+              "value": 141.0,
+              "confidence": 0.7967247366905212,
+              "valid": true,
+              "expected": true,
+              "score": 113.57967247366905,
+              "warning": null
+            }
+          ]
+        },
+        "k21_usd_buy": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844652043_k21_usd_buy_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "138",
+            "value": 138.0,
+            "confidence": 0.9069077372550964,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "138",
+              "value": 138.0,
+              "confidence": 0.9069077372550964,
+              "valid": true,
+              "expected": true,
+              "score": 113.59069077372551,
+              "warning": null
+            }
+          ]
+        },
+        "k18_syp_sell": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844741458_k18_syp_sell_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "1 4300",
+            "value": 14300,
+            "confidence": 0.9390172362327576,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "1 4300",
+              "value": 14300,
+              "confidence": 0.9390172362327576,
+              "valid": true,
+              "expected": true,
+              "score": 113.59390172362328,
+              "warning": null
+            }
+          ]
+        },
+        "k18_syp_buy": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844835890_k18_syp_buy_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "13950",
+            "value": 13950,
+            "confidence": 0.9098199605941772,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "13950",
+              "value": 13950,
+              "confidence": 0.9098199605941772,
+              "valid": true,
+              "expected": true,
+              "score": 113.59098199605941,
+              "warning": null
+            }
+          ]
+        },
+        "k18_usd_sell": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844921495_k18_usd_sell_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "121",
+            "value": 121.0,
+            "confidence": 0.9188335537910461,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "121",
+              "value": 121.0,
+              "confidence": 0.9188335537910461,
+              "valid": true,
+              "expected": true,
+              "score": 113.59188335537911,
+              "warning": null
+            }
+          ]
+        },
+        "k18_usd_buy": {
+          "crop_variant": "base",
+          "crop_debug_path": "data/debug/fields/20260325T035844986320_k18_usd_buy_base.png",
+          "selected": {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "118",
+            "value": 118.0,
+            "confidence": 0.8524275422096252,
+            "valid": true,
+            "expected": true,
+            "warning": null
+          },
+          "candidates": [
+            {
+              "engine": "paddle",
+              "mode": "base:binary",
+              "raw_text": "118",
+              "value": 118.0,
+              "confidence": 0.8524275422096252,
+              "valid": true,
+              "expected": true,
+              "score": 113.58524275422096,
+              "warning": null
+            }
+          ]
+        }
+      },
+      "relationship_ok": true,
+      "relationship_warnings": [],
+      "validation": {
+        "usd_hard_min": 50.0,
+        "usd_hard_max": 400.0,
+        "usd_expected_min": 90.0,
+        "usd_expected_max": 180.0,
+        "syp_hard_min": 5000.0,
+        "syp_hard_max": 50000.0,
+        "syp_expected_min": 12000.0,
+        "syp_expected_max": 20000.0,
+        "min_18k_to_21k_ratio": 0.8,
+        "max_18k_to_21k_ratio": 0.9
+      },
+      "ocr_word_count": 11,
+      "has_blueprint": true,
+      "extraction_method": "template_fields",
+      "debug_overlay_path": "data/debug/20260325T035844_template_fields_651690656_122177052974861173_886124130613687903_n.jpg.png"
+    },
+    "should_notify": false,
+    "change_summary": {
+      "changed": false,
+      "count": 0,
+      "fields": {}
+    },
+    "change_key": "0000/00/00|02:30|16700|16350|141.0|138.0|14300|13950|121.0|118.0",
+    "previous_values": {
+      "k21_ss": 16700,
+      "k21_sb": 16350,
+      "k21_us": 141.0,
+      "k21_ub": 138.0,
+      "k18_ss": 14300,
+      "k18_sb": 13950,
+      "k18_us": 121.0,
+      "k18_ub": 118.0
+    },
+    "raw_ocr": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118"
   }
 ]
