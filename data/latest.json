@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFM8r26&_nc_gid=BnSDSru0AJbtGf1RpbTXbQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfxJGpN0rbE2KNkO7IUtgJcJTSWUwd0FY4RIF73AwMLMFg&oe=69C971D0",
+  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFVXDy-&_nc_gid=2cWclJIDXEM6iQHxb5c9og&ccb=1-7&_nc_sid=7b2446&oh=00_AfxkyUI48sXFiIR3RnU2brdnAkqYT30nyFCJ6UERxYpLsg&oe=69C971D0",
   "date": "0000/00/00",
   "time": "02:30",
   "k21_ss": 16700,
@@ -15,7 +15,7 @@
   "source_w": 1024,
   "source_h": 1024,
   "byte_length": 23106,
-  "updated_at_utc": "2026-03-25T07:48:54.544907+00:00",
+  "updated_at_utc": "2026-03-25T08:41:04.712835+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields",
@@ -27,7 +27,7 @@
     "header_date_failed"
   ],
   "debug": {
-    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFM8r26&_nc_gid=BnSDSru0AJbtGf1RpbTXbQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfxJGpN0rbE2KNkO7IUtgJcJTSWUwd0FY4RIF73AwMLMFg&oe=69C971D0",
+    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=QH-A9vHUlvgQ7kNvwFVXDy-&_nc_gid=2cWclJIDXEM6iQHxb5c9og&ccb=1-7&_nc_sid=7b2446&oh=00_AfxkyUI48sXFiIR3RnU2brdnAkqYT30nyFCJ6UERxYpLsg&oe=69C971D0",
     "image_width": 1024,
     "image_height": 1024,
     "display_timezone": "Asia/Dubai",
@@ -46,7 +46,7 @@
     "fields": {
       "day": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074851168978_day_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084101346231_day_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:adaptive",
@@ -73,7 +73,7 @@
       },
       "date": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853479318_date_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084103686648_date_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -177,7 +177,7 @@
       },
       "time": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853598640_time_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084103803333_time_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:adaptive",
@@ -204,7 +204,7 @@
       },
       "k21_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853690542_k21_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084103894479_k21_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -231,7 +231,7 @@
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853786144_k21_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084103988777_k21_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -258,7 +258,7 @@
       },
       "k21_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853875151_k21_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104076960_k21_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -285,7 +285,7 @@
       },
       "k21_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074853942575_k21_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104145365_k21_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -312,7 +312,7 @@
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074854032851_k18_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104235008_k18_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -339,7 +339,7 @@
       },
       "k18_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074854127215_k18_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104325993_k18_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -366,7 +366,7 @@
       },
       "k18_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074854213166_k18_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104410450_k18_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -393,7 +393,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T074854277723_k18_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T084104475295_k18_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -436,7 +436,7 @@
     "ocr_word_count": 11,
     "has_blueprint": true,
     "extraction_method": "template_fields",
-    "debug_overlay_path": "data/debug/20260325T074854_template_fields_651690656_122177052974861173_886124130613687903_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260325T084104_template_fields_651690656_122177052974861173_886124130613687903_n.jpg.png"
   },
   "should_notify": false,
   "change_summary": {
