@@ -26,13 +26,13 @@ jobs:
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "10"
+      FACEBOOK_MAX_SCROLL_STEPS: "3"
       FACEBOOK_SCROLL_DELAY_MS: "1200"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "20"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "10"
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       DISABLE_PADDLE: "false"
       FACEBOOK_MAX_CANDIDATES_PER_POST: "12"
-      FACEBOOK_MAX_POST_GROUPS: "3"
+      FACEBOOK_MAX_POST_GROUPS: "2"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
