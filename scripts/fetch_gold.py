@@ -1333,20 +1333,20 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     warnings.extend(price_warnings)
 
     if k21 is None or k18 is None:
-    logger.warning("Blueprint extraction failed → using fallback extraction")
+        logger.warning("Blueprint extraction failed → using fallback extraction")
 
-    # 🔥 fallback: extract from full text
-    nums = re.findall(r"\d{3,6}", full_text)
-    nums = [int(n) for n in nums]
+        # 🔥 fallback: extract from full text
+        nums = re.findall(r"\d{3,6}", full_text)
+        nums = [int(n) for n in nums]
 
-    syp = [n for n in nums if 10000 <= n <= 25000]
-    usd = [n for n in nums if 80 <= n <= 200]
+        syp = [n for n in nums if 10000 <= n <= 25000]
+        usd = [n for n in nums if 80 <= n <= 200]
 
-    if len(syp) >= 2 and len(usd) >= 2:
-        k21 = GoldRate(ub=usd[1], us=usd[0], sb=syp[1], ss=syp[0])
-        k18 = GoldRate(ub=usd[-1], us=usd[-2], sb=syp[-1], ss=syp[-2])
-    else:
-        raise ValueError("Fallback extraction failed")
+        if len(syp) >= 2 and len(usd) >= 2:
+            k21 = GoldRate(ub=usd[1], us=usd[0], sb=syp[1], ss=syp[0])
+            k18 = GoldRate(ub=usd[-1], us=usd[-2], sb=syp[-1], ss=syp[-2])
+        else:
+            raise ValueError("Fallback extraction failed")
     relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
     debug["relationship_ok"] = relationship_ok
     debug["relationship_warnings"] = relationship_warnings
