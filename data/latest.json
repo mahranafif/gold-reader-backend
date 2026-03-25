@@ -1,35 +1,42 @@
 {
   "ok": true,
-  "source": "https://scontent-fra3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-fra3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwExHKdn&_nc_gid=Xoiq0YqPg8xmokdR8sBTjg&ccb=1-7&_nc_sid=7b2446&oh=00_Afy0drhDt852wIHUVgppd99PCYUAHOLj55L_UUEWTpUnQQ&oe=69C9E250",
+  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwFQ8fyX&_nc_gid=GmD-dYaGdM-2Ri14Lo9UCQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfywxRhyxnVBoNndegwbFzrb8XePE7CU2cVeia_f0l9XQQ&oe=69C9E250",
   "date": "0000/00/00",
-  "time": "02:30",
-  "k21_ss": 16700,
-  "k21_sb": 16350,
-  "k21_us": 141.0,
-  "k21_ub": 138.0,
-  "k18_ss": 14300,
-  "k18_sb": 13950,
-  "k18_us": 121.0,
-  "k18_ub": 118.0,
-  "raw_ocr_preview": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118",
-  "source_w": 1024,
-  "source_h": 1024,
+  "time": "00:00",
+  "k21_ss": 16380,
+  "k21_sb": 16700,
+  "k21_us": 138.0,
+  "k21_ub": 141.0,
+  "k18_ss": 12118,
+  "k18_sb": 14300,
+  "k18_us": 138.0,
+  "k18_ub": 121.0,
+  "raw_ocr_preview": "day=ا 3222 | date=1 ‏الذهب‎ a ‏وميه‎ | time=55 | k21_syp_sell=16380 | k21_syp_buy=16700 | k21_usd_sell=138.0 | k21_usd_buy=141.0 | k18_syp_sell=12118 | k18_syp_buy=14300 | k18_usd_sell=138.0 | k18_usd_buy=121.0",
+  "source_w": 390,
+  "source_h": 390,
   "byte_length": 23106,
-  "updated_at_utc": "2026-03-25T15:44:07.980767+00:00",
+  "updated_at_utc": "2026-03-25T17:48:06.687618+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
-  "extraction_method": "template_fields",
-  "confidence": 0.8033663734146889,
+  "extraction_method": "template_fields_hybrid",
+  "confidence": 0.28929545454545447,
   "has_blueprint": true,
   "ocr_word_count": 11,
   "warnings": [
-    "missing_required_fields:date",
-    "header_date_failed"
+    "header_date_failed",
+    "header_time_failed",
+    "missing_price_fields:k21_syp_sell,k21_syp_buy,k21_usd_sell,k21_usd_buy,k18_syp_sell,k18_syp_buy,k18_usd_sell,k18_usd_buy",
+    "used_full_text_price_fallback",
+    "k21_syp_sell_not_gt_buy",
+    "k18_syp_sell_not_gt_buy",
+    "k21_usd_sell_not_gt_buy",
+    "21k_not_gt_18k",
+    "missing_required_fields:date,time"
   ],
   "debug": {
-    "source_url": "https://scontent-fra3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-fra3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwExHKdn&_nc_gid=Xoiq0YqPg8xmokdR8sBTjg&ccb=1-7&_nc_sid=7b2446&oh=00_Afy0drhDt852wIHUVgppd99PCYUAHOLj55L_UUEWTpUnQQ&oe=69C9E250",
-    "image_width": 1024,
-    "image_height": 1024,
+    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwFQ8fyX&_nc_gid=GmD-dYaGdM-2Ri14Lo9UCQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfywxRhyxnVBoNndegwbFzrb8XePE7CU2cVeia_f0l9XQQ&oe=69C9E250",
+    "image_width": 390,
+    "image_height": 390,
     "display_timezone": "Asia/Dubai",
     "opencv_available": true,
     "paddle_enabled": true,
@@ -39,395 +46,1228 @@
       "alignment_enabled": true,
       "alignment_mode": "resize_only",
       "reference_size": {
-        "width": 1024,
-        "height": 1024
+        "width": 526,
+        "height": 526
       }
     },
     "fields": {
       "day": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154404573616_day_base.png",
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260325T174732606290_day_base.png",
         "selected": {
-          "engine": "paddle",
-          "mode": "base:adaptive",
-          "raw_text": "مويلا هتتالا",
-          "value": "مويلا هتتالا",
-          "confidence": 0.8048549592494965,
+          "engine": "tesseract",
+          "mode": "down:soft",
+          "raw_text": "ا 3222",
+          "value": "ا 3222",
+          "confidence": 39.0,
           "valid": true,
           "expected": true,
+          "score": 116.9,
           "warning": null
         },
         "candidates": [
           {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "مويلا هتتالا",
-            "value": "مويلا هتتالا",
-            "confidence": 0.8048549592494965,
+            "engine": "tesseract",
+            "mode": "down:soft",
+            "raw_text": "ا 3222",
+            "value": "ا 3222",
+            "confidence": 39.0,
             "valid": true,
             "expected": true,
-            "score": 113.08048549592495,
+            "score": 116.9,
             "warning": null
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:soft",
+            "raw_text": "3",
+            "value": "3",
+            "confidence": 39.0,
+            "valid": true,
+            "expected": true,
+            "score": 116.9,
+            "warning": null
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:soft",
+            "raw_text": "مم",
+            "value": "مم",
+            "confidence": 22.0,
+            "valid": true,
+            "expected": true,
+            "score": 115.2,
+            "warning": null
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:soft",
+            "raw_text": "bee oie",
+            "value": "bee 0ie",
+            "confidence": 16.0,
+            "valid": true,
+            "expected": true,
+            "score": 114.6,
+            "warning": null
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": "",
+            "confidence": 0.0,
+            "valid": false,
+            "expected": true,
+            "score": 0.0,
+            "warning": "empty_text"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": "",
+            "confidence": 0.0,
+            "valid": false,
+            "expected": true,
+            "score": 0.0,
+            "warning": "empty_text"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:soft",
+            "raw_text": "",
+            "value": "",
+            "confidence": 0.0,
+            "valid": false,
+            "expected": true,
+            "score": 0.0,
+            "warning": "empty_text"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:soft",
+            "raw_text": "",
+            "value": "",
+            "confidence": 0.0,
+            "valid": false,
+            "expected": true,
+            "score": 0.0,
+            "warning": "empty_text"
           }
         ]
       },
       "date": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154406938288_date_base.png",
+        "crop_variant": "pad_h",
+        "crop_debug_path": "data/debug/fields/20260325T174734984269_date_base.png",
         "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "خيرات",
+          "engine": "tesseract",
+          "mode": "pad_h:contrast",
+          "raw_text": "١ ‏الذهب‎ a ‏ومية‎",
           "value": "0000/00/00",
-          "confidence": 0.955923855304718,
+          "confidence": 75.25,
           "valid": false,
           "expected": true,
+          "score": 7.524999999999999,
           "warning": "date_parse_failed"
         },
         "candidates": [
           {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "خيرات",
+            "engine": "tesseract",
+            "mode": "pad_h:contrast",
+            "raw_text": "١ ‏الذهب‎ a ‏ومية‎",
             "value": "0000/00/00",
-            "confidence": 0.955923855304718,
+            "confidence": 75.25,
             "valid": false,
             "expected": true,
-            "score": 13.595592385530471,
+            "score": 7.524999999999999,
             "warning": "date_parse_failed"
           },
           {
-            "engine": "paddle",
-            "mode": "up:binary",
-            "raw_text": "خيرات",
+            "engine": "tesseract",
+            "mode": "down:contrast",
+            "raw_text": "مية لبيع الذهب | 1",
             "value": "0000/00/00",
-            "confidence": 0.9511386752128601,
+            "confidence": 71.8,
             "valid": false,
             "expected": true,
-            "score": 13.595113867521286,
+            "score": 7.18,
             "warning": "date_parse_failed"
           },
           {
-            "engine": "paddle",
-            "mode": "pad_s:binary",
-            "raw_text": "خبرات",
-            "value": "0000/00/00",
-            "confidence": 0.9307509660720825,
-            "valid": false,
-            "expected": true,
-            "score": 13.593075096607208,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "paddle",
+            "engine": "tesseract",
             "mode": "down:binary",
-            "raw_text": "خيرات",
+            "raw_text": "مية لبيع الذهب '",
             "value": "0000/00/00",
-            "confidence": 0.9249533414840698,
+            "confidence": 69.5,
             "valid": false,
             "expected": true,
-            "score": 13.592495334148406,
+            "score": 6.949999999999999,
             "warning": "date_parse_failed"
           },
           {
-            "engine": "paddle",
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "0 ‏الذهب‎ us lea",
+            "value": "0000/00/00",
+            "confidence": 63.5,
+            "valid": false,
+            "expected": true,
+            "score": 6.350000000000001,
+            "warning": "date_parse_failed"
+          },
+          {
+            "engine": "tesseract",
             "mode": "pad_h:binary",
-            "raw_text": "خيراتل",
+            "raw_text": "8 ‏لبيع الذهب‎ ass",
             "value": "0000/00/00",
-            "confidence": 0.8649336695671082,
+            "confidence": 62.75,
             "valid": false,
             "expected": true,
-            "score": 13.586493366956711,
+            "score": 6.274999999999999,
             "warning": "date_parse_failed"
           },
           {
-            "engine": "paddle",
-            "mode": "down:adaptive",
-            "raw_text": "خبرات ?//",
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "‎ie‏ لبيع الذهب",
             "value": "0000/00/00",
-            "confidence": 0.8131760954856873,
+            "confidence": 62.666666666666664,
             "valid": false,
             "expected": true,
-            "score": 13.081317609548568,
+            "score": 6.266666666666666,
             "warning": "date_parse_failed"
           },
           {
-            "engine": "paddle",
-            "mode": "up:adaptive",
-            "raw_text": "خبرات ?i/",
-            "value": "0000/00/00",
-            "confidence": 0.8052211701869965,
-            "valid": false,
-            "expected": true,
-            "score": 13.080522117018699,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "paddle",
+            "engine": "tesseract",
             "mode": "base:adaptive",
-            "raw_text": "خيرات ?//",
+            "raw_text": "15 5 fos 7 : 3 0",
             "value": "0000/00/00",
-            "confidence": 0.7892093360424042,
+            "confidence": 48.0,
             "valid": false,
             "expected": true,
-            "score": 13.078920933604241,
+            "score": 4.800000000000001,
+            "warning": "date_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "a ga ‏وي‎",
+            "value": "0000/00/00",
+            "confidence": 39.666666666666664,
+            "valid": false,
+            "expected": true,
+            "score": 3.966666666666667,
             "warning": "date_parse_failed"
           }
         ]
       },
       "time": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407059217_time_base.png",
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260325T174739710618_time_base.png",
         "selected": {
-          "engine": "paddle",
-          "mode": "base:adaptive",
-          "raw_text": ":ةع TZ 30!",
-          "value": "02:30",
-          "confidence": 0.6661682724952698,
-          "valid": true,
+          "engine": "tesseract",
+          "mode": "up:adaptive",
+          "raw_text": "55",
+          "value": "00:00",
+          "confidence": 66.0,
+          "valid": false,
           "expected": true,
-          "warning": null
+          "score": 6.600000000000001,
+          "warning": "time_parse_failed"
         },
         "candidates": [
           {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": ":ةع TZ 30!",
-            "value": "02:30",
-            "confidence": 0.6661682724952698,
-            "valid": true,
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "55",
+            "value": "00:00",
+            "confidence": 66.0,
+            "valid": false,
             "expected": true,
-            "score": 115.06661682724953,
-            "warning": null
-          }
-        ]
-      },
-      "k21_syp_sell": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407150458_k21_syp_sell_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "1 6700",
-          "value": 16700,
-          "confidence": 0.8833385109901428,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
+            "score": 6.600000000000001,
+            "warning": "time_parse_failed"
+          },
           {
-            "engine": "paddle",
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "7 . 7",
+            "value": "00:00",
+            "confidence": 57.333333333333336,
+            "valid": false,
+            "expected": true,
+            "score": 5.733333333333334,
+            "warning": "time_parse_failed"
+          },
+          {
+            "engine": "tesseract",
             "mode": "base:binary",
-            "raw_text": "1 6700",
-            "value": 16700,
-            "confidence": 0.8833385109901428,
-            "valid": true,
+            "raw_text": "ا",
+            "value": "00:00",
+            "confidence": 48.0,
+            "valid": false,
             "expected": true,
-            "score": 113.58833385109901,
-            "warning": null
-          }
-        ]
-      },
-      "k21_syp_buy": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407247359_k21_syp_buy_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "1 6350",
-          "value": 16350,
-          "confidence": 0.9208712577819824,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
+            "score": 4.800000000000001,
+            "warning": "time_parse_failed"
+          },
           {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "1 6350",
-            "value": 16350,
-            "confidence": 0.9208712577819824,
-            "valid": true,
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "ا",
+            "value": "00:00",
+            "confidence": 48.0,
+            "valid": false,
             "expected": true,
-            "score": 113.59208712577819,
-            "warning": null
-          }
-        ]
-      },
-      "k21_usd_sell": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407336156_k21_usd_sell_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "141",
-          "value": 141.0,
-          "confidence": 0.7967247366905212,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
+            "score": 4.800000000000001,
+            "warning": "time_parse_failed"
+          },
           {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "141",
-            "value": 141.0,
-            "confidence": 0.7967247366905212,
-            "valid": true,
+            "engine": "tesseract",
+            "mode": "pad_h:binary",
+            "raw_text": "ا",
+            "value": "00:00",
+            "confidence": 46.0,
+            "valid": false,
             "expected": true,
-            "score": 113.57967247366905,
-            "warning": null
+            "score": 4.600000000000001,
+            "warning": "time_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "— a",
+            "value": "00:00",
+            "confidence": 39.0,
+            "valid": false,
+            "expected": true,
+            "score": 3.9000000000000004,
+            "warning": "time_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:contrast",
+            "raw_text": "ا",
+            "value": "00:00",
+            "confidence": 27.0,
+            "valid": false,
+            "expected": true,
+            "score": 2.6999999999999993,
+            "warning": "time_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "ee",
+            "value": "00:00",
+            "confidence": 25.0,
+            "valid": false,
+            "expected": true,
+            "score": 2.5,
+            "warning": "time_parse_failed"
           }
         ]
       },
       "k21_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407404456_k21_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T174658467480_k21_usd_buy_base.png",
         "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "138",
-          "value": 138.0,
-          "confidence": 0.9069077372550964,
-          "valid": true,
-          "expected": true,
-          "warning": null
+          "engine": "tesseract",
+          "mode": "base:adaptive",
+          "raw_text": "=",
+          "value": 0.0,
+          "confidence": 93.0,
+          "valid": false,
+          "expected": false,
+          "score": -0.6999999999999993,
+          "warning": "usd_parse_failed"
         },
         "candidates": [
           {
+            "engine": "tesseract",
+            "mode": "base:adaptive",
+            "raw_text": "=",
+            "value": 0.0,
+            "confidence": 93.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.6999999999999993,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:binary",
+            "raw_text": "العيار",
+            "value": 0.0,
+            "confidence": 92.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.7999999999999989,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "العيار",
+            "value": 0.0,
+            "confidence": 91.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.9000000000000004,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "العيار",
+            "value": 0.0,
+            "confidence": 91.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.9000000000000004,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "1 العيار",
+            "value": 1.0,
+            "confidence": 67.5,
+            "valid": false,
+            "expected": false,
+            "score": -3.25,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:adaptive",
+            "raw_text": "2 7 =",
+            "value": 27.0,
+            "confidence": 64.66666666666667,
+            "valid": false,
+            "expected": false,
+            "score": -3.5333333333333323,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "hi] te. ‏اليو‎",
+            "value": 0.0,
+            "confidence": 57.333333333333336,
+            "valid": false,
+            "expected": false,
+            "score": -4.266666666666666,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:contrast",
+            "raw_text": "حت",
+            "value": 0.0,
+            "confidence": 27.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.3,
+            "warning": "usd_parse_failed"
+          }
+        ]
+      },
+      "k21_usd_sell": {
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260325T174702794638_k21_usd_sell_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "base:binary",
+          "raw_text": "5",
+          "value": 5.0,
+          "confidence": 81.0,
+          "valid": false,
+          "expected": false,
+          "score": -1.9000000000000004,
+          "warning": "outside_hard_range"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "5",
+            "value": 5.0,
+            "confidence": 81.0,
+            "valid": false,
+            "expected": false,
+            "score": -1.9000000000000004,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "0",
+            "value": 0.0,
+            "confidence": 60.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.0,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:contrast",
+            "raw_text": "د",
+            "value": 0.0,
+            "confidence": 52.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.8,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:binary",
+            "raw_text": "= ;",
+            "value": 0.0,
+            "confidence": 40.5,
+            "valid": false,
+            "expected": false,
+            "score": -5.95,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "aa",
+            "value": 0.0,
+            "confidence": 26.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.4,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "a",
+            "value": 0.0,
+            "confidence": 26.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.4,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "==",
+            "value": 0.0,
+            "confidence": 13.0,
+            "valid": false,
+            "expected": false,
+            "score": -8.7,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": 0.0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "usd_parse_failed"
+          }
+        ]
+      },
+      "k21_syp_buy": {
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260325T174706707637_k21_syp_buy_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "down:adaptive",
+          "raw_text": "a",
+          "value": 0,
+          "confidence": 65.0,
+          "valid": false,
+          "expected": false,
+          "score": -3.5,
+          "warning": "syp_parse_failed"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "down:adaptive",
+            "raw_text": "a",
+            "value": 0,
+            "confidence": 65.0,
+            "valid": false,
+            "expected": false,
+            "score": -3.5,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "عام اس",
+            "value": 0,
+            "confidence": 42.5,
+            "valid": false,
+            "expected": false,
+            "score": -5.75,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "ee",
+            "value": 0,
+            "confidence": 42.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.8,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "ee",
+            "value": 0,
+            "confidence": 42.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.8,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:adaptive",
+            "raw_text": "“=r ; =",
+            "value": 0,
+            "confidence": 40.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "م",
+            "value": 0,
+            "confidence": 35.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.5,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "mam 2",
+            "value": 2,
+            "confidence": 28.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.199999999999999,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:contrast",
+            "raw_text": "ae",
+            "value": 0,
+            "confidence": 21.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.9,
+            "warning": "syp_parse_failed"
+          }
+        ]
+      },
+      "k21_syp_sell": {
+        "crop_variant": "pad_h",
+        "crop_debug_path": "data/debug/fields/20260325T174711517687_k21_syp_sell_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "pad_h:adaptive",
+          "raw_text": "=",
+          "value": 0,
+          "confidence": 52.0,
+          "valid": false,
+          "expected": false,
+          "score": -4.8,
+          "warning": "syp_parse_failed"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:adaptive",
+            "raw_text": "=",
+            "value": 0,
+            "confidence": 52.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.8,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "2 ْ",
+            "value": 2,
+            "confidence": 47.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.3,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "0",
+            "value": 0,
+            "confidence": 43.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.7,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "-",
+            "value": 0,
+            "confidence": 40.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:adaptive",
+            "raw_text": "mT",
+            "value": 0,
+            "confidence": 40.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:contrast",
+            "raw_text": "للكت",
+            "value": 0,
+            "confidence": 37.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.3,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "a",
+            "value": 0,
+            "confidence": 21.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.9,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "اد",
+            "value": 0,
+            "confidence": 14.0,
+            "valid": false,
+            "expected": false,
+            "score": -8.6,
+            "warning": "syp_parse_failed"
+          }
+        ]
+      },
+      "k18_usd_buy": {
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260325T174716207543_k18_usd_buy_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "down:binary",
+          "raw_text": "2",
+          "value": 2.0,
+          "confidence": 95.0,
+          "valid": false,
+          "expected": false,
+          "score": -0.5,
+          "warning": "outside_hard_range"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "down:binary",
+            "raw_text": "2",
+            "value": 2.0,
+            "confidence": 95.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.5,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:binary",
+            "raw_text": "2",
+            "value": 2.0,
+            "confidence": 93.0,
+            "valid": false,
+            "expected": false,
+            "score": -0.6999999999999993,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "3",
+            "value": 3.0,
+            "confidence": 88.0,
+            "valid": false,
+            "expected": false,
+            "score": -1.1999999999999993,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:contrast",
+            "raw_text": "8",
+            "value": 8.0,
+            "confidence": 88.0,
+            "valid": false,
+            "expected": false,
+            "score": -1.1999999999999993,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "2",
+            "value": 2.0,
+            "confidence": 73.0,
+            "valid": false,
+            "expected": false,
+            "score": -2.6999999999999993,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "3",
+            "value": 3.0,
+            "confidence": 66.0,
+            "valid": false,
+            "expected": false,
+            "score": -3.3999999999999995,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:binary",
+            "raw_text": "3",
+            "value": 3.0,
+            "confidence": 66.0,
+            "valid": false,
+            "expected": false,
+            "score": -3.3999999999999995,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:contrast",
+            "raw_text": "a",
+            "value": 0.0,
+            "confidence": 59.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.1,
+            "warning": "usd_parse_failed"
+          }
+        ]
+      },
+      "k18_usd_sell": {
+        "crop_variant": "pad_s",
+        "crop_debug_path": "data/debug/fields/20260325T174720099057_k18_usd_sell_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "pad_s:adaptive",
+          "raw_text": "=",
+          "value": 0.0,
+          "confidence": 42.0,
+          "valid": false,
+          "expected": false,
+          "score": -5.8,
+          "warning": "usd_parse_failed"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:adaptive",
+            "raw_text": "=",
+            "value": 0.0,
+            "confidence": 42.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.8,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "اه",
+            "value": 0.0,
+            "confidence": 41.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.8999999999999995,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:binary",
+            "raw_text": "١ 0",
+            "value": 10.0,
+            "confidence": 36.5,
+            "valid": false,
+            "expected": false,
+            "score": -6.35,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:adaptive",
+            "raw_text": "a",
+            "value": 0.0,
+            "confidence": 36.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.4,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:adaptive",
+            "raw_text": "lo",
+            "value": 10.0,
+            "confidence": 24.0,
+            "valid": false,
+            "expected": false,
+            "score": -7.6,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": 0.0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "usd_parse_failed"
+          },
+          {
             "engine": "paddle",
             "mode": "base:binary",
-            "raw_text": "138",
-            "value": 138.0,
-            "confidence": 0.9069077372550964,
-            "valid": true,
-            "expected": true,
-            "score": 113.59069077372551,
-            "warning": null
+            "raw_text": "",
+            "value": 0.0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "usd_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "",
+            "value": 0.0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "usd_parse_failed"
+          }
+        ]
+      },
+      "k18_syp_buy": {
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260325T174724070599_k18_syp_buy_base.png",
+        "selected": {
+          "engine": "tesseract",
+          "mode": "up:binary",
+          "raw_text": "5 مم",
+          "value": 5,
+          "confidence": 58.0,
+          "valid": false,
+          "expected": false,
+          "score": -4.199999999999999,
+          "warning": "outside_hard_range"
+        },
+        "candidates": [
+          {
+            "engine": "tesseract",
+            "mode": "up:binary",
+            "raw_text": "5 مم",
+            "value": 5,
+            "confidence": 58.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.199999999999999,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:contrast",
+            "raw_text": "مم",
+            "value": 0,
+            "confidence": 50.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:adaptive",
+            "raw_text": "on",
+            "value": 0,
+            "confidence": 35.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.5,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:binary",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:binary",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "paddle",
+            "mode": "base:contrast",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
           }
         ]
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407495218_k18_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T174728603888_k18_syp_sell_base.png",
         "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "1 4300",
-          "value": 14300,
-          "confidence": 0.9390172362327576,
-          "valid": true,
-          "expected": true,
-          "warning": null
+          "engine": "tesseract",
+          "mode": "base:contrast",
+          "raw_text": "“|",
+          "value": 1,
+          "confidence": 66.0,
+          "valid": false,
+          "expected": false,
+          "score": -3.3999999999999995,
+          "warning": "outside_hard_range"
         },
         "candidates": [
           {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "1 4300",
-            "value": 14300,
-            "confidence": 0.9390172362327576,
-            "valid": true,
-            "expected": true,
-            "score": 113.59390172362328,
-            "warning": null
-          }
-        ]
-      },
-      "k18_syp_buy": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407590354_k18_syp_buy_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "13950",
-          "value": 13950,
-          "confidence": 0.9098199605941772,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
+            "engine": "tesseract",
+            "mode": "base:contrast",
+            "raw_text": "“|",
+            "value": 1,
+            "confidence": 66.0,
+            "valid": false,
+            "expected": false,
+            "score": -3.3999999999999995,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:adaptive",
+            "raw_text": "ll",
+            "value": 11,
+            "confidence": 63.0,
+            "valid": false,
+            "expected": false,
+            "score": -3.6999999999999993,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "up:contrast",
+            "raw_text": "va |",
+            "value": 1,
+            "confidence": 57.0,
+            "valid": false,
+            "expected": false,
+            "score": -4.3,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "base:adaptive",
+            "raw_text": "اد",
+            "value": 0,
+            "confidence": 50.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.0,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "down:adaptive",
+            "raw_text": "“ell",
+            "value": 11,
+            "confidence": 41.0,
+            "valid": false,
+            "expected": false,
+            "score": -5.8999999999999995,
+            "warning": "outside_hard_range"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_s:adaptive",
+            "raw_text": "اك",
+            "value": 0,
+            "confidence": 38.0,
+            "valid": false,
+            "expected": false,
+            "score": -6.199999999999999,
+            "warning": "syp_parse_failed"
+          },
+          {
+            "engine": "tesseract",
+            "mode": "pad_h:adaptive",
+            "raw_text": ") a1 8",
+            "value": 18,
+            "confidence": 35.333333333333336,
+            "valid": false,
+            "expected": false,
+            "score": -6.466666666666667,
+            "warning": "outside_hard_range"
+          },
           {
             "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "13950",
-            "value": 13950,
-            "confidence": 0.9098199605941772,
-            "valid": true,
-            "expected": true,
-            "score": 113.59098199605941,
-            "warning": null
-          }
-        ]
-      },
-      "k18_usd_sell": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407677348_k18_usd_sell_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "121",
-          "value": 121.0,
-          "confidence": 0.9188335537910461,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "121",
-            "value": 121.0,
-            "confidence": 0.9188335537910461,
-            "valid": true,
-            "expected": true,
-            "score": 113.59188335537911,
-            "warning": null
-          }
-        ]
-      },
-      "k18_usd_buy": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T154407742719_k18_usd_buy_base.png",
-        "selected": {
-          "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "118",
-          "value": 118.0,
-          "confidence": 0.8524275422096252,
-          "valid": true,
-          "expected": true,
-          "warning": null
-        },
-        "candidates": [
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "118",
-            "value": 118.0,
-            "confidence": 0.8524275422096252,
-            "valid": true,
-            "expected": true,
-            "score": 113.58524275422096,
-            "warning": null
+            "mode": "base:adaptive",
+            "raw_text": "",
+            "value": 0,
+            "confidence": 0.0,
+            "valid": false,
+            "expected": false,
+            "score": -10.0,
+            "warning": "syp_parse_failed"
           }
         ]
       }
     },
-    "relationship_ok": true,
-    "relationship_warnings": [],
+    "header_fallback": {
+      "header_box": [
+        0,
+        66,
+        390,
+        128
+      ],
+      "header_best_text": "لبسعيره اليومية ‎ee Bp) RA‏ اير\n‎te.‏ الصادرة ‎١ 9 3 ١ 7 59 (SSF‏ 00\n2 ممصم ‎VV) oe‏",
+      "header_attempts": [
+        {
+          "preprocess": "soft",
+          "engine": "paddle",
+          "text": "",
+          "confidence": 0.0
+        },
+        {
+          "preprocess": "soft",
+          "engine": "tesseract",
+          "text": "فس ‎SE fae ee oD‏\nالسادرة عن\n+ جمعبة الصاغة بدمشق هد | | |",
+          "confidence": 43.333333333333336
+        },
+        {
+          "preprocess": "binary",
+          "engine": "paddle",
+          "text": "",
+          "confidence": 0.0
+        },
+        {
+          "preprocess": "binary",
+          "engine": "tesseract",
+          "text": "",
+          "confidence": 0.0
+        },
+        {
+          "preprocess": "adaptive",
+          "engine": "paddle",
+          "text": "",
+          "confidence": 0.0
+        },
+        {
+          "preprocess": "adaptive",
+          "engine": "tesseract",
+          "text": "لبسعيره اليومية ‎ee Bp) RA‏ اير\n‎te.‏ الصادرة ‎١ 9 3 ١ 7 59 (SSF‏ 00\n2 ممصم ‎VV) oe‏",
+          "confidence": 45.6
+        }
+      ]
+    },
+    "relationship_ok": false,
+    "relationship_warnings": [
+      "k21_syp_sell_not_gt_buy",
+      "k18_syp_sell_not_gt_buy",
+      "k21_usd_sell_not_gt_buy",
+      "21k_not_gt_18k"
+    ],
     "validation": {
-      "usd_hard_min": 50.0,
-      "usd_hard_max": 400.0,
+      "usd_hard_min": 80,
+      "usd_hard_max": 200,
       "usd_expected_min": 90.0,
       "usd_expected_max": 180.0,
-      "syp_hard_min": 5000.0,
-      "syp_hard_max": 50000.0,
+      "syp_hard_min": 10000,
+      "syp_hard_max": 25000,
       "syp_expected_min": 12000.0,
       "syp_expected_max": 20000.0,
       "min_18k_to_21k_ratio": 0.8,
@@ -435,16 +1275,49 @@
     },
     "ocr_word_count": 11,
     "has_blueprint": true,
-    "extraction_method": "template_fields",
-    "debug_overlay_path": "data/debug/20260325T154407_template_fields_651690656_122177052974861173_886124130613687903_n.jpg.png"
+    "extraction_method": "template_fields_hybrid",
+    "debug_overlay_path": "data/debug/20260325T174806_template_fields_hybrid_651690656_122177052974861173_886124130613687903_n.jpg.png"
   },
-  "should_notify": false,
+  "should_notify": true,
   "change_summary": {
-    "changed": false,
-    "count": 0,
-    "fields": {}
+    "changed": true,
+    "count": 8,
+    "fields": {
+      "k21_ss": {
+        "old": 16700,
+        "new": 16380
+      },
+      "k21_sb": {
+        "old": 16350,
+        "new": 16700
+      },
+      "k21_us": {
+        "old": 141.0,
+        "new": 138.0
+      },
+      "k21_ub": {
+        "old": 138.0,
+        "new": 141.0
+      },
+      "k18_ss": {
+        "old": 14300,
+        "new": 12118
+      },
+      "k18_sb": {
+        "old": 13950,
+        "new": 14300
+      },
+      "k18_us": {
+        "old": 121.0,
+        "new": 138.0
+      },
+      "k18_ub": {
+        "old": 118.0,
+        "new": 121.0
+      }
+    }
   },
-  "change_key": "0000/00/00|02:30|16700|16350|141.0|138.0|14300|13950|121.0|118.0",
+  "change_key": "0000/00/00|00:00|16380|16700|138.0|141.0|12118|14300|138.0|121.0",
   "previous_values": {
     "k21_ss": 16700,
     "k21_sb": 16350,
@@ -455,5 +1328,5 @@
     "k18_us": 121.0,
     "k18_ub": 118.0
   },
-  "raw_ocr": "day=مويلا هتتالا | date=خيرات | time=:ةع TZ 30! | k21_syp_sell=1 6700 | k21_syp_buy=1 6350 | k21_usd_sell=141 | k21_usd_buy=138 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=121 | k18_usd_buy=118"
+  "raw_ocr": "J o*%s\n‏النسعيرة اليومبة لبيع الذهب 3و‎\n‏السادرة عن‎\n=f ‏جمعبة الصاغة بدمشو أ‎ >\nee A = 1 /\n‏اليؤم: التاريخ: الساعة:‎\nSra ‏سحي‎ | ed ‏1م‎ gill pee 1\n‏ب‎ wd ‏لعبار ميع ضر ميع‎ |\n4 138 141 | 16380 16700 21 |\n12118 1211 ‏مووود‎ 14300 _ 18\n‏الاتنزام بوضع التسعيرة على الؤاجية بشكل واضح‎ Aba dle\n)223176(_])223005( ‏بشت سهريا والسهجر‎ Sebo dy yall ‏دمشق‎ | * * *\nالتسعيرة اليومية لبيع الذهب\nالصادرة عن 0 ا\nجمعية الصاغة بدمشق ون\n8 . =\nعي\n‎sega!‏ التاريخ: الساعة:\nالعيار سبي ع ا اين\n‎or oe 3‏ د 7\n21 141200016350000 138 -\n18 14300 13950 121 118 '\nملاحظة الالنزام بوضع النسعيرة على الواجهة بشكل واضع\nدمشق الحريقة مقابل بنك سوريا والمهجر (221510005)_ )2230766( | Se Bera aed ‏لجيه‎ Speen!\n3 a Z er 20 Where RT a\nbedisdcll ‏التاريخ: رموه‎ seb ‏اليوم:‎\n‎oe col ‏د‎ eo ‏لعف‎ |\nlo Glan colo _ i\ntap @ilem coll WH |)\n\nDORAN ‏بود التسعيرة علي‎ Y TTD LED)\n(2230766) (2248005) ‏دمشق” الحريقة > مقابل بنك سوريا والمهجر‎"
 }
