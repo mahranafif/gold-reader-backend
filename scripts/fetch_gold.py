@@ -28,6 +28,7 @@ except Exception:
     cv2 = None
     CV2_AVAILABLE = False
 
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DEBUG_DIR = DATA_DIR / "debug"
@@ -75,6 +76,8 @@ DEFAULT_REQUIRED_PRICE_FIELDS = [
 ]
 
 KNOWN_FIELD_TYPES = {"arabic_text", "date", "time", "syp_price", "usd_price"}
+KNOWN_PREPROCESS = {"soft", "binary", "adaptive", "contrast"}
+KNOWN_ENGINES = {"paddle", "tesseract"}
 
 try:
     APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
@@ -83,7 +86,7 @@ except Exception:
     APP_TIMEZONE_NAME = "UTC"
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("gold-ocr-final")
+logger = logging.getLogger("gold-ocr")
 
 
 def build_session() -> requests.Session:
@@ -137,7 +140,6 @@ def get_paddle():
                     {"lang": "ar", "use_angle_cls": True, "show_log": False},
                     {"lang": "ar"},
                 ]
-
                 last_exc = None
                 for kwargs in attempts:
                     try:
@@ -146,7 +148,6 @@ def get_paddle():
                         break
                     except Exception as exc:
                         last_exc = exc
-
                 if _PADDLE_OCR is None:
                     disable_paddle(f"init_failed: {last_exc}")
                     raise last_exc
@@ -271,6 +272,27 @@ def normalize_text(text: str) -> str:
     return text
 
 
+def default_blueprint() -> dict:
+    return {
+        "template_name": "damascus_gold_board_default",
+        "reference_size": {"width": 1024, "height": 1024},
+        "validation": DEFAULT_VALIDATION.copy(),
+        "fields": {
+            "day": {"id": "day", "type": "arabic_text", "box": {"x1": 0.70, "y1": 0.35, "x2": 1.00, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "soft"], "psm": 7},
+            "date": {"id": "date", "type": "date", "box": {"x1": 0.25, "y1": 0.35, "x2": 0.70, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789/.-"},
+            "time": {"id": "time", "type": "time", "box": {"x1": 0.00, "y1": 0.35, "x2": 0.30, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "binary"], "psm": 7, "char_whitelist": "0123456789:.;,مصAPMapm "},
+            "k21_usd_buy": {"id": "k21_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.55, "x2": 0.18, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k21_usd_sell": {"id": "k21_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.55, "x2": 0.35, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k21_syp_buy": {"id": "k21_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.55, "x2": 0.55, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k21_syp_sell": {"id": "k21_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.55, "x2": 0.75, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k18_usd_buy": {"id": "k18_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.68, "x2": 0.18, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k18_usd_sell": {"id": "k18_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.68, "x2": 0.35, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k18_syp_buy": {"id": "k18_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.68, "x2": 0.55, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k18_syp_sell": {"id": "k18_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.68, "x2": 0.75, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+        },
+    }
+
+
 def normalize_blueprint_fields(fields_raw: Any) -> dict:
     if isinstance(fields_raw, dict):
         out = {}
@@ -297,27 +319,6 @@ def normalize_blueprint_fields(fields_raw: Any) -> dict:
             out[field_id] = field_copy
         return out
     return {}
-
-
-def default_blueprint() -> dict:
-    return {
-        "template_name": "damascus_gold_board_default",
-        "reference_size": {"width": 1024, "height": 1024},
-        "validation": DEFAULT_VALIDATION.copy(),
-        "fields": {
-            "day": {"id": "day", "type": "arabic_text", "box": {"x1": 0.70, "y1": 0.35, "x2": 1.00, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "soft"], "psm": 7},
-            "date": {"id": "date", "type": "date", "box": {"x1": 0.25, "y1": 0.35, "x2": 0.70, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789/.-"},
-            "time": {"id": "time", "type": "time", "box": {"x1": 0.00, "y1": 0.35, "x2": 0.30, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "binary"], "psm": 7, "char_whitelist": "0123456789:.;,مصAPMapm "},
-            "k21_usd_buy": {"id": "k21_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.55, "x2": 0.18, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k21_usd_sell": {"id": "k21_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.55, "x2": 0.35, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k21_syp_buy": {"id": "k21_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.55, "x2": 0.55, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k21_syp_sell": {"id": "k21_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.55, "x2": 0.75, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k18_usd_buy": {"id": "k18_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.68, "x2": 0.18, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k18_usd_sell": {"id": "k18_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.68, "x2": 0.35, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k18_syp_buy": {"id": "k18_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.68, "x2": 0.55, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k18_syp_sell": {"id": "k18_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.68, "x2": 0.75, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-        },
-    }
 
 
 def validate_blueprint(blueprint: dict):
@@ -709,6 +710,10 @@ def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
     if not (k21.ss > k18.ss and k21.sb > k18.sb and k21.us > k18.us and k21.ub > k18.ub):
         ok = False
         warnings.append("21k_not_gt_18k")
+    ratio = k18.ss / max(k21.ss, 1)
+    if not (validation["min_18k_to_21k_ratio"] <= ratio <= validation["max_18k_to_21k_ratio"]):
+        ok = False
+        warnings.append(f"ratio_out_of_range:{ratio:.4f}")
     return ok, warnings
 
 
@@ -764,43 +769,12 @@ def extract_fallback_header(img: Image.Image):
     letters = re.findall(r"[\u0600-\u06FF ]{3,}", normalize_text(best_text))
     if letters:
         day = max(letters, key=len).strip()
-    return date, time, day, {"header_box": header_box, "header_best_text": best_text, "header_attempts": [{"preprocess": p, "engine": e, "text": t[:120], "confidence": c} for p, e, t, c in attempts[:10]]}
+    return date, time, day, {"header_box": header_box, "header_best_text": best_text}
 
 
 def build_rates_from_full_text(full_text: str):
+    # Only used to diagnose, not to save final prices.
     text = normalize_digits(full_text)
-    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
-    merged = " | ".join(lines)
-
-    def parse_row(label: str):
-        row = ""
-        for line in lines:
-            if re.search(rf"\b{label}\b", line):
-                row = line
-                break
-        if not row:
-            m = re.search(rf"{label}[^|]*", merged)
-            if m:
-                row = m.group(0)
-        if not row:
-            return None
-        nums = []
-        for n in re.findall(r"\d+(?:[.,]\d+)?", row):
-            try:
-                nums.append(float(n.replace(",", ".")))
-            except Exception:
-                pass
-        usd = [x for x in nums if 80 <= x <= 200]
-        syp = [int(round(x)) for x in nums if 10000 <= x <= 25000]
-        if len(syp) >= 2 and len(usd) >= 2:
-            return GoldRate(ub=float(usd[-1]), us=float(usd[0]), sb=int(syp[-1]), ss=int(syp[0]))
-        return None
-
-    k21 = parse_row("21")
-    k18 = parse_row("18")
-    if k21 and k18:
-        return k21, k18
-
     nums = []
     for n in re.findall(r"\d+(?:[.,]\d+)?", text):
         try:
@@ -834,10 +808,13 @@ def learn_blueprint_from_success(blueprint: dict, field_results: dict, confidenc
         if not all(k in box for k in ("x1", "y1", "x2", "y2")):
             continue
         dx1, dy1, dx2, dy2 = shifts[crop_variant]
-        new_box = {"x1": max(0.0, min(1.0, float(box["x1"]) + dx1)), "y1": max(0.0, min(1.0, float(box["y1"]) + dy1)), "x2": max(0.0, min(1.0, float(box["x2"]) + dx2)), "y2": max(0.0, min(1.0, float(box["y2"]) + dy2))}
-        if new_box != box:
-            field_cfg["box"] = new_box
-            changed = True
+        field_cfg["box"] = {
+            "x1": max(0.0, min(1.0, float(box["x1"]) + dx1)),
+            "y1": max(0.0, min(1.0, float(box["y1"]) + dy1)),
+            "x2": max(0.0, min(1.0, float(box["x2"]) + dx2)),
+            "y2": max(0.0, min(1.0, float(box["y2"]) + dy2)),
+        }
+        changed = True
     if changed:
         blueprint["updated_at"] = datetime.now(timezone.utc).isoformat()
         blueprint["updated_by"] = "auto_learn"
@@ -916,7 +893,7 @@ def save_snapshot_into_history(snapshot: dict) -> None:
     save_json(LATEST_FILE, snapshot)
 
 
-def export_overlay(image_bytes: bytes, debug: dict, extraction_method: str, source_url: str):
+def export_overlay(image_bytes: bytes, extraction_method: str, source_url: str):
     if not DEBUG_EXPORT:
         return None
     try:
@@ -951,7 +928,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "opencv_available": CV2_AVAILABLE,
         "paddle_enabled": _PADDLE_AVAILABLE,
         "paddle_failure_reason": _PADDLE_FAILURE_REASON,
-        "alignment": {"opencv_available": CV2_AVAILABLE, "alignment_enabled": True, "alignment_mode": (blueprint.get("alignment") or {}).get("mode", "resize_only"), "reference_size": blueprint.get("reference_size", {"width": 1024, "height": 1024})},
+        "has_blueprint": bool(fields_cfg),
     }
 
     field_results = {field_id: run_field_ocr(field_id, field_cfg, img, validation) for field_id, field_cfg in fields_cfg.items()}
@@ -961,10 +938,11 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
             if field_id in adapted_fields_cfg:
                 field_results[field_id] = run_field_ocr(field_id, adapted_fields_cfg[field_id], img, validation)
 
-    debug["fields"] = {field_id: {"crop_variant": result.crop_variant, "crop_debug_path": result.crop_debug_path, "selected": sanitize_for_json(result.selected.__dict__) if result.selected else None, "candidates": [sanitize_for_json(c.__dict__) for c in result.candidates]} for field_id, result in field_results.items()}
+    debug["fields"] = {field_id: {"crop_variant": result.crop_variant, "crop_debug_path": result.crop_debug_path, "selected": sanitize_for_json(result.selected.__dict__) if result.selected else None} for field_id, result in field_results.items()}
 
     full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
     fallback_date, fallback_time, fallback_day, fallback_debug = extract_fallback_header(img)
+    debug["header_fallback"] = fallback_debug
 
     date = field_results["date"].selected.value if field_results.get("date") and field_results["date"].selected and field_results["date"].selected.valid else fallback_date
     if date == "0000/00/00":
@@ -979,29 +957,26 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
             warnings.append("header_time_failed")
 
     day = field_results["day"].selected.value if field_results.get("day") and field_results["day"].selected and field_results["day"].selected.valid else fallback_day
-    debug["header_fallback"] = fallback_debug
 
     k21, k18, price_warnings = build_rates_from_fields(field_results)
     warnings.extend(price_warnings)
+
     if k21 is None or k18 is None:
-        logger.warning("Blueprint extraction failed → using full-text fallback extraction")
-        fk21, fk18 = build_rates_from_full_text(full_text)
-        if fk21 and fk18:
-            k21, k18 = fk21, fk18
-            warnings.append("used_full_text_price_fallback")
-        else:
-            raise ValueError("Missing required valid fields: price_fields")
+        # Only diagnose fallback; do not save guessed price rows as final truth.
+        dk21, dk18 = build_rates_from_full_text(full_text)
+        debug["full_text_price_fallback"] = {
+            "diagnostic_only": True,
+            "k21": sanitize_for_json(dk21.__dict__) if dk21 else None,
+            "k18": sanitize_for_json(dk18.__dict__) if dk18 else None,
+        }
+        raise ValueError("Blueprint price extraction failed; refusing to save guessed prices")
 
     relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
     if relationship_warnings:
         warnings.extend(relationship_warnings)
-
     debug["relationship_ok"] = relationship_ok
     debug["relationship_warnings"] = relationship_warnings
     debug["validation"] = validation
-    debug["ocr_word_count"] = len(field_results)
-    debug["has_blueprint"] = bool(fields_cfg)
-    debug["extraction_method"] = "template_fields_hybrid"
 
     missing_header = []
     if date == "0000/00/00":
@@ -1013,7 +988,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
 
     confidence = compute_confidence(field_results, relationship_ok, warnings)
     learn_blueprint_from_success(blueprint, field_results, confidence)
-    overlay = export_overlay(image_bytes, debug, "template_fields_hybrid", source_url)
+    overlay = export_overlay(image_bytes, "template_fields_hybrid", source_url)
     if overlay:
         debug["debug_overlay_path"] = overlay
 
@@ -1063,8 +1038,6 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
         "ocr_engine": result.ocr_engine,
         "extraction_method": result.extraction_method,
         "confidence": result.confidence,
-        "has_blueprint": result.debug.get("has_blueprint", False),
-        "ocr_word_count": result.debug.get("ocr_word_count", 0),
         "warnings": result.warnings,
         "debug": result.debug,
     }
@@ -1078,12 +1051,12 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Final", version="10.1.0")
+app = FastAPI(title="Gold OCR Final", version="10.2.0")
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "gold-ocr-final", "version": "10.1.0", "time_utc": datetime.now(timezone.utc).isoformat(), "display_timezone": APP_TIMEZONE_NAME}
+    return {"ok": True, "service": "gold-ocr-final", "version": "10.2.0", "time_utc": datetime.now(timezone.utc).isoformat(), "display_timezone": APP_TIMEZONE_NAME}
 
 
 @app.post("/extract", response_model=ExtractResponse)
