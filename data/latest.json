@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwFTpIQQ&_nc_gid=Yb7n7n9oQKZq5y8rjvMBjw&ccb=1-7&_nc_sid=7b2446&oh=00_AfyhN_l8zpKWmL2pozCWyKCei2oOK1-rbe1Y9toeBlku5g&oe=69C924AE",
+  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHheyZK&_nc_gid=VlXmU5mvCZ62tdu26iIoKQ&ccb=1-7&_nc_sid=7b2446&oh=00_Afytb4cD9UOqfYT8Mq96bI5jwFVyVi2ZGYT7Yt5DUVr3Sg&oe=69C924AE",
   "date": "0000/00/00",
   "time": "13:21",
   "k21_ss": 16700,
@@ -15,7 +15,7 @@
   "source_w": 1024,
   "source_h": 1024,
   "byte_length": 22566,
-  "updated_at_utc": "2026-03-25T01:50:17.354228+00:00",
+  "updated_at_utc": "2026-03-25T02:01:49.716611+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields",
@@ -27,7 +27,7 @@
     "header_date_failed"
   ],
   "debug": {
-    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwFTpIQQ&_nc_gid=Yb7n7n9oQKZq5y8rjvMBjw&ccb=1-7&_nc_sid=7b2446&oh=00_AfyhN_l8zpKWmL2pozCWyKCei2oOK1-rbe1Y9toeBlku5g&oe=69C924AE",
+    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHheyZK&_nc_gid=VlXmU5mvCZ62tdu26iIoKQ&ccb=1-7&_nc_sid=7b2446&oh=00_Afytb4cD9UOqfYT8Mq96bI5jwFVyVi2ZGYT7Yt5DUVr3Sg&oe=69C924AE",
     "image_width": 1024,
     "image_height": 1024,
     "display_timezone": "Asia/Dubai",
@@ -46,7 +46,7 @@
     "fields": {
       "day": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015011525529_day_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020143976168_day_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:adaptive",
@@ -73,7 +73,7 @@
       },
       "date": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T015013771903_date_up.png",
+        "crop_debug_path": "data/debug/fields/20260325T020146173060_date_up.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:binary",
@@ -177,7 +177,7 @@
       },
       "time": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T015015903239_time_pad_h.png",
+        "crop_debug_path": "data/debug/fields/20260325T020148277417_time_pad_h.png",
         "selected": {
           "engine": "tesseract",
           "mode": "pad_h:binary",
@@ -281,7 +281,7 @@
       },
       "k21_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016361774_k21_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020148729723_k21_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:contrast",
@@ -352,7 +352,7 @@
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016634972_k21_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020148998471_k21_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:adaptive",
@@ -401,7 +401,7 @@
       },
       "k21_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016722044_k21_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149086046_k21_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -428,7 +428,7 @@
       },
       "k21_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016788400_k21_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149152591_k21_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -455,7 +455,7 @@
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016879160_k18_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149241193_k18_syp_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -482,7 +482,7 @@
       },
       "k18_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015016970227_k18_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149333247_k18_syp_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -509,7 +509,7 @@
       },
       "k18_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015017056515_k18_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149419440_k18_usd_sell_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -536,7 +536,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T015017121622_k18_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T020149483715_k18_usd_buy_base.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -579,57 +579,24 @@
     "ocr_word_count": 11,
     "has_blueprint": true,
     "extraction_method": "template_fields",
-    "debug_overlay_path": "data/debug/20260325T015017_template_fields_651789084_122177269742861173_8640508007092135418_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260325T020149_template_fields_651789084_122177269742861173_8640508007092135418_n.jpg.png"
   },
-  "should_notify": true,
+  "should_notify": false,
   "change_summary": {
-    "changed": true,
-    "count": 8,
-    "fields": {
-      "k21_ss": {
-        "old": 15950,
-        "new": 16700
-      },
-      "k21_sb": {
-        "old": 15600,
-        "new": 16350
-      },
-      "k21_us": {
-        "old": 134.0,
-        "new": 141.0
-      },
-      "k21_ub": {
-        "old": 131.0,
-        "new": 138.0
-      },
-      "k18_ss": {
-        "old": 13700,
-        "new": 14300
-      },
-      "k18_sb": {
-        "old": 13350,
-        "new": 13950
-      },
-      "k18_us": {
-        "old": 115.0,
-        "new": 121.0
-      },
-      "k18_ub": {
-        "old": 112.0,
-        "new": 118.0
-      }
-    }
+    "changed": false,
+    "count": 0,
+    "fields": {}
   },
   "change_key": "0000/00/00|13:21|16700|16350|141.0|138.0|14300|13950|121.0|118.0",
   "previous_values": {
-    "k21_ss": 15950,
-    "k21_sb": 15600,
-    "k21_us": 134.0,
-    "k21_ub": 131.0,
-    "k18_ss": 13700,
-    "k18_sb": 13350,
-    "k18_us": 115.0,
-    "k18_ub": 112.0
+    "k21_ss": 16700,
+    "k21_sb": 16350,
+    "k21_us": 141.0,
+    "k21_ub": 138.0,
+    "k18_ss": 14300,
+    "k18_sb": 13950,
+    "k18_us": 121.0,
+    "k18_ub": 118.0
   },
   "raw_ocr": "day=مويلا | date=خيرات | time=1 | k21_syp_sell=1 6700 | k21_syp_buy=16350 | k21_usd_sell=141 | k21_usd_buy=1 38 | k18_syp_sell=1 4300 | k18_syp_buy=13950 | k18_usd_sell=1 21 | k18_usd_buy=1 18"
 }
