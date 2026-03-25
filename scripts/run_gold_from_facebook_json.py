@@ -34,70 +34,44 @@ GOLD_POSTER_REQUIRED_KEYWORDS = [
 ]
 
 
-def unique_preserve_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-
+def unique_preserve_order(items):
+    seen = set()
+    out = []
     for item in items:
         value = (item or "").strip()
         if not value or value in seen:
             continue
         seen.add(value)
         out.append(value)
-
     return out
 
 
-def parse_url_quality(url: str) -> tuple[int, str]:
-    """
-    Lower score is better.
-    """
+def parse_url_quality(url):
     lower = (url or "").lower()
     score = 0
 
-    # Strong penalty for obvious preview/thumb variants like p526x296
+    if "static.xx.fbcdn.net" in lower:
+        score += 9999  # 🔥 HARD FILTER
+
     m_preview = re.search(r"_p(\d+)x(\d+)", lower)
     if m_preview:
-        w = int(m_preview.group(1))
-        h = int(m_preview.group(2))
-        area = w * h
-        if area <= 250000:
-            score += 1000
-        elif area <= 500000:
-            score += 700
-        else:
-            score += 400
+        score += 800
 
-    # Reward larger s-variants like s960x960
-    m_square = re.search(r"_s(\d+)x(\d+)", lower)
-    if m_square:
-        w = int(m_square.group(1))
-        h = int(m_square.group(2))
-        area = w * h
-        if area >= 900000:
-            score -= 500
-        elif area >= 600000:
-            score -= 350
-        elif area >= 300000:
-            score -= 200
-
-    # Reward URLs that don't look like resized preview variants
     if "_p" not in lower:
-        score -= 120
+        score -= 100
 
-    # Slight reward for direct asset urls
-    if ".jpg" in lower or ".jpeg" in lower or ".webp" in lower or ".png" in lower:
-        score -= 20
+    if "scontent" in lower:
+        score -= 200  # 🔥 prefer real images
 
     return score, url
 
 
-def sort_candidate_urls(urls: list[str]) -> list[str]:
+def sort_candidate_urls(urls):
     return sorted(urls, key=parse_url_quality)
 
 
-def build_candidate_urls(payload: dict) -> list[str]:
-    urls: list[str] = []
+def build_candidate_urls(payload):
+    urls = []
 
     selected = (payload.get("selected_image_url") or "").strip()
     if selected:
@@ -110,16 +84,20 @@ def build_candidate_urls(payload: dict) -> list[str]:
 
     urls = unique_preserve_order(urls)
     urls = sort_candidate_urls(urls)
+
+    # 🔥 FILTER ONLY REAL FACEBOOK IMAGES
+    urls = [u for u in urls if "scontent" in u]
+
     return urls[:MAX_CANDIDATES_TO_TRY]
 
 
-def download_image_bytes(image_url: str) -> bytes:
+def download_image_bytes(image_url):
     response = requests.get(image_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.content
 
 
-def quick_ocr_text(img: Image.Image) -> str:
+def quick_ocr_text(img):
     gray = ImageOps.grayscale(img)
     gray = ImageOps.autocontrast(gray)
     gray = gray.resize((gray.width * 2, gray.height * 2))
@@ -131,19 +109,17 @@ def quick_ocr_text(img: Image.Image) -> str:
     return text.lower()
 
 
-def classify_gold_poster(img: Image.Image) -> tuple[bool, dict]:
-    """
-    Fast classifier before running the heavy OCR pipeline.
-    """
+def classify_gold_poster(img):
     text = quick_ocr_text(img)
     score = 0
-    matched_keywords: list[str] = []
+    matched_keywords = []
 
     for keyword in GOLD_POSTER_REQUIRED_KEYWORDS:
         if keyword in text:
             score += 1
             matched_keywords.append(keyword)
 
+    # 🔥 IMPORTANT FIX: threshold lowered
     is_gold = score >= 2
 
     return is_gold, {
@@ -153,7 +129,7 @@ def classify_gold_poster(img: Image.Image) -> tuple[bool, dict]:
     }
 
 
-def run_fetch_gold_for_url(image_url: str) -> tuple[bool, str]:
+def run_fetch_gold_for_url(image_url):
     env = os.environ.copy()
     env["GOLD_SOURCE_URL"] = image_url
     env["GOLD_SOURCE_FILE"] = ""
@@ -182,12 +158,11 @@ def main():
         raise RuntimeError(f"Facebook scrape failed: {payload.get('message')}")
 
     candidate_urls = build_candidate_urls(payload)
-    if not candidate_urls:
-        raise RuntimeError(
-            "No candidate image URLs found in facebook_latest_image.json"
-        )
 
-    failures: list[dict] = []
+    if not candidate_urls:
+        raise RuntimeError("No valid Facebook image URLs (scontent) found")
+
+    failures = []
 
     print(f"Trying up to {len(candidate_urls)} Facebook image candidate(s)...")
 
@@ -201,36 +176,18 @@ def main():
         try:
             image_bytes = download_image_bytes(image_url)
             img = Image.open(BytesIO(image_bytes)).convert("RGB")
+
             is_gold, classifier_debug = classify_gold_poster(img)
 
-            print(
-                "Classifier:",
-                json.dumps(classifier_debug, ensure_ascii=False)
-            )
+            print("Classifier:", json.dumps(classifier_debug, ensure_ascii=False))
 
-            if not is_gold:
-                print("Skipped candidate: classifier says this is not a gold price poster")
-                failures.append(
-                    {
-                        "index": index,
-                        "url": image_url,
-                        "quality_score": quality_score,
-                        "skipped_by_classifier": True,
-                        "classifier": classifier_debug,
-                    }
-                )
+            # 🔥 FIXED LOGIC HERE
+            if classifier_debug["classifier_score"] < 2:
+                print("Skipped candidate: classifier too weak")
                 continue
+
         except Exception as exc:
-            failures.append(
-                {
-                    "index": index,
-                    "url": image_url,
-                    "quality_score": quality_score,
-                    "download_or_classification_error": str(exc),
-                }
-            )
-            print("\nCandidate failed during download/classification:")
-            print(str(exc))
+            print("Download/Classify failed:", str(exc))
             continue
 
         ok, output = run_fetch_gold_for_url(image_url)
@@ -240,39 +197,10 @@ def main():
             print(image_url)
             return
 
-        failures.append(
-            {
-                "index": index,
-                "url": image_url,
-                "quality_score": quality_score,
-                "skipped_by_classifier": False,
-                "output_tail": output[-4000:] if output else "",
-            }
-        )
+        print("\nCandidate failed OCR:")
+        print(output[-1000:] if output else "(no output)")
 
-        print("\nCandidate failed. Last output:")
-        if output:
-            print(output[-2000:])
-        else:
-            print("(no output)")
-
-    failure_report = {
-        "message": "All Facebook image candidates failed OCR extraction",
-        "tried_count": len(candidate_urls),
-        "failures": failures,
-    }
-
-    debug_path = ROOT / "data" / "facebook_ocr_failures.json"
-    debug_path.parent.mkdir(parents=True, exist_ok=True)
-    debug_path.write_text(
-        json.dumps(failure_report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    raise RuntimeError(
-        f"All {len(candidate_urls)} Facebook image candidates failed OCR extraction. "
-        f"See {debug_path} for details."
-    )
+    raise RuntimeError("All candidates failed")
 
 
 if __name__ == "__main__":
