@@ -32,7 +32,7 @@ jobs:
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       DISABLE_PADDLE: "false"
       FACEBOOK_MAX_CANDIDATES_PER_POST: "12"
-      FACEBOOK_MAX_POST_GROUPS: "2"
+      FACEBOOK_MAX_POST_GROUPS: "4"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
