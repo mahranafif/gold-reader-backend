@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwFQ8fyX&_nc_gid=GmD-dYaGdM-2Ri14Lo9UCQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfywxRhyxnVBoNndegwbFzrb8XePE7CU2cVeia_f0l9XQQ&oe=69C9E250",
+  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwEg0drD&_nc_gid=yU8vBM2_UkC_JWznhR5yGg&ccb=1-7&_nc_sid=7b2446&oh=00_AfxhjbIGpkm13shS6LRSBc3tkleoOjqHJ0P2VwNf_MY2kQ&oe=69C9E250",
   "date": "0000/00/00",
   "time": "00:00",
   "k21_ss": 16380,
@@ -15,7 +15,7 @@
   "source_w": 390,
   "source_h": 390,
   "byte_length": 23106,
-  "updated_at_utc": "2026-03-25T17:48:06.687618+00:00",
+  "updated_at_utc": "2026-03-25T17:53:35.509618+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
@@ -34,7 +34,7 @@
     "missing_required_fields:date,time"
   ],
   "debug": {
-    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwFQ8fyX&_nc_gid=GmD-dYaGdM-2Ri14Lo9UCQ&ccb=1-7&_nc_sid=7b2446&oh=00_AfywxRhyxnVBoNndegwbFzrb8XePE7CU2cVeia_f0l9XQQ&oe=69C9E250",
+    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwEg0drD&_nc_gid=yU8vBM2_UkC_JWznhR5yGg&ccb=1-7&_nc_sid=7b2446&oh=00_AfxhjbIGpkm13shS6LRSBc3tkleoOjqHJ0P2VwNf_MY2kQ&oe=69C9E250",
     "image_width": 390,
     "image_height": 390,
     "display_timezone": "Asia/Dubai",
@@ -53,7 +53,7 @@
     "fields": {
       "day": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T174732606290_day_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175259580392_day_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:soft",
@@ -158,7 +158,7 @@
       },
       "date": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T174734984269_date_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175302051955_date_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "pad_h:contrast",
@@ -263,7 +263,7 @@
       },
       "time": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T174739710618_time_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175306878187_time_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:adaptive",
@@ -368,7 +368,7 @@
       },
       "k21_usd_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T174658467480_k21_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175224562201_k21_usd_buy_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "base:adaptive",
@@ -473,7 +473,7 @@
       },
       "k21_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T174702794638_k21_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175228939623_k21_usd_sell_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "base:binary",
@@ -578,7 +578,7 @@
       },
       "k21_syp_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T174706707637_k21_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175232930531_k21_syp_buy_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:adaptive",
@@ -683,7 +683,7 @@
       },
       "k21_syp_sell": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T174711517687_k21_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175237885378_k21_syp_sell_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "pad_h:adaptive",
@@ -788,7 +788,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T174716207543_k18_usd_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175242696341_k18_usd_buy_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:binary",
@@ -893,7 +893,7 @@
       },
       "k18_usd_sell": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260325T174720099057_k18_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175246734535_k18_usd_sell_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "pad_s:adaptive",
@@ -998,7 +998,7 @@
       },
       "k18_syp_buy": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T174724070599_k18_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175250808187_k18_syp_buy_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:binary",
@@ -1103,7 +1103,7 @@
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T174728603888_k18_syp_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260325T175255446828_k18_syp_sell_base.png",
         "selected": {
           "engine": "tesseract",
           "mode": "base:contrast",
@@ -1276,57 +1276,24 @@
     "ocr_word_count": 11,
     "has_blueprint": true,
     "extraction_method": "template_fields_hybrid",
-    "debug_overlay_path": "data/debug/20260325T174806_template_fields_hybrid_651690656_122177052974861173_886124130613687903_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260325T175335_template_fields_hybrid_651690656_122177052974861173_886124130613687903_n.jpg.png"
   },
-  "should_notify": true,
+  "should_notify": false,
   "change_summary": {
-    "changed": true,
-    "count": 8,
-    "fields": {
-      "k21_ss": {
-        "old": 16700,
-        "new": 16380
-      },
-      "k21_sb": {
-        "old": 16350,
-        "new": 16700
-      },
-      "k21_us": {
-        "old": 141.0,
-        "new": 138.0
-      },
-      "k21_ub": {
-        "old": 138.0,
-        "new": 141.0
-      },
-      "k18_ss": {
-        "old": 14300,
-        "new": 12118
-      },
-      "k18_sb": {
-        "old": 13950,
-        "new": 14300
-      },
-      "k18_us": {
-        "old": 121.0,
-        "new": 138.0
-      },
-      "k18_ub": {
-        "old": 118.0,
-        "new": 121.0
-      }
-    }
+    "changed": false,
+    "count": 0,
+    "fields": {}
   },
   "change_key": "0000/00/00|00:00|16380|16700|138.0|141.0|12118|14300|138.0|121.0",
   "previous_values": {
-    "k21_ss": 16700,
-    "k21_sb": 16350,
-    "k21_us": 141.0,
-    "k21_ub": 138.0,
-    "k18_ss": 14300,
-    "k18_sb": 13950,
-    "k18_us": 121.0,
-    "k18_ub": 118.0
+    "k21_ss": 16380,
+    "k21_sb": 16700,
+    "k21_us": 138.0,
+    "k21_ub": 141.0,
+    "k18_ss": 12118,
+    "k18_sb": 14300,
+    "k18_us": 138.0,
+    "k18_ub": 121.0
   },
   "raw_ocr": "J o*%s\n‏النسعيرة اليومبة لبيع الذهب 3و‎\n‏السادرة عن‎\n=f ‏جمعبة الصاغة بدمشو أ‎ >\nee A = 1 /\n‏اليؤم: التاريخ: الساعة:‎\nSra ‏سحي‎ | ed ‏1م‎ gill pee 1\n‏ب‎ wd ‏لعبار ميع ضر ميع‎ |\n4 138 141 | 16380 16700 21 |\n12118 1211 ‏مووود‎ 14300 _ 18\n‏الاتنزام بوضع التسعيرة على الؤاجية بشكل واضح‎ Aba dle\n)223176(_])223005( ‏بشت سهريا والسهجر‎ Sebo dy yall ‏دمشق‎ | * * *\nالتسعيرة اليومية لبيع الذهب\nالصادرة عن 0 ا\nجمعية الصاغة بدمشق ون\n8 . =\nعي\n‎sega!‏ التاريخ: الساعة:\nالعيار سبي ع ا اين\n‎or oe 3‏ د 7\n21 141200016350000 138 -\n18 14300 13950 121 118 '\nملاحظة الالنزام بوضع النسعيرة على الواجهة بشكل واضع\nدمشق الحريقة مقابل بنك سوريا والمهجر (221510005)_ )2230766( | Se Bera aed ‏لجيه‎ Speen!\n3 a Z er 20 Where RT a\nbedisdcll ‏التاريخ: رموه‎ seb ‏اليوم:‎\n‎oe col ‏د‎ eo ‏لعف‎ |\nlo Glan colo _ i\ntap @ilem coll WH |)\n\nDORAN ‏بود التسعيرة علي‎ Y TTD LED)\n(2230766) (2248005) ‏دمشق” الحريقة > مقابل بنك سوريا والمهجر‎"
 }
