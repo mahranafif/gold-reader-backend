@@ -8,10 +8,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: fetch-gold-ocr
+  cancel-in-progress: true
+
 jobs:
   fetch-gold:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 12
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -21,30 +25,35 @@ jobs:
       LOG_LEVEL: INFO
       REQUEST_TIMEOUT: "35"
       GOLD_OCR_MODE: prefer_blueprint
-      GOLD_DEBUG_EXPORT: "true"
+      GOLD_DEBUG_EXPORT: "false"
 
+      FACEBOOK_PAGE_URL: "https://www.facebook.com/profile.php?id=61575835207125"
+      FACEBOOK_URL_MODE: "desktop"
       FACEBOOK_HEADLESS: "true"
-      FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
-      FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "3"
-      FACEBOOK_SCROLL_DELAY_MS: "1200"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "4"
-      FACEBOOK_MAX_CANDIDATES_PER_POST: "12"
+      FACEBOOK_REQUEST_TIMEOUT_MS: "22000"
+      FACEBOOK_MAX_SCROLL_STEPS: "4"
+      FACEBOOK_SCROLL_DELAY_MS: "900"
+      FACEBOOK_MAX_POSTS_TO_SCAN: "6"
       FACEBOOK_MAX_POST_GROUPS: "3"
+      FACEBOOK_MAX_CANDIDATES_PER_POST: "8"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "10"
+      FACEBOOK_MIN_CANDIDATE_WIDTH: "700"
+      FACEBOOK_MIN_CANDIDATE_HEIGHT: "700"
+      FACEBOOK_FAST_RESOURCE_BLOCKING: "true"
+      FACEBOOK_SAVE_DEBUG_SCREENSHOT: "true"
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-      DISABLE_PADDLE: "false"
+      DISABLE_PADDLE: "true"
 
-      CNN_POSTER_MIN_CONFIDENCE: "0.70"
-      CNN_LAYOUT_MIN_CONFIDENCE: "0.50"
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,107 +61,54 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            tesseract-ocr \
-            tesseract-ocr-ara \
-            libglib2.0-0 \
-            libnss3 \
-            libnspr4 \
-            libdbus-1-3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libdrm2 \
-            libxcb1 \
-            libxkbcommon0 \
-            libatspi2.0-0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libasound2t64 || sudo apt-get install -y libasound2
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v1
 
-      - name: Install Python packages
+      - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements.txt
-          pip install torch torchvision pillow
+          python -m pip install --upgrade pip wheel setuptools
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
       - name: Install Playwright Chromium
-        run: python -m playwright install chromium
-
-      - name: Ensure data directories exist
         run: |
-          mkdir -p data
-          mkdir -p data/debug
-          mkdir -p models
+          python -m playwright install chromium
 
-      - name: Verify CNN model files
+      - name: Run Facebook image scraper
         run: |
-          echo "Checking model files..."
-          ls -lah models || true
-          test -f models/gold_poster_classifier.pt || (echo "Missing models/gold_poster_classifier.pt" && exit 1)
-          test -f models/gold_layout_classifier.pt || (echo "Missing models/gold_layout_classifier.pt" && exit 1)
+          python scripts/fetch_facebook_public_image.py
 
-      - name: Scrape public Facebook image
-        run: python scripts/fetch_facebook_public_image.py
-
-      - name: Show scraper output
-        if: always()
+      - name: Run gold fetch pipeline
         run: |
-          echo "facebook_latest_image.json:"
-          cat data/facebook_latest_image.json || true
+          python scripts/fetch_gold.py
 
-      - name: Show blueprint
-        if: always()
-        run: |
-          echo "blueprint.json:"
-          cat data/blueprint.json || true
-
-      - name: Run gold OCR using scraped image candidates
-        run: python scripts/run_gold_from_facebook_json.py
-
-      - name: Show OCR output
-        if: always()
-        run: |
-          echo "latest.json:"
-          cat data/latest.json || true
-
-      - name: Upload debug artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gold-ocr-debug
-          path: |
-            data/facebook_latest_image.json
-            data/facebook_page_debug.png
-            data/facebook_ocr_failures.json
-            data/latest.json
-            data/history.json
-            data/debug
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Commit updated data files
-        if: always()
+      - name: Commit and push changed data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add -A data
+          git add data/latest.json data/history.json data/facebook_latest_image.json || true
 
-          echo "---- Git Status ----"
-          git status
-
-          if git diff --cached --quiet; then
+          if ! git diff --cached --quiet; then
+            git commit -m "Update gold OCR data"
+            git push
+          else
             echo "No changes to commit"
-            exit 0
           fi
 
-          git commit -m "Update gold OCR snapshot"
-          git pull --rebase origin "${GITHUB_REF_NAME}" || true
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-debug-artifacts
+          path: |
+            data/facebook_page_debug.png
+            data/login_wall.png
+            data/facebook_latest_image.json
+            data/latest.json
+            data/history.json
+          if-no-files-found: ignore
