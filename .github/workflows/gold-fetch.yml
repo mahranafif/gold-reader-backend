@@ -1,3 +1,4 @@
+```yaml
 name: Fetch Gold OCR From Facebook Public Page
 
 on:
@@ -82,9 +83,22 @@ jobs:
         run: |
           python scripts/fetch_facebook_public_image.py
 
+      - name: Extract image URL from scraper output
+        run: |
+          IMAGE_URL=$(python -c "import json; d=json.load(open('data/facebook_latest_image.json', encoding='utf-8')); print(d.get('selected_image_url','') if d.get('ok') else '')")
+          echo "IMAGE_URL=$IMAGE_URL" >> "$GITHUB_ENV"
+
+          if [ -z "$IMAGE_URL" ]; then
+            echo "ERROR: No selected_image_url found in data/facebook_latest_image.json"
+            cat data/facebook_latest_image.json || true
+            exit 1
+          fi
+
+          echo "Resolved IMAGE_URL=$IMAGE_URL"
+
       - name: Run gold fetch pipeline
         run: |
-          python scripts/fetch_gold.py
+          GOLD_SOURCE_URL="$IMAGE_URL" python scripts/fetch_gold.py
 
       - name: Commit and push changed data
         run: |
@@ -112,3 +126,4 @@ jobs:
             data/latest.json
             data/history.json
           if-no-files-found: ignore
+```
