@@ -72,6 +72,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-chromium-v1
+          
+      - name: Cache PaddleOCR models
+        uses: actions/cache@v4
+        with:
+          path: ~/.paddleocr
+          key: ${{ runner.os }}-paddleocr-v1
 
       - name: Install system dependencies
         run: |
