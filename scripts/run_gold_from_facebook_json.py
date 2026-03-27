@@ -27,6 +27,8 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
 CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
+MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "800"))
+MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "800"))
 
 HEADERS = {
     "User-Agent": (
@@ -274,9 +276,14 @@ def main():
     candidate_urls = build_candidate_urls(payload)
 
     if not candidate_urls:
-        if not payload.get("ok", False):
-            raise RuntimeError(f"Facebook scrape failed: {message or 'no usable image candidates'}")
-        raise RuntimeError("No usable Facebook image candidates found")
+        raise RuntimeError(
+            "No usable Facebook image candidates found. "
+            f"ok={payload.get('ok', False)} "
+            f"message={message!r} "
+            f"selected_image_file={payload.get('selected_image_file', '')!r} "
+            f"selected_image_url={payload.get('selected_image_url', '')!r} "
+            f"candidate_count={len(payload.get('candidates') or [])}"
+        )
 
     print(f"Scraper status ok={payload.get('ok', False)} message={message!r}")
     print(f"Candidate URLs to try: {len(candidate_urls)}")
@@ -297,6 +304,21 @@ def main():
             print(f"Download/open failed: {exc}")
             continue
 
+        if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+            failures.append(
+                {
+                    "index": index,
+                    "url": image_url,
+                    "stage": "image_size",
+                    "width": img.width,
+                    "height": img.height,
+                    "minimum_width": MIN_SOURCE_WIDTH,
+                    "minimum_height": MIN_SOURCE_HEIGHT,
+                }
+            )
+            print(f"Skipped candidate: image too small ({img.width}x{img.height})")
+            continue
+
         try:
             if poster_classifier is not None:
                 poster_debug = poster_classifier.predict(img)
@@ -307,10 +329,7 @@ def main():
                 print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
             else:
                 is_gold, poster_debug = classify_gold_poster_ocr_fallback(img)
-                poster_decision = {
-                    "accepted": is_gold,
-                    "source": "ocr",
-                }
+                poster_decision = {"accepted": is_gold, "source": "ocr"}
                 print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
                 print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
 
@@ -383,14 +402,4 @@ def main():
             print(f"Candidate failed: {exc}")
 
     save_failures(failures)
-
-    if not payload.get("ok", False):
-        raise RuntimeError(
-            f"Facebook scrape reported failure ({message}), and all {len(candidate_urls)} candidates also failed"
-        )
-
     raise RuntimeError(f"All {len(candidate_urls)} candidate URLs failed")
-
-
-if __name__ == "__main__":
-    main()
