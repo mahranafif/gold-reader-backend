@@ -12,11 +12,11 @@ from playwright.async_api import BrowserContext, Page, Route, async_playwright
 
 FACEBOOK_PAGE_URL = os.getenv(
     "FACEBOOK_PAGE_URL",
-    "https://www.facebook.com/profile.php?id=61575835207125",
+    "https://m.facebook.com/profile.php?id=61575835207125",
 ).strip()
 
 # auto | mobile | desktop
-FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "desktop").strip().lower()
+FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
 
 HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {
     "1", "true", "yes", "on"
@@ -32,8 +32,8 @@ MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "6"))
 MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "3"))
 MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "8"))
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "10"))
-MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "700"))
-MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "700"))
+MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "400"))
+MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "400"))
 
 SAVE_DEBUG_SCREENSHOT = os.getenv("FACEBOOK_SAVE_DEBUG_SCREENSHOT", "true").strip().lower() in {
     "1", "true", "yes", "on"
@@ -125,14 +125,14 @@ def normalize_fb_image_url(url: str) -> str:
         return ""
 
     u = url.strip()
-    u = re.sub(r"_p(\d+)x(\d+)", "_s2048x2048", u, flags=re.IGNORECASE)
+    u = re.sub(r"_p(\d+)x(\d+)", "_s1024x1024", u, flags=re.IGNORECASE)
 
     def _upgrade_s(match: re.Match[str]) -> str:
         w = int(match.group(1))
         h = int(match.group(2))
         if w * h >= 1_000_000:
             return match.group(0)
-        return "_s2048x2048"
+        return "_s1024x1024"
 
     u = re.sub(r"_s(\d+)x(\d+)", _upgrade_s, u, flags=re.IGNORECASE)
 
@@ -597,25 +597,11 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
         best_snapshot: list[ImageCandidate] = []
         last_error = ""
 
+        login_wall_detected = False
+
         for step in range(MAX_SCROLL_STEPS + 1):
             html = await page.content()
-
-            if is_login_wall(html, page.url):
-                return {
-                    "ok": False,
-                    "page_url": page.url,
-                    "context_mode": context_mode,
-                    "modal_closed": modal_closed,
-                    "message": "Login wall detected",
-                    "selected_image_url": "",
-                    "selected_width": 0,
-                    "selected_height": 0,
-                    "selected_top": 0,
-                    "selected_in_post": False,
-                    "selected_post_index": -1,
-                    "selected_post_top": 0,
-                    "candidates": [],
-                }
+            login_wall_detected = is_login_wall(html, page.url)
 
             try:
                 candidates = await collect_dom_candidates(page)
@@ -628,8 +614,12 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             if candidates:
                 best_snapshot = candidates
                 top = candidates[0]
-                if top.width >= 1000 and top.height >= 1000 and top.in_post and top.post_index <= 1:
+                if top.width >= 1024 and top.height >= 1024 and top.in_post and top.post_index <= 1:
                     break
+
+            if login_wall_detected:
+                # Try to use whatever we already extracted before giving up.
+                break
 
             if step < MAX_SCROLL_STEPS:
                 await maybe_scroll(page, step)
@@ -644,7 +634,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 "page_url": page.url,
                 "context_mode": context_mode,
                 "modal_closed": modal_closed,
-                "message": last_error or "No usable images found",
+                "message": "Login wall detected" if login_wall_detected else (last_error or "No usable images found"),
                 "selected_image_url": "",
                 "selected_width": 0,
                 "selected_height": 0,
@@ -661,7 +651,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "page_url": page.url,
             "context_mode": context_mode,
             "modal_closed": modal_closed,
-            "message": "Success",
+            "message": "Success_with_login_wall_fallback" if login_wall_detected else "Success",
             "selected_image_url": best.src,
             "selected_width": best.width,
             "selected_height": best.height,
