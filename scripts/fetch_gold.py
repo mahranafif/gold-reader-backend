@@ -1,815 +1,1481 @@
-import asyncio
+import hashlib
 import json
+import logging
 import os
-import random
 import re
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from threading import Lock
+from typing import Any, Optional
+from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
-from playwright.async_api import BrowserContext, Page, Route, async_playwright
+import numpy as np
+import pytesseract
+import requests
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from PIL import Image, ImageFilter, ImageOps, UnidentifiedImageError
+from pydantic import BaseModel, Field, HttpUrl
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+try:
+    import cv2  # type: ignore
+    CV2_AVAILABLE = True
+except Exception:
+    cv2 = None
+    CV2_AVAILABLE = False
 
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "data"
+DEBUG_DIR = DATA_DIR / "debug"
+DEBUG_FIELDS_DIR = DEBUG_DIR / "fields"
+CACHE_DIR = DATA_DIR / "cache"
+IMAGE_CACHE_DIR = CACHE_DIR / "images"
+OCR_CACHE_FILE = CACHE_DIR / "ocr_results.json"
 
-FACEBOOK_PAGE_URL = os.getenv(
-    "FACEBOOK_PAGE_URL",
-    "https://m.facebook.com/profile.php?id=61575835207125",
-).strip()
+LATEST_FILE = DATA_DIR / "latest.json"
+HISTORY_FILE = DATA_DIR / "history.json"
+BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
-# mobile | auto | desktop
-FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
+APP_MODE = os.getenv("APP_MODE", "cli").strip().lower()
+APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "Asia/Dubai").strip() or "Asia/Dubai"
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+DEBUG_EXPORT = os.getenv("GOLD_DEBUG_EXPORT", "false").strip().lower() in {"1", "true", "yes", "on"}
 
-HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {
-    "1", "true", "yes", "on"
+CACHE_ENABLED = os.getenv("GOLD_CACHE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+IMAGE_CACHE_ENABLED = os.getenv("GOLD_IMAGE_CACHE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+OCR_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_OCR_CACHE_MAX_ENTRIES", "300"))
+IMAGE_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_IMAGE_CACHE_MAX_ENTRIES", "80"))
+IMAGE_CACHE_TTL_HOURS = int(os.getenv("GOLD_IMAGE_CACHE_TTL_HOURS", "72"))
+MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "780"))
+MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "780"))
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
 }
 
-OUTPUT_FILE = Path(os.getenv("FACEBOOK_OUTPUT_JSON", "data/facebook_latest_image.json"))
-SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page_debug.png"))
+IMAGE_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/bmp"}
+GOLD_SOURCE_URL_ENV = "GOLD_SOURCE_URL"
+GOLD_SOURCE_FILE_ENV = "GOLD_SOURCE_FILE"
 
-REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "22000"))
-MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "4"))
-SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "900"))
-MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "6"))
-MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "3"))
-MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "8"))
-MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "10"))
-MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "400"))
-MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "400"))
-
-SAVE_DEBUG_SCREENSHOT = os.getenv("FACEBOOK_SAVE_DEBUG_SCREENSHOT", "true").strip().lower() in {
-    "1", "true", "yes", "on"
+DEFAULT_VALIDATION = {
+    "usd_hard_min": 80.0,
+    "usd_hard_max": 200.0,
+    "usd_expected_min": 90.0,
+    "usd_expected_max": 180.0,
+    "syp_hard_min": 10000.0,
+    "syp_hard_max": 25000.0,
+    "syp_expected_min": 12000.0,
+    "syp_expected_max": 20000.0,
+    "min_18k_to_21k_ratio": 0.80,
+    "max_18k_to_21k_ratio": 0.90,
 }
 
-FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {
-    "1", "true", "yes", "on"
-}
+DEFAULT_REQUIRED_PRICE_FIELDS = [
+    "k21_syp_sell", "k21_syp_buy", "k21_usd_sell", "k21_usd_buy",
+    "k18_syp_sell", "k18_syp_buy", "k18_usd_sell", "k18_usd_buy",
+]
+
+KNOWN_FIELD_TYPES = {"arabic_text", "date", "time", "syp_price", "usd_price"}
+KNOWN_PREPROCESS = {"soft", "binary", "adaptive", "contrast"}
+KNOWN_ENGINES = {"paddle", "tesseract"}
+
+try:
+    APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
+except Exception:
+    APP_TIMEZONE = timezone.utc
+    APP_TIMEZONE_NAME = "UTC"
+
+logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
+logger = logging.getLogger("gold-ocr")
+
+
+def build_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1.0,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update(HEADERS)
+    return session
+
+
+SESSION = build_session()
+_PADDLE_OCR = None
+_PADDLE_LOCK = Lock()
+_PADDLE_AVAILABLE = os.getenv("DISABLE_PADDLE", "false").strip().lower() not in {"1", "true", "yes", "on"}
+_PADDLE_FAILURE_REASON: Optional[str] = None if _PADDLE_AVAILABLE else "disabled_by_env"
+
+
+def disable_paddle(reason: str) -> None:
+    global _PADDLE_AVAILABLE, _PADDLE_FAILURE_REASON, _PADDLE_OCR
+    _PADDLE_AVAILABLE = False
+    _PADDLE_FAILURE_REASON = reason
+    _PADDLE_OCR = None
+    logger.warning("PaddleOCR disabled: %s", reason)
+
+
+def get_paddle():
+    global _PADDLE_OCR
+    if not _PADDLE_AVAILABLE:
+        raise RuntimeError(_PADDLE_FAILURE_REASON or "Paddle disabled")
+
+    if _PADDLE_OCR is None:
+        with _PADDLE_LOCK:
+            if _PADDLE_OCR is None:
+                try:
+                    from paddleocr import PaddleOCR  # type: ignore
+                except Exception as exc:
+                    disable_paddle(f"import_failed: {exc}")
+                    raise
+
+                attempts = [
+                    {"lang": "ar", "use_doc_orientation_classify": False, "use_doc_unwarping": False, "use_textline_orientation": False, "show_log": False},
+                    {"lang": "ar", "use_angle_cls": True, "show_log": False},
+                    {"lang": "ar"},
+                ]
+                last_exc = None
+                for kwargs in attempts:
+                    try:
+                        _PADDLE_OCR = PaddleOCR(**kwargs)
+                        last_exc = None
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                if _PADDLE_OCR is None:
+                    disable_paddle(f"init_failed: {last_exc}")
+                    raise last_exc
+    return _PADDLE_OCR
 
 
 @dataclass
-class ImageCandidate:
-    src: str
-    width: int
-    height: int
-    top: float
-    in_post: bool
-    post_index: int
-    post_top: float
-    from_srcset: bool = False
-    score: float = 0.0
-
-    @property
-    def area(self) -> int:
-        return self.width * self.height
-
-    @property
-    def aspect_ratio(self) -> float:
-        return self.width / self.height if self.height else 0.0
+class GoldRate:
+    ub: float
+    us: float
+    sb: int
+    ss: int
 
 
-def is_login_wall(html: str, page_url: str = "") -> bool:
-    lower = html.lower()
-    url_lower = page_url.lower()
-    wall_signals = (
-        "facebook.com/login",
-        "/login/",
-        "log in",
-        "login",
-        "see more on facebook",
-        "you must log in",
-        "create new account",
-        "تسجيل الدخول",
-        "عرض المزيد على فيسبوك",
-        "يجب تسجيل الدخول",
+@dataclass
+class OcrCandidate:
+    engine: str
+    mode: str
+    raw_text: str
+    value: Any
+    confidence: float
+    valid: bool
+    expected: bool
+    score: float
+    warning: Optional[str]
+
+
+@dataclass
+class OcrFieldResult:
+    crop_variant: str
+    crop_debug_path: Optional[str]
+    selected: Optional[OcrCandidate]
+    candidates: list[OcrCandidate]
+
+
+@dataclass
+class ExtractionResult:
+    date: str
+    time: str
+    day: str
+    k21: GoldRate
+    k18: GoldRate
+    confidence: float
+    raw_ocr: str
+    raw_ocr_preview: str
+    extraction_method: str
+    ocr_engine: str
+    warnings: list[str]
+    debug: dict
+
+
+class ExtractRequest(BaseModel):
+    image_url: Optional[HttpUrl] = None
+    include_debug: bool = False
+
+
+class ExtractResponse(BaseModel):
+    ok: bool
+    date: str
+    time: str
+    k21_ss: int
+    k21_sb: int
+    k21_us: float
+    k21_ub: float
+    k18_ss: int
+    k18_sb: int
+    k18_us: float
+    k18_ub: float
+    confidence: float = Field(ge=0.0, le=1.0)
+    extraction_method: str
+    ocr_engine: str
+    warnings: list[str] = Field(default_factory=list)
+    raw_ocr_preview: str = ""
+    debug: dict = Field(default_factory=dict)
+
+
+def sanitize_for_json(obj: Any):
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [sanitize_for_json(v) for v in obj]
+    return str(obj)
+
+
+def load_json(path: Path, fallback):
+    if not path.exists():
+        return fallback
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to load JSON %s: %s", path, exc)
+        return fallback
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sanitize_for_json(data), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def cache_key_for_url(url: str) -> str:
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
+
+
+def prune_image_cache() -> None:
+    if not IMAGE_CACHE_ENABLED or not IMAGE_CACHE_DIR.exists():
+        return
+    now = datetime.now(timezone.utc)
+    files = []
+    for path in IMAGE_CACHE_DIR.glob("*"):
+        try:
+            stat = path.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+            age = now - mtime
+            if age > timedelta(hours=IMAGE_CACHE_TTL_HOURS):
+                path.unlink(missing_ok=True)
+                continue
+            files.append((mtime, path))
+        except Exception:
+            continue
+    files.sort(reverse=True)
+    for _, path in files[IMAGE_CACHE_MAX_ENTRIES:]:
+        path.unlink(missing_ok=True)
+
+
+def load_ocr_cache() -> dict:
+    if not CACHE_ENABLED:
+        return {}
+    data = load_json(OCR_CACHE_FILE, {})
+    return data if isinstance(data, dict) else {}
+
+
+def save_ocr_cache(cache: dict) -> None:
+    if not CACHE_ENABLED:
+        return
+    items = sorted(cache.items(), key=lambda kv: kv[1].get("cached_at", ""), reverse=True)[:OCR_CACHE_MAX_ENTRIES]
+    save_json(OCR_CACHE_FILE, dict(items))
+
+
+def extraction_result_to_cache_entry(result: ExtractionResult) -> dict:
+    return {
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "result": {
+            "date": result.date,
+            "time": result.time,
+            "day": result.day,
+            "k21": asdict(result.k21),
+            "k18": asdict(result.k18),
+            "confidence": result.confidence,
+            "raw_ocr": result.raw_ocr,
+            "raw_ocr_preview": result.raw_ocr_preview,
+            "extraction_method": result.extraction_method,
+            "ocr_engine": result.ocr_engine,
+            "warnings": result.warnings,
+            "debug": result.debug,
+        },
+    }
+
+
+def extraction_result_from_cache_entry(entry: dict) -> ExtractionResult:
+    data = entry["result"]
+    debug = dict(data.get("debug") or {})
+    debug["cache_hit"] = True
+    debug["cache_cached_at"] = entry.get("cached_at", "")
+    return ExtractionResult(
+        date=data["date"],
+        time=data["time"],
+        day=data.get("day", ""),
+        k21=GoldRate(**data["k21"]),
+        k18=GoldRate(**data["k18"]),
+        confidence=float(data["confidence"]),
+        raw_ocr=data.get("raw_ocr", ""),
+        raw_ocr_preview=data.get("raw_ocr_preview", ""),
+        extraction_method=data.get("extraction_method", "template_fields_hybrid"),
+        ocr_engine=data.get("ocr_engine", "unknown"),
+        warnings=list(data.get("warnings") or []),
+        debug=debug,
     )
-    return any(sig in lower for sig in wall_signals) or "/login" in url_lower
 
 
-def build_url_candidates(url: str, mode: str) -> list[str]:
-    url = url.strip()
-    if not url:
-        return []
-
-    variants: list[str] = []
-
-    def add(u: str) -> None:
-        u = u.strip()
-        if u and u not in variants:
-            variants.append(u)
-
-    parsed = urlparse(url)
-    host = parsed.netloc.lower()
-    add(url)
-
-    if "facebook.com" not in host:
-        return variants
-
-    mobile_netloc = "m.facebook.com"
-    desktop_netloc = "www.facebook.com"
-
-    if mode == "mobile":
-        add(urlunparse(parsed._replace(netloc=mobile_netloc)))
-        add(urlunparse(parsed._replace(netloc=desktop_netloc)))
-        return variants
-
-    if mode == "desktop":
-        add(urlunparse(parsed._replace(netloc=desktop_netloc)))
-        add(urlunparse(parsed._replace(netloc=mobile_netloc)))
-        return variants
-
-    add(urlunparse(parsed._replace(netloc=mobile_netloc)))
-    add(urlunparse(parsed._replace(netloc=desktop_netloc)))
-    return variants
+def blueprint_signature(blueprint: dict) -> str:
+    minimal = {
+        "validation": blueprint.get("validation", {}),
+        "fields": blueprint.get("fields", {}),
+        "active_layout": blueprint.get("active_layout", ""),
+        "updated_at": blueprint.get("updated_at", ""),
+    }
+    return hashlib.sha256(json.dumps(sanitize_for_json(minimal), ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def normalize_fb_image_url(url: str) -> str:
-    # Keep the exact URL as rendered; do not force another size.
-    return (url or "").strip()
+ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
-def is_bad_url(url: str) -> bool:
-    lower = url.lower().strip()
-    if not lower:
-        return True
-    if "scontent" not in lower and "fbcdn.net" not in lower:
-        return True
+def app_now() -> datetime:
+    return datetime.now(APP_TIMEZONE)
 
-    bad_parts = [
-        "static.xx.fbcdn.net",
-        "rsrc.php",
-        "emoji",
-        "profile_pic",
-        "safe_image.php",
-        "lookaside",
-        "icon",
-        "logo",
-        "profile",
-        "cover_photo",
-        "/v/t1.",
-        "/v/t39.2365-6/",
-        "/v/t15.5256-10/",
+
+def normalize_digits(text: str) -> str:
+    text = (text or "").translate(ARABIC_NUM_MAP)
+    replacements = {
+        "O": "0", "o": "0", "I": "1", "l": "1", "|": "1",
+        "S": "5", "s": "5", "Z": "2", "G": "6",
+        "٫": ".", "،": ",", ";": ":",
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    return text
+
+
+def normalize_text(text: str) -> str:
+    text = normalize_digits(text)
+    text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+    text = text.replace("ة", "ه").replace("ى", "ي")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def default_blueprint() -> dict:
+    return {
+        "template_name": "damascus_gold_board_default",
+        "reference_size": {"width": 1024, "height": 1024},
+        "validation": DEFAULT_VALIDATION.copy(),
+        "fields": {
+            "day": {"id": "day", "type": "arabic_text", "box": {"x1": 0.70, "y1": 0.35, "x2": 1.00, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "soft"], "psm": 7},
+            "date": {"id": "date", "type": "date", "box": {"x1": 0.25, "y1": 0.35, "x2": 0.70, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789/.-"},
+            "time": {"id": "time", "type": "time", "box": {"x1": 0.00, "y1": 0.35, "x2": 0.30, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "binary"], "psm": 7, "char_whitelist": "0123456789:.;,مصAPMapm "},
+            "k21_usd_buy": {"id": "k21_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.55, "x2": 0.18, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k21_usd_sell": {"id": "k21_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.55, "x2": 0.35, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k21_syp_buy": {"id": "k21_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.55, "x2": 0.55, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k21_syp_sell": {"id": "k21_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.55, "x2": 0.75, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k18_usd_buy": {"id": "k18_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.68, "x2": 0.18, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k18_usd_sell": {"id": "k18_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.68, "x2": 0.35, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
+            "k18_syp_buy": {"id": "k18_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.68, "x2": 0.55, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+            "k18_syp_sell": {"id": "k18_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.68, "x2": 0.75, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
+        },
+    }
+
+
+def normalize_blueprint_fields(fields_raw: Any) -> dict:
+    if isinstance(fields_raw, dict):
+        out = {}
+        for field_id, field in fields_raw.items():
+            if not isinstance(field, dict):
+                continue
+            field_copy = dict(field)
+            field_copy.setdefault("id", field_id)
+            if "box" not in field_copy:
+                field_copy["box"] = {
+                    "x1": field_copy.get("x1"),
+                    "y1": field_copy.get("y1"),
+                    "x2": field_copy.get("x2"),
+                    "y2": field_copy.get("y2"),
+                }
+            out[field_id] = field_copy
+        return out
+    if isinstance(fields_raw, list):
+        out = {}
+        for field in fields_raw:
+            if not isinstance(field, dict):
+                continue
+            field_id = str(field.get("id") or "").strip()
+            if not field_id:
+                continue
+            field_copy = dict(field)
+            if "box" not in field_copy:
+                field_copy["box"] = {
+                    "x1": field_copy.get("x1"),
+                    "y1": field_copy.get("y1"),
+                    "x2": field_copy.get("x2"),
+                    "y2": field_copy.get("y2"),
+                }
+            out[field_id] = field_copy
+        return out
+    return {}
+
+
+def validate_blueprint(blueprint: dict):
+    errors = []
+    warnings = []
+    if not isinstance(blueprint, dict):
+        return False, ["blueprint must be a JSON object"], []
+    normalized_fields = normalize_blueprint_fields(blueprint.get("fields"))
+    blueprint["fields"] = normalized_fields
+    for field_id, field in normalized_fields.items():
+        if field.get("type") and field.get("type") not in KNOWN_FIELD_TYPES:
+            warnings.append(f"field '{field_id}' has unknown type '{field.get('type')}'")
+        box = field.get("box") or {}
+        if not isinstance(box, dict):
+            errors.append(f"field '{field_id}' box must be an object")
+            continue
+        for k in ("x1", "y1", "x2", "y2"):
+            if k not in box:
+                errors.append(f"field '{field_id}' missing box.{k}")
+                continue
+            try:
+                val = float(box[k])
+            except Exception:
+                errors.append(f"field '{field_id}' box.{k} must be numeric")
+                continue
+            if not (0.0 <= val <= 1.0):
+                errors.append(f"field '{field_id}' box.{k} must be between 0.0 and 1.0")
+    return len(errors) == 0, errors, warnings
+
+
+def load_blueprint() -> dict:
+    raw = load_json(BLUEPRINT_FILE, {})
+    if not isinstance(raw, dict) or not raw:
+        logger.warning("Blueprint missing, using built-in default blueprint")
+        return default_blueprint()
+    ok, errors, warnings = validate_blueprint(raw)
+    for warning in warnings:
+        logger.warning("Blueprint warning: %s", warning)
+    if not ok:
+        logger.warning("Blueprint invalid, using built-in default blueprint")
+        for err in errors:
+            logger.warning("Blueprint error: %s", err)
+        return default_blueprint()
+    merged = default_blueprint()
+    merged.update({k: v for k, v in raw.items() if k != "fields"})
+    merged["validation"].update(raw.get("validation") or {})
+    merged["fields"].update(raw.get("fields") or {})
+    return merged
+
+
+def validate_image_content_type(response: requests.Response, source_url: str) -> None:
+    content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if content_type and content_type not in IMAGE_CONTENT_TYPES:
+        raise RuntimeError(f"Unsupported content type {content_type} for {source_url}")
+
+
+def fetch_image_bytes_from_url(url: str):
+    if IMAGE_CACHE_ENABLED:
+        try:
+            prune_image_cache()
+            IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            key = cache_key_for_url(url)
+            cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
+            if cache_file.exists():
+                logger.info("Image cache hit for URL")
+                return cache_file.read_bytes(), url
+        except Exception as exc:
+            logger.warning("Image cache read failed: %s", exc)
+
+    response = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    validate_image_content_type(response, url)
+    image_bytes = response.content
+
+    if IMAGE_CACHE_ENABLED:
+        try:
+            IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            key = cache_key_for_url(url)
+            cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
+            cache_file.write_bytes(image_bytes)
+        except Exception as exc:
+            logger.warning("Image cache write failed: %s", exc)
+
+    return image_bytes, response.url
+
+
+def read_image_bytes_from_file(file_path: str):
+    path = Path(file_path)
+    if not path.is_absolute():
+        path = (ROOT / path).resolve()
+    if not path.exists():
+        raise RuntimeError(f"Missing local image file: {path}")
+    return path.read_bytes(), path.as_uri()
+
+
+def resolve_input_image():
+    source_file = os.getenv(GOLD_SOURCE_FILE_ENV, "").strip()
+    source_url = os.getenv(GOLD_SOURCE_URL_ENV, "").strip()
+
+    if source_file:
+        return read_image_bytes_from_file(source_file)
+
+    if source_url:
+        return fetch_image_bytes_from_url(source_url)
+
+    facebook_json = DATA_DIR / "facebook_latest_image.json"
+    if facebook_json.exists():
+        try:
+            payload = json.loads(facebook_json.read_text(encoding="utf-8"))
+            selected_file = str(payload.get("selected_image_file") or "").strip()
+            if selected_file:
+                logger.info("Resolved input image from facebook_latest_image.json selected_image_file")
+                return read_image_bytes_from_file(selected_file)
+            selected = str(payload.get("selected_image_url") or "").strip()
+            if selected:
+                logger.info("Resolved input image from facebook_latest_image.json selected_image_url")
+                return fetch_image_bytes_from_url(selected)
+        except Exception as exc:
+            logger.warning("Failed to use facebook_latest_image.json fallback: %s", exc)
+
+    raise RuntimeError(f"Neither {GOLD_SOURCE_FILE_ENV} nor {GOLD_SOURCE_URL_ENV} is set")
+
+
+def pil_to_cv_gray(img: Image.Image) -> np.ndarray:
+    arr = np.array(img.convert("RGB"))
+    if CV2_AVAILABLE:
+        return cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    return np.array(img.convert("L"))
+
+
+def cv_gray_to_pil(gray: np.ndarray) -> Image.Image:
+    return Image.fromarray(gray)
+
+
+def preprocess_soft(img: Image.Image, upscale: int = 2) -> Image.Image:
+    gray = ImageOps.grayscale(img)
+    gray = ImageOps.autocontrast(gray, cutoff=2)
+    gray = gray.filter(ImageFilter.MedianFilter(size=3))
+    gray = gray.filter(ImageFilter.SHARPEN)
+    if upscale > 1:
+        gray = gray.resize((gray.width * upscale, gray.height * upscale))
+    return gray
+
+
+def preprocess_binary(img: Image.Image, threshold: int = 145, upscale: int = 2) -> Image.Image:
+    if CV2_AVAILABLE:
+        gray = pil_to_cv_gray(img)
+        if upscale > 1:
+            gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        _, out = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY)
+        return cv_gray_to_pil(out)
+    pil = preprocess_soft(img, upscale=upscale)
+    return pil.point(lambda p: 255 if p >= threshold else 0)
+
+
+def preprocess_adaptive(img: Image.Image, upscale: int = 2) -> Image.Image:
+    if CV2_AVAILABLE:
+        gray = pil_to_cv_gray(img)
+        if upscale > 1:
+            gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        out = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 9)
+        return cv_gray_to_pil(out)
+    return preprocess_soft(img, upscale=upscale)
+
+
+def preprocess_contrast(img: Image.Image, upscale: int = 2) -> Image.Image:
+    if CV2_AVAILABLE:
+        gray = pil_to_cv_gray(img)
+        if upscale > 1:
+            gray = cv2.resize(gray, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
+        clahe = cv2.createCLAHE(clipLimit=2.2, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+        _, out = cv2.threshold(gray, 145, 255, cv2.THRESH_BINARY)
+        return cv_gray_to_pil(out)
+    return preprocess_binary(img, threshold=150, upscale=upscale)
+
+
+PREPROCESSORS = {
+    "soft": preprocess_soft,
+    "binary": preprocess_binary,
+    "adaptive": preprocess_adaptive,
+    "contrast": preprocess_contrast,
+}
+
+
+def tesseract_ocr(img: Image.Image, psm: int = 6, whitelist: Optional[str] = None):
+    config = f"--oem 3 --psm {psm}"
+    if whitelist:
+        config += f' -c tessedit_char_whitelist="{whitelist}"'
+    text = pytesseract.image_to_string(img, lang="ara+eng", config=config)
+    try:
+        data = pytesseract.image_to_data(img, lang="ara+eng", config=config, output_type=pytesseract.Output.DICT)
+        confs = [float(c) for c in data.get("conf", []) if str(c) not in {"-1", ""}]
+        avg_conf = sum(confs) / len(confs) if confs else 0.0
+    except Exception:
+        avg_conf = 0.0
+    return text.strip(), avg_conf
+
+
+def paddle_ocr(img: Image.Image):
+    paddle = get_paddle()
+    rgb = np.array(img.convert("RGB"))
+    if hasattr(paddle, "predict"):
+        result = paddle.predict(rgb)
+    else:
+        result = paddle.ocr(rgb, cls=False)
+    texts = []
+    confs = []
+    if isinstance(result, list):
+        for page in result:
+            if hasattr(page, "json"):
+                payload = getattr(page, "json", None)
+                if payload:
+                    res = payload.get("res", payload)
+                    rec_texts = res.get("rec_texts", []) or []
+                    rec_scores = res.get("rec_scores", []) or []
+                    for idx, txt in enumerate(rec_texts):
+                        txt = str(txt).strip()
+                        if txt:
+                            texts.append(txt)
+                            if idx < len(rec_scores):
+                                confs.append(float(rec_scores[idx]) * 100.0)
+            elif page and isinstance(page, list):
+                for line in page:
+                    try:
+                        txt = str(line[1][0]).strip()
+                        score = float(line[1][1]) * 100.0
+                    except Exception:
+                        continue
+                    if txt:
+                        texts.append(txt)
+                        confs.append(score)
+    return " ".join(texts).strip(), (sum(confs) / len(confs) if confs else 0.0)
+
+
+def text_density_score(text: str) -> float:
+    text = normalize_digits(text)
+    digits = len(re.findall(r"\d", text))
+    separators = text.count("/") + text.count("-") + text.count(":") + text.count(";") + text.count(".")
+    letters = len(re.findall(r"[A-Za-z\u0600-\u06FF]", text))
+    return digits * 4 + separators * 5 + letters * 0.2 + len(text) * 0.1
+
+
+def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
+    w, h = img.size
+    px1 = max(0, min(w - 1, int(round(w * x1))))
+    py1 = max(0, min(h - 1, int(round(h * y1))))
+    px2 = max(px1 + 1, min(w, int(round(w * x2))))
+    py2 = max(py1 + 1, min(h, int(round(h * y2))))
+    return img.crop((px1, py1, px2, py2))
+
+
+def find_header_box(img: Image.Image):
+    width, height = img.size
+    top_limit = int(height * 0.55)
+    best_score = -1.0
+    best_box = (0, 0, width, int(height * 0.24))
+    step = max(8, int(height * 0.03))
+    band_h = max(40, int(height * 0.16))
+    for y in range(0, max(1, top_limit - band_h), step):
+        box = (0, y, width, min(height, y + band_h))
+        crop = img.crop(box)
+        local_best = ""
+        for variant in [preprocess_soft(crop, 2), preprocess_binary(crop, 145, 2), preprocess_adaptive(crop, 2)]:
+            txt, _ = tesseract_ocr(variant, psm=6)
+            if text_density_score(txt) > text_density_score(local_best):
+                local_best = txt
+        score = text_density_score(local_best)
+        if score > best_score:
+            best_score = score
+            best_box = box
+    return best_box
+
+
+def extract_date_from_text(text: str) -> str:
+    text = normalize_digits(text)
+    now = app_now()
+    year_candidates = [now.year, now.year - 1, now.year + 1, now.year + 2, now.year + 3]
+    patterns = [
+        r"(\d{1,2})\s*[/\-]\s*(\d{1,2})\s*[/\-]\s*(\d{2,4})",
+        r"(\d{1,2})\s*[/\-]\s*(\d{1,2})",
     ]
-    return any(part in lower for part in bad_parts)
+    for pat in patterns:
+        for m in re.finditer(pat, text):
+            parts = [int(x) for x in m.groups()]
+            if len(parts) == 3:
+                d, mo, y = parts
+                if y < 100:
+                    y += 2000
+            else:
+                d, mo = parts
+                y = now.year
+            if mo > 12 and d <= 12:
+                d, mo = mo, d
+            if y not in year_candidates and not (now.year - 1 <= y <= now.year + 3):
+                continue
+            if 1 <= d <= 31 and 1 <= mo <= 12:
+                return f"{y:04d}/{mo:02d}/{d:02d}"
+    return "0000/00/00"
 
 
-def compute_candidate_score(c: ImageCandidate) -> float:
-    score = float(c.area)
+def extract_time_from_text(text: str) -> str:
+    text = normalize_digits(text)
+    text = text.replace("؛", ":").replace(";", ":").replace(",", ":")
+    m = re.search(r"(\d{1,2})\s*[:.]\s*(\d{2})", text)
+    if not m:
+        return "00:00"
+    hh = int(m.group(1))
+    mm = int(m.group(2))
+    lower = text.lower()
+    if "م" in text or "pm" in lower:
+        if 1 <= hh <= 11:
+            hh += 12
+    elif "ص" in text or "am" in lower:
+        if hh == 12:
+            hh = 0
+    if 0 <= hh <= 23 and 0 <= mm <= 59:
+        return f"{hh:02d}:{mm:02d}"
+    return "00:00"
 
-    if c.in_post:
-        score += 1_000_000.0
-    else:
-        score -= 500_000.0
 
-    score -= float(c.post_index) * 1_300_000.0
+def extract_fallback_header(img: Image.Image):
+    header_box = find_header_box(img)
+    header = img.crop(header_box)
+    variants = [
+        preprocess_soft(header, 2),
+        preprocess_binary(header, 145, 2),
+        preprocess_adaptive(header, 2),
+        preprocess_contrast(header, 2),
+    ]
+    best_text = ""
+    for variant in variants:
+        txt, _ = tesseract_ocr(variant, psm=6)
+        if text_density_score(txt) > text_density_score(best_text):
+            best_text = txt
+    text = normalize_text(best_text)
+    date = extract_date_from_text(text)
+    time = extract_time_from_text(text)
+    day = ""
+    letters = re.findall(r"[\u0600-\u06FF ]{3,}", text)
+    if letters:
+        day = max(letters, key=len).strip()
+    return date, time, day, {"header_box": header_box, "header_best_text": best_text}
 
-    relative_top = max(c.top - c.post_top, 0.0)
-    score -= min(relative_top, 1300.0) * 110.0
 
-    ratio = c.aspect_ratio
-    if 0.80 <= ratio <= 1.20:
-        score += 220_000.0
-    elif 0.65 <= ratio <= 1.45:
-        score += 100_000.0
-    else:
-        score -= 180_000.0
+def parse_numeric_value(text: str, field_type: str):
+    text = normalize_digits(text)
+    if field_type == "date":
+        value = extract_date_from_text(text)
+        return value, value != "0000/00/00", None if value != "0000/00/00" else "date_parse_failed"
+    if field_type == "time":
+        value = extract_time_from_text(text)
+        return value, value != "00:00", None if value != "00:00" else "time_parse_failed"
+    if field_type == "arabic_text":
+        norm = normalize_text(text)
+        return norm, bool(norm), None if norm else "empty_text"
+    compact = re.sub(r"\s+", "", text)
+    if field_type == "usd_price":
+        m = re.findall(r"\d+(?:[.,]\d{1,2})?", compact)
+        if not m:
+            return 0.0, False, "usd_parse_failed"
+        return float(max(m, key=len).replace(",", ".")), True, None
+    if field_type == "syp_price":
+        digits = re.findall(r"\d{3,6}", compact) or re.findall(r"\d+", compact)
+        if not digits:
+            return 0, False, "syp_parse_failed"
+        return int(max(digits, key=len)), True, None
+    return compact, bool(compact), None if compact else "parse_failed"
 
-    if c.width >= 1024 and c.height >= 1024:
-        score += 240_000.0
-    elif c.width >= 900 and c.height >= 900:
-        score += 180_000.0
-    elif c.width >= 700 and c.height >= 700:
-        score += 100_000.0
 
-    if c.width > c.height * 1.45:
-        score -= 250_000.0
+def validate_field_value(field_type: str, value: Any, validation: dict):
+    if field_type in {"date", "time"}:
+        return value not in {"0000/00/00", "00:00"}, True, None
+    if field_type == "arabic_text":
+        return bool(value), True, None if value else "empty_text"
+    if field_type == "usd_price":
+        value = float(value)
+        hard_ok = validation["usd_hard_min"] <= value <= validation["usd_hard_max"]
+        expected_ok = validation["usd_expected_min"] <= value <= validation["usd_expected_max"]
+        return hard_ok, expected_ok, None if hard_ok else "outside_hard_range"
+    if field_type == "syp_price":
+        value = int(round(float(value)))
+        hard_ok = validation["syp_hard_min"] <= value <= validation["syp_hard_max"]
+        expected_ok = validation["syp_expected_min"] <= value <= validation["syp_expected_max"]
+        return hard_ok, expected_ok, None if hard_ok else "outside_hard_range"
+    return False, False, "unknown_field_type"
 
-    if c.from_srcset:
-        score += 45_000.0
 
+def candidate_score(valid: bool, expected: bool, confidence: float, warning: Optional[str], field_type: str) -> float:
+    score = 100.0 if valid else 0.0
+    if expected:
+        score += 10.0
+    score += min(confidence, 100.0) * 0.1
+    if warning:
+        score -= 10.0
+    if field_type in {"date", "time"} and valid:
+        score += 5.0
+    elif field_type in {"usd_price", "syp_price", "arabic_text"} and valid:
+        score += 3.0
     return score
 
 
-async def route_handler(route: Route) -> None:
-    if not FAST_RESOURCE_BLOCKING:
-        await route.continue_()
-        return
+def make_crop_variants(img: Image.Image, box: dict):
+    x1 = float(box["x1"])
+    y1 = float(box["y1"])
+    x2 = float(box["x2"])
+    y2 = float(box["y2"])
+    shifts = {
+        "base": (0.0, 0.0, 0.0, 0.0),
+        "up": (0.0, -0.015, 0.0, -0.015),
+        "down": (0.0, 0.015, 0.0, 0.015),
+        "pad_h": (-0.015, 0.0, 0.015, 0.0),
+        "pad_s": (-0.01, -0.01, 0.01, 0.01),
+    }
+    out = []
+    for name, (dx1, dy1, dx2, dy2) in shifts.items():
+        xx1 = max(0.0, min(1.0, x1 + dx1))
+        yy1 = max(0.0, min(1.0, y1 + dy1))
+        xx2 = max(0.0, min(1.0, x2 + dx2))
+        yy2 = max(0.0, min(1.0, y2 + dy2))
+        if xx2 <= xx1 or yy2 <= yy1:
+            continue
+        out.append((name, crop_box(img, xx1, yy1, xx2, yy2)))
+    return out
 
-    req = route.request
-    url = req.url.lower()
-    resource_type = req.resource_type
 
-    if resource_type in {"font", "media", "websocket"}:
-        await route.abort()
-        return
+def run_field_ocr(field_id: str, field_cfg: dict, img: Image.Image, validation: dict) -> OcrFieldResult:
+    field_type = field_cfg.get("type", "text")
+    preprocess_modes = [m for m in (field_cfg.get("preprocess_modes") or ["adaptive", "binary", "contrast"]) if m in KNOWN_PREPROCESS]
+    ocr_engines = [e for e in (field_cfg.get("ocr_engines") or ["paddle", "tesseract"]) if e in KNOWN_ENGINES]
 
-    noisy_parts = [
-        "doubleclick",
-        "analytics",
-        "googletagmanager",
-        "google-analytics",
-        "/tr?",
-        "facebook.com/tr/",
-        "connect.facebook.net",
+    if _PADDLE_AVAILABLE and "tesseract" in ocr_engines and "paddle" in ocr_engines:
+        ocr_engines = ["tesseract", "paddle"]
+
+    psm = int(field_cfg.get("psm", 7))
+    whitelist = field_cfg.get("char_whitelist")
+    box = field_cfg.get("box") or field_cfg
+    variants = make_crop_variants(img, box)
+    all_candidates: list[OcrCandidate] = []
+    best_crop_debug_path = None
+    best_crop_variant = "base"
+
+    for crop_variant_name, crop in variants:
+        for mode_name in preprocess_modes:
+            pre = PREPROCESSORS.get(mode_name, preprocess_adaptive)(crop)
+            if DEBUG_EXPORT:
+                DEBUG_FIELDS_DIR.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+                field_path = DEBUG_FIELDS_DIR / f"{stamp}_{field_id}_{crop_variant_name}_{mode_name}.png"
+                try:
+                    pre.save(field_path)
+                    if best_crop_debug_path is None:
+                        best_crop_debug_path = str(field_path.relative_to(ROOT))
+                except Exception:
+                    pass
+            for engine in ocr_engines:
+                try:
+                    if engine == "paddle":
+                        raw_text, conf = paddle_ocr(pre)
+                    else:
+                        raw_text, conf = tesseract_ocr(pre, psm=psm, whitelist=whitelist)
+                except Exception:
+                    continue
+                value, parsed_ok, parse_warning = parse_numeric_value(raw_text, field_type)
+                valid, expected, validate_warning = validate_field_value(field_type, value, validation)
+                warning = parse_warning or validate_warning
+                score = candidate_score(valid and parsed_ok, expected, conf, warning, field_type)
+                cand = OcrCandidate(
+                    engine=engine,
+                    mode=f"{crop_variant_name}:{mode_name}",
+                    raw_text=raw_text,
+                    value=value,
+                    confidence=conf,
+                    valid=bool(valid and parsed_ok),
+                    expected=bool(expected),
+                    score=score,
+                    warning=warning,
+                )
+                all_candidates.append(cand)
+                if cand.valid and cand.expected and conf >= 70:
+                    selected = cand
+                    return OcrFieldResult(
+                        crop_variant=selected.mode.split(":", 1)[0],
+                        crop_debug_path=best_crop_debug_path,
+                        selected=selected,
+                        candidates=[selected],
+                    )
+
+    all_candidates.sort(key=lambda item: item.score, reverse=True)
+    selected = all_candidates[0] if all_candidates else None
+    if selected:
+        best_crop_variant = selected.mode.split(":", 1)[0]
+    return OcrFieldResult(
+        crop_variant=best_crop_variant,
+        crop_debug_path=best_crop_debug_path,
+        selected=selected,
+        candidates=all_candidates,
+    )
+
+
+def adaptive_field_shift(fields_cfg: dict, field_results: dict) -> dict:
+    shifted = json.loads(json.dumps(fields_cfg))
+    for field_id in ("day", "date", "time"):
+        result = field_results.get(field_id)
+        field_cfg = shifted.get(field_id)
+        if not result or not field_cfg or result.selected:
+            continue
+        box = field_cfg.get("box") or {}
+        if all(k in box for k in ("x1", "y1", "x2", "y2")):
+            field_cfg["box"] = {
+                "x1": max(0.0, float(box["x1"]) - 0.02),
+                "y1": max(0.0, float(box["y1"]) - 0.02),
+                "x2": min(1.0, float(box["x2"]) + 0.02),
+                "y2": min(1.0, float(box["y2"]) + 0.02),
+            }
+    return shifted
+
+
+def build_rates_from_fields(field_results: dict):
+    warnings = []
+    required = {}
+    for key in DEFAULT_REQUIRED_PRICE_FIELDS:
+        item = field_results.get(key)
+        if not item or not item.selected or not item.selected.valid:
+            warnings.append(f"missing_or_invalid:{key}")
+            continue
+        required[key] = item.selected.value
+    if len(required) != len(DEFAULT_REQUIRED_PRICE_FIELDS):
+        return None, None, warnings
+    k21 = GoldRate(
+        ub=float(required["k21_usd_buy"]),
+        us=float(required["k21_usd_sell"]),
+        sb=int(required["k21_syp_buy"]),
+        ss=int(required["k21_syp_sell"]),
+    )
+    k18 = GoldRate(
+        ub=float(required["k18_usd_buy"]),
+        us=float(required["k18_usd_sell"]),
+        sb=int(required["k18_syp_buy"]),
+        ss=int(required["k18_syp_sell"]),
+    )
+    return k21, k18, warnings
+
+
+def full_image_text_variants(img: Image.Image):
+    variants = [
+        preprocess_soft(img, 2),
+        preprocess_binary(img, 145, 2),
     ]
-    if any(part in url for part in noisy_parts):
-        await route.abort()
-        return
-
-    await route.continue_()
-
-
-async def setup_context(context: BrowserContext) -> None:
-    await context.route("**/*", route_handler)
-
-
-async def dismiss_login_modal(page: Page) -> bool:
-    selectors = [
-        'div[aria-label="Close"]',
-        'div[role="button"][aria-label="Close"]',
-        'div[role="button"][aria-label="إغلاق"]',
-        'div[aria-label="إغلاق"]',
-        'div[aria-label="Not Now"]',
-        '[role="dialog"] [aria-label="Close"]',
-        '[role="dialog"] [aria-label="إغلاق"]',
-        '[role="dialog"] [role="button"]',
-    ]
-
-    for selector in selectors:
+    out = []
+    for variant in variants:
         try:
-            locator = page.locator(selector).first
-            if await locator.count() > 0 and await locator.is_visible():
-                await locator.click(timeout=1500)
-                await page.wait_for_timeout(600)
-                return True
+            txt, _ = tesseract_ocr(variant, psm=6)
+            if txt.strip():
+                out.append(txt)
         except Exception:
             pass
-
-    try:
-        clicked = await page.evaluate(
-            """
-            () => {
-              const els = Array.from(document.querySelectorAll('[role="button"], button, div, svg'));
-              for (const el of els) {
-                const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                const text = (el.textContent || '').toLowerCase().trim();
-                const rect = el.getBoundingClientRect();
-
-                const nearTopRight =
-                  rect.top >= 0 &&
-                  rect.top < window.innerHeight * 0.45 &&
-                  rect.left > window.innerWidth * 0.55 &&
-                  rect.width > 10 &&
-                  rect.height > 10;
-
-                if (
-                  nearTopRight &&
-                  (
-                    label.includes('close') ||
-                    label.includes('إغلاق') ||
-                    text === 'close' ||
-                    text === 'إغلاق'
-                  )
-                ) {
-                  el.click();
-                  return true;
-                }
-              }
-              return false;
-            }
-            """
-        )
-        if clicked:
-            await page.wait_for_timeout(600)
-            return True
-    except Exception:
-        pass
-
-    return False
-
-
-async def save_selected_image_as_rendered(page: Page, image_url: str) -> str:
-    """
-    Save the selected image exactly as rendered in the page using element screenshot.
-    This avoids later 403 hotlink issues and preserves the actual size the browser saw.
-    """
-    if not image_url:
-        return ""
-
-    out_file = OUTPUT_FILE.parent / "facebook_selected_image.png"
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-
-    handle = await page.evaluate_handle(
-        """
-        (target) => {
-          const imgs = Array.from(document.images || []);
-          const normalize = (u) => (u || '').trim();
-          const targetNorm = normalize(target);
-
-          for (const img of imgs) {
-            const current = normalize(img.currentSrc || '');
-            const src = normalize(img.src || '');
-            if (current === targetNorm || src === targetNorm) {
-              return img;
-            }
-          }
-
-          const stripQuery = (u) => normalize(u).split('?')[0];
-          for (const img of imgs) {
-            const current = stripQuery(img.currentSrc || '');
-            const src = stripQuery(img.src || '');
-            if (current === stripQuery(targetNorm) || src === stripQuery(targetNorm)) {
-              return img;
-            }
-          }
-
-          return null;
-        }
-        """,
-        image_url,
-    )
-
-    element = handle.as_element()
-    if element is None:
-        return ""
-
-    try:
-        await element.scroll_into_view_if_needed(timeout=2000)
-    except Exception:
-        pass
-
-    try:
-        await page.wait_for_timeout(250)
-        await element.screenshot(path=str(out_file))
-        return str(out_file.relative_to(ROOT))
-    except Exception:
-        return ""
-
-
-async def collect_dom_candidates(page: Page) -> list[ImageCandidate]:
-    raw = await page.evaluate(
-        f"""
-        () => {{
-          function parseSrcset(srcset) {{
-            const out = [];
-            for (const part of (srcset || '').split(',')) {{
-              const item = part.trim();
-              if (!item) continue;
-              const pieces = item.split(/\\s+/);
-              const url = pieces[0] || '';
-              let width = 0;
-              for (const p of pieces.slice(1)) {{
-                if (p.endsWith('w')) {{
-                  const n = parseInt(p.slice(0, -1), 10);
-                  if (!isNaN(n)) width = n;
-                }}
-              }}
-              if (url) out.push({{ url, width }});
-            }}
-            return out;
-          }}
-
-          function isLikelyPostContainer(el) {{
-            if (!el || !el.getBoundingClientRect) return false;
-            const rect = el.getBoundingClientRect();
-            if (rect.width < 220 || rect.height < 180) return false;
-
-            const role = (el.getAttribute('role') || '').toLowerCase();
-            const dataPagelet = (el.getAttribute('data-pagelet') || '').toLowerCase();
-            const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-            const className = (el.className || '').toString().toLowerCase();
-            const tag = (el.tagName || '').toLowerCase();
-            const text = (el.innerText || '').trim();
-
-            if (
-              tag === 'article' ||
-              role === 'article' ||
-              dataPagelet.includes('feed') ||
-              dataPagelet.includes('timeline') ||
-              aria.includes('post') ||
-              className.includes('story')
-            ) {{
-              return true;
-            }}
-
-            if (text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 240) {{
-              return true;
-            }}
-
-            return false;
-          }}
-
-          function collectPostContainers() {{
-            const all = Array.from(document.querySelectorAll('article, div, section'));
-            const posts = [];
-
-            for (const el of all) {{
-              if (!isLikelyPostContainer(el)) continue;
-
-              const rect = el.getBoundingClientRect();
-              const top = rect.top + window.scrollY;
-
-              const imgs = Array.from(el.querySelectorAll('img')).map(img => {{
-                const r = img.getBoundingClientRect();
-                return {{
-                  currentSrc: img.currentSrc || '',
-                  src: img.src || '',
-                  srcset: parseSrcset(img.getAttribute('srcset') || ''),
-                  width: img.naturalWidth || 0,
-                  height: img.naturalHeight || 0,
-                  top: r.top + window.scrollY,
-                  in_post: true,
-                }};
-              }});
-
-              if (imgs.length > 0) {{
-                posts.push({{ el, top, images: imgs }});
-              }}
-            }}
-
-            posts.sort((a, b) => a.top - b.top);
-
-            const deduped = [];
-            for (const post of posts) {{
-              const parentAlreadyIncluded = deduped.some(p => p.el.contains(post.el));
-              if (!parentAlreadyIncluded) deduped.push(post);
-            }}
-
-            return deduped.slice(0, {MAX_POSTS_TO_SCAN}).map((post, idx) => ({{
-              post_index: idx,
-              post_top: post.top,
-              images: post.images,
-            }}));
-          }}
-
-          return collectPostContainers();
-        }}
-        """
-    )
-
-    candidates: list[ImageCandidate] = []
-    seen: set[str] = set()
-
-    def add_candidate(
-        src: str,
-        width: int,
-        height: int,
-        top: float,
-        in_post: bool,
-        post_index: int,
-        post_top: float,
-        from_srcset: bool = False,
-    ) -> None:
-        src = normalize_fb_image_url((src or "").strip())
-        if not src or src in seen:
-            return
-        if is_bad_url(src):
-            return
-        if width < MIN_CANDIDATE_WIDTH or height < MIN_CANDIDATE_HEIGHT:
-            return
-
-        seen.add(src)
-        candidate = ImageCandidate(
-            src=src,
-            width=width,
-            height=height,
-            top=top,
-            in_post=in_post,
-            post_index=post_index,
-            post_top=post_top,
-            from_srcset=from_srcset,
-        )
-        candidate.score = compute_candidate_score(candidate)
-        candidates.append(candidate)
-
-    if isinstance(raw, list):
-        for post in raw:
-            post_index = int(post.get("post_index") or 0)
-            post_top = float(post.get("post_top") or 0.0)
-            images = post.get("images") or []
-
-            local_added = 0
-            for item in images:
-                width = int(item.get("width") or 0)
-                height = int(item.get("height") or 0)
-                top = float(item.get("top") or 0.0)
-                in_post = bool(item.get("in_post") or False)
-
-                current_src = str(item.get("currentSrc") or "").strip()
-                src = str(item.get("src") or "").strip()
-
-                before = len(candidates)
-                add_candidate(current_src, width, height, top, in_post, post_index, post_top)
-                add_candidate(src, width, height, top, in_post, post_index, post_top)
-                local_added += len(candidates) - before
-
-                srcset_items = item.get("srcset") or []
-                if isinstance(srcset_items, list):
-                    ordered = sorted(
-                        srcset_items,
-                        key=lambda x: int(x.get("width") or 0),
-                        reverse=True,
-                    )
-                    for entry in ordered[:10]:
-                        candidate_url = str(entry.get("url") or "").strip()
-                        declared_width = int(entry.get("width") or 0)
-                        approx_w = max(width, declared_width) if declared_width > 0 else width
-                        approx_h = height
-                        if approx_w > 0 and height > 0 and width > 0:
-                            approx_h = max(int(height * (approx_w / max(width, 1))), height)
-
-                        before = len(candidates)
-                        add_candidate(
-                            candidate_url,
-                            approx_w,
-                            approx_h,
-                            top,
-                            in_post,
-                            post_index,
-                            post_top,
-                            from_srcset=True,
-                        )
-                        local_added += len(candidates) - before
-
-            if local_added >= MAX_CANDIDATES_PER_POST:
-                continue
-
-    grouped: dict[int, list[ImageCandidate]] = {}
-    for candidate in candidates:
-        grouped.setdefault(candidate.post_index, []).append(candidate)
-
-    ordered_final: list[ImageCandidate] = []
-    for post_index in sorted(grouped)[:MAX_POST_GROUPS]:
-        group = grouped[post_index]
-        group.sort(key=lambda c: c.score, reverse=True)
-        ordered_final.extend(group[:MAX_CANDIDATES_PER_POST])
-
-    ordered_final.sort(key=lambda c: c.score, reverse=True)
-    return ordered_final[:MAX_CANDIDATES_TO_TRY]
-
-
-async def maybe_scroll(page: Page, step: int) -> None:
-    amount = random.randint(850, 1450)
-    await page.mouse.wheel(0, amount)
-
-    try:
-        await page.mouse.move(random.randint(40, 420), random.randint(120, 700))
-    except Exception:
-        pass
-
-    delay = random.randint(max(500, SCROLL_DELAY_MS - 250), SCROLL_DELAY_MS + 450)
-    if step < 2:
-        delay += 250
-    await page.wait_for_timeout(delay)
-
-
-async def create_context(browser, mode: str) -> BrowserContext:
-    if mode == "desktop":
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1366, "height": 2200},
-            device_scale_factor=1,
-        )
-    else:
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                "Version/16.0 Mobile/15E148 Safari/604.1"
-            ),
-            viewport={"width": 390, "height": 844},
-            device_scale_factor=2,
-        )
-
-    await setup_context(context)
-    return context
-
-
-def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
-    host = urlparse(url).netloc.lower()
-    if host.startswith("www."):
-        return "desktop"
-    if host.startswith("m."):
-        return "mobile"
-    return fallback_mode
-
-
-async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
-    context_mode = preferred_context_mode_for_url(url, default_mode)
-    context = await create_context(browser, context_mode)
-    page = await context.new_page()
-    page.set_default_timeout(REQUEST_TIMEOUT_MS)
-
-    try:
-        await page.goto(url, wait_until="domcontentloaded")
-        await page.wait_for_timeout(1000)
-
-        modal_closed = await dismiss_login_modal(page)
-        await page.wait_for_timeout(350)
-
-        best_snapshot: list[ImageCandidate] = []
-        last_error = ""
-        saw_login_wall = False
-
-        for step in range(MAX_SCROLL_STEPS + 1):
-            html = await page.content()
-
-            if is_login_wall(html, page.url):
-                saw_login_wall = True
-                closed = await dismiss_login_modal(page)
-                if closed:
-                    modal_closed = True
-                    await page.wait_for_timeout(700)
-
+        if _PADDLE_AVAILABLE:
             try:
-                candidates = await collect_dom_candidates(page)
-            except Exception as exc:
-                candidates = []
-                last_error = f"candidate extraction failed: {exc}"
-            else:
-                last_error = ""
-
-            if candidates:
-                best_snapshot = candidates
-                top = candidates[0]
-                if top.width >= 1024 and top.height >= 1024 and top.in_post and top.post_index <= 1:
-                    break
-
-            if step < MAX_SCROLL_STEPS:
-                await maybe_scroll(page, step)
-
-        if SAVE_DEBUG_SCREENSHOT:
-            SCREENSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            await page.screenshot(path=str(SCREENSHOT_FILE), full_page=True)
-
-        if best_snapshot:
-            best = best_snapshot[0]
-            selected_image_file = await save_selected_image_as_rendered(page, best.src)
-            return {
-                "ok": True,
-                "page_url": page.url,
-                "context_mode": context_mode,
-                "modal_closed": modal_closed,
-                "message": "Success_with_login_wall_fallback" if saw_login_wall else "Success",
-                "selected_image_url": best.src,
-                "selected_width": best.width,
-                "selected_height": best.height,
-                "selected_top": best.top,
-                "selected_in_post": best.in_post,
-                "selected_post_index": best.post_index,
-                "selected_post_top": best.post_top,
-                "selected_image_file": selected_image_file,
-                "candidates": [asdict(c) for c in best_snapshot],
-            }
-
-        html = await page.content()
-        if is_login_wall(html, page.url):
-            login_wall_path = OUTPUT_FILE.parent / "login_wall.png"
-            login_wall_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                await page.screenshot(path=str(login_wall_path), full_page=True)
+                txt, _ = paddle_ocr(variant)
+                if txt.strip():
+                    out.append(txt)
             except Exception:
                 pass
-            return {
-                "ok": False,
-                "page_url": page.url,
-                "context_mode": context_mode,
-                "modal_closed": modal_closed,
-                "message": "Login wall detected",
-                "selected_image_url": "",
-                "selected_width": 0,
-                "selected_height": 0,
-                "selected_top": 0,
-                "selected_in_post": False,
-                "selected_post_index": -1,
-                "selected_post_top": 0,
-                "selected_image_file": "",
-                "candidates": [],
-            }
+    return out
 
-        return {
-            "ok": False,
-            "page_url": page.url,
-            "context_mode": context_mode,
-            "modal_closed": modal_closed,
-            "message": last_error or "No usable images found",
-            "selected_image_url": "",
-            "selected_width": 0,
-            "selected_height": 0,
-            "selected_top": 0,
-            "selected_in_post": False,
-            "selected_post_index": -1,
-            "selected_post_top": 0,
-            "selected_image_file": "",
-            "candidates": [],
+
+def build_rates_from_full_text(full_text: str):
+    text = normalize_digits(full_text)
+    nums = []
+    for n in re.findall(r"\d+(?:[.,]\d+)?", text):
+        try:
+            nums.append(float(n.replace(",", ".")))
+        except Exception:
+            pass
+    usd = [x for x in nums if 80 <= x <= 200]
+    syp = [int(round(x)) for x in nums if 10000 <= x <= 25000]
+    if len(usd) >= 4 and len(syp) >= 4:
+        return (
+            GoldRate(ub=float(usd[1]), us=float(usd[0]), sb=int(syp[1]), ss=int(syp[0])),
+            GoldRate(ub=float(usd[3]), us=float(usd[2]), sb=int(syp[3]), ss=int(syp[2])),
+        )
+    return None, None
+
+
+def sanitize_price_relationships(k21: GoldRate, k18: GoldRate):
+    warnings = []
+    if k21.us < k21.ub:
+        k21 = GoldRate(ub=k21.us, us=k21.ub, sb=k21.sb, ss=k21.ss)
+        warnings.append("auto_swapped_k21_usd_buy_sell")
+    if k18.us < k18.ub:
+        k18 = GoldRate(ub=k18.us, us=k18.ub, sb=k18.sb, ss=k18.ss)
+        warnings.append("auto_swapped_k18_usd_buy_sell")
+    if k21.ss < k21.sb:
+        k21 = GoldRate(ub=k21.ub, us=k21.us, sb=k21.ss, ss=k21.sb)
+        warnings.append("auto_swapped_k21_syp_buy_sell")
+    if k18.ss < k18.sb:
+        k18 = GoldRate(ub=k18.ub, us=k18.us, sb=k18.ss, ss=k18.sb)
+        warnings.append("auto_swapped_k18_syp_buy_sell")
+    return k21, k18, warnings
+
+
+def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
+    warnings = []
+    relationship_ok = True
+    if k21.us <= 0 or k21.ub <= 0 or k18.us <= 0 or k18.ub <= 0:
+        relationship_ok = False
+        warnings.append("non_positive_usd_values")
+    for sell, buy, prefix in [
+        (k21.ss, k21.sb, "k21_syp"),
+        (k18.ss, k18.sb, "k18_syp"),
+        (k21.us, k21.ub, "k21_usd"),
+        (k18.us, k18.ub, "k18_usd"),
+    ]:
+        if sell < buy:
+            relationship_ok = False
+            warnings.append(f"{prefix}_sell_less_than_buy")
+    for pair_name, a, b in [("buy_ratio", k18.sb, k21.sb), ("sell_ratio", k18.ss, k21.ss)]:
+        if b > 0:
+            ratio = a / b
+            if not (validation["min_18k_to_21k_ratio"] <= ratio <= validation["max_18k_to_21k_ratio"]):
+                relationship_ok = False
+                warnings.append(f"{pair_name}_outside_expected_ratio:{ratio:.4f}")
+    return relationship_ok, warnings
+
+
+def learn_blueprint_from_success(blueprint: dict, field_results: dict, confidence: float) -> None:
+    if confidence < 0.85:
+        return
+    shifts = {
+        "up": (0.0, -0.015, 0.0, -0.015),
+        "down": (0.0, 0.015, 0.0, 0.015),
+        "pad_h": (-0.015, 0.0, 0.015, 0.0),
+        "pad_s": (-0.01, -0.01, 0.01, 0.01),
+    }
+    changed = False
+    for field_id in ("day", "date", "time"):
+        result = field_results.get(field_id)
+        field_cfg = blueprint.get("fields", {}).get(field_id)
+        if not result or not result.selected or not field_cfg:
+            continue
+        crop_variant = result.selected.mode.split(":", 1)[0]
+        if crop_variant == "base" or crop_variant not in shifts:
+            continue
+        box = field_cfg.get("box") or {}
+        if not all(k in box for k in ("x1", "y1", "x2", "y2")):
+            continue
+        dx1, dy1, dx2, dy2 = shifts[crop_variant]
+        field_cfg["box"] = {
+            "x1": max(0.0, min(1.0, float(box["x1"]) + dx1)),
+            "y1": max(0.0, min(1.0, float(box["y1"]) + dy1)),
+            "x2": max(0.0, min(1.0, float(box["x2"]) + dx2)),
+            "y2": max(0.0, min(1.0, float(box["y2"]) + dy2)),
         }
+        changed = True
+    if changed:
+        blueprint["updated_at"] = datetime.now(timezone.utc).isoformat()
+        blueprint["updated_by"] = "auto_learn"
+        save_json(BLUEPRINT_FILE, blueprint)
+        logger.info("Blueprint auto-learned from successful run")
 
-    finally:
-        await context.close()
+
+def compute_confidence(fields, relationship_ok: bool, warnings: list[str]) -> float:
+    valid_count = 0
+    expected_count = 0
+    conf_total = 0.0
+    for result in fields.values():
+        if not result.selected:
+            continue
+        if result.selected.valid:
+            valid_count += 1
+        if result.selected.expected:
+            expected_count += 1
+        conf_total += min(result.selected.confidence, 100.0)
+    total_fields = max(len(fields), 1)
+    score = (
+        0.35
+        + (valid_count / total_fields) * 0.35
+        + (expected_count / total_fields) * 0.15
+        + min((conf_total / total_fields) / 100.0, 1.0) * 0.10
+    )
+    if relationship_ok:
+        score += 0.10
+    score -= min(len(warnings) * 0.03, 0.20)
+    return max(0.0, min(score, 1.0))
 
 
-async def scrape_public_facebook_image() -> dict:
-    url_candidates = build_url_candidates(FACEBOOK_PAGE_URL, FACEBOOK_URL_MODE)
+def value_changed(a: Any, b: Any, tolerance: float = 0.001) -> bool:
+    try:
+        return abs(float(a) - float(b)) > tolerance
+    except Exception:
+        return a != b
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            headless=HEADLESS,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ],
+
+def snapshot_identity_key(snapshot: dict) -> str:
+    keys = ["date", "time", "k21_ss", "k21_sb", "k21_us", "k21_ub", "k18_ss", "k18_sb", "k18_us", "k18_ub"]
+    return "|".join(str(snapshot.get(k, "")) for k in keys)
+
+
+def summarize_price_changes(previous: dict, current: dict) -> dict:
+    keys = ["k21_ss", "k21_sb", "k21_us", "k21_ub", "k18_ss", "k18_sb", "k18_us", "k18_ub"]
+    fields = {}
+    for key in keys:
+        if value_changed(previous.get(key), current.get(key)):
+            fields[key] = {"old": previous.get(key), "new": current.get(key)}
+    return {"changed": bool(fields), "count": len(fields), "fields": fields}
+
+
+def parse_to_datetime(date_str: str, time_str: str, updated_at_utc: str = "") -> datetime:
+    if date_str != "0000/00/00":
+        try:
+            y, m, d = [int(x) for x in date_str.split("/")]
+            hh, mm = [int(x) for x in time_str.split(":")]
+            return datetime(y, m, d, hh, mm, tzinfo=APP_TIMEZONE)
+        except Exception:
+            pass
+    if updated_at_utc:
+        try:
+            return datetime.fromisoformat(updated_at_utc)
+        except Exception:
+            pass
+    return datetime(2000, 1, 1, tzinfo=APP_TIMEZONE)
+
+
+def save_snapshot_into_history(snapshot: dict) -> None:
+    history = load_json(HISTORY_FILE, [])
+    if not isinstance(history, list):
+        history = []
+    key = snapshot_identity_key(snapshot)
+    if any(snapshot_identity_key(item) == key for item in history if isinstance(item, dict)):
+        save_json(LATEST_FILE, snapshot)
+        return
+    history.append(snapshot)
+    history.sort(
+        key=lambda item: parse_to_datetime(
+            item.get("date", "0000/00/00"),
+            item.get("time", "00:00"),
+            item.get("updated_at_utc", ""),
+        ),
+        reverse=True,
+    )
+    save_json(HISTORY_FILE, history[:500])
+    save_json(LATEST_FILE, snapshot)
+
+
+def export_overlay(image_bytes: bytes, extraction_method: str, source_url: str):
+    if not DEBUG_EXPORT:
+        return None
+    try:
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        source_name = Path(urlparse(source_url).path).name or "source"
+        out = DEBUG_DIR / f"{stamp}_{extraction_method}_{source_name}.png"
+        img.save(out)
+        return str(out.relative_to(ROOT))
+    except Exception:
+        return None
+
+
+def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
+    try:
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    except UnidentifiedImageError as exc:
+        raise ValueError(f"Invalid image input: {exc}")
+
+    if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+        raise ValueError(
+            f"Source image too small for reliable OCR: {img.width}x{img.height} "
+            f"(minimum {MIN_SOURCE_WIDTH}x{MIN_SOURCE_HEIGHT})"
         )
 
-        all_attempts: list[dict] = []
-        final_result: dict | None = None
+    blueprint = load_blueprint()
+    bp_sig = blueprint_signature(blueprint)
+    image_hash = sha256_bytes(image_bytes)
 
+    if CACHE_ENABLED:
+        cache = load_ocr_cache()
+        cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
+        entry = cache.get(cache_key)
+        if isinstance(entry, dict):
+            logger.info("OCR cache hit")
+            return extraction_result_from_cache_entry(entry)
+
+    validation = DEFAULT_VALIDATION.copy()
+    validation.update(blueprint.get("validation") or {})
+    fields_cfg = blueprint.get("fields") or {}
+
+    warnings: list[str] = []
+    debug = {
+        "source_url": source_url,
+        "image_width": img.width,
+        "image_height": img.height,
+        "display_timezone": APP_TIMEZONE_NAME,
+        "opencv_available": CV2_AVAILABLE,
+        "paddle_enabled": _PADDLE_AVAILABLE,
+        "paddle_failure_reason": _PADDLE_FAILURE_REASON,
+        "has_blueprint": bool(fields_cfg),
+        "image_sha256": image_hash,
+        "blueprint_signature": bp_sig,
+        "cache_hit": False,
+    }
+
+    ordered_field_ids = DEFAULT_REQUIRED_PRICE_FIELDS + ["date", "time", "day"]
+    field_results = {}
+    for field_id in ordered_field_ids:
+        field_cfg = fields_cfg.get(field_id)
+        if field_cfg:
+            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
+
+    for field_id, field_cfg in fields_cfg.items():
+        if field_id not in field_results:
+            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
+
+    adapted_fields_cfg = adaptive_field_shift(fields_cfg, field_results)
+    if adapted_fields_cfg != fields_cfg:
+        for field_id in ["day", "date", "time"]:
+            if field_id in adapted_fields_cfg:
+                field_results[field_id] = run_field_ocr(field_id, adapted_fields_cfg[field_id], img, validation)
+
+    debug["fields"] = {
+        field_id: {
+            "crop_variant": result.crop_variant,
+            "crop_debug_path": result.crop_debug_path,
+            "selected": sanitize_for_json(result.selected.__dict__) if result.selected else None,
+        }
+        for field_id, result in field_results.items()
+    }
+
+    need_full_text = False
+    for required in DEFAULT_REQUIRED_PRICE_FIELDS + ["date", "time"]:
+        item = field_results.get(required)
+        if not item or not item.selected or not item.selected.valid:
+            need_full_text = True
+            break
+
+    full_text = ""
+    if need_full_text:
+        full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+
+    fallback_date, fallback_time, fallback_day, fallback_debug = extract_fallback_header(img)
+    debug["header_fallback"] = fallback_debug
+
+    date = field_results["date"].selected.value if field_results.get("date") and field_results["date"].selected and field_results["date"].selected.valid else fallback_date
+    if date == "0000/00/00" and full_text:
+        date = extract_date_from_text(full_text)
+        if date == "0000/00/00":
+            warnings.append("header_date_failed")
+
+    time = field_results["time"].selected.value if field_results.get("time") and field_results["time"].selected and field_results["time"].selected.valid else fallback_time
+    if time == "00:00" and full_text:
+        time = extract_time_from_text(full_text)
+        if time == "00:00":
+            warnings.append("header_time_failed")
+
+    day = field_results["day"].selected.value if field_results.get("day") and field_results["day"].selected and field_results["day"].selected.valid else fallback_day
+
+    k21, k18, price_warnings = build_rates_from_fields(field_results)
+    warnings.extend(price_warnings)
+
+    if k21 is None or k18 is None:
+        if not full_text:
+            full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+
+        dk21, dk18 = build_rates_from_full_text(full_text)
+        debug["full_text_price_fallback"] = {
+            "diagnostic_only": False,
+            "k21": sanitize_for_json(dk21.__dict__) if dk21 else None,
+            "k18": sanitize_for_json(dk18.__dict__) if dk18 else None,
+        }
+
+        if dk21 is not None and dk18 is not None:
+            k21, k18 = dk21, dk18
+            warnings.append("used_full_text_price_fallback")
+            debug["price_source"] = "full_text_fallback"
+        else:
+            raise ValueError("Blueprint price extraction failed and full-text fallback also failed")
+
+    k21, k18, auto_fix_warnings = sanitize_price_relationships(k21, k18)
+    warnings.extend(auto_fix_warnings)
+
+    relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
+    if relationship_warnings:
+        warnings.extend(relationship_warnings)
+    debug["relationship_ok"] = relationship_ok
+    debug["relationship_warnings"] = relationship_warnings
+    debug["validation"] = validation
+
+    missing_header = []
+    if date == "0000/00/00":
+        missing_header.append("date")
+    if time == "00:00":
+        missing_header.append("time")
+    if missing_header:
+        warnings.append(f"missing_required_fields:{','.join(missing_header)}")
+
+    confidence = compute_confidence(field_results, relationship_ok, warnings)
+    learn_blueprint_from_success(blueprint, field_results, confidence)
+    overlay = export_overlay(image_bytes, "template_fields_hybrid", source_url)
+    if overlay:
+        debug["debug_overlay_path"] = overlay
+
+    raw_date_preview = normalize_text(field_results["date"].selected.raw_text) if field_results.get("date") and field_results["date"].selected else ""
+    raw_time_preview = normalize_text(field_results["time"].selected.raw_text) if field_results.get("time") and field_results["time"].selected else ""
+
+    result = ExtractionResult(
+        date=date,
+        time=time,
+        day=day,
+        k21=k21,
+        k18=k18,
+        confidence=confidence,
+        raw_ocr=full_text,
+        raw_ocr_preview=f"{raw_date_preview} | {raw_time_preview}".strip(" |"),
+        extraction_method="template_fields_hybrid",
+        ocr_engine="paddle+tesseract" if _PADDLE_AVAILABLE else "tesseract",
+        warnings=warnings,
+        debug=debug,
+    )
+
+    if CACHE_ENABLED:
         try:
-            for attempt_url in url_candidates:
-                try:
-                    result = await try_scrape_single_url(browser, attempt_url, FACEBOOK_URL_MODE)
-                except Exception as exc:
-                    result = {
-                        "ok": False,
-                        "page_url": attempt_url,
-                        "context_mode": preferred_context_mode_for_url(attempt_url, FACEBOOK_URL_MODE),
-                        "modal_closed": False,
-                        "message": f"Navigation/extraction error: {exc}",
-                        "selected_image_url": "",
-                        "selected_width": 0,
-                        "selected_height": 0,
-                        "selected_top": 0,
-                        "selected_in_post": False,
-                        "selected_post_index": -1,
-                        "selected_post_top": 0,
-                        "selected_image_file": "",
-                        "candidates": [],
-                    }
+            cache = load_ocr_cache()
+            cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
+            cache[cache_key] = extraction_result_to_cache_entry(result)
+            save_ocr_cache(cache)
+        except Exception as exc:
+            logger.warning("Failed to save OCR cache: %s", exc)
 
-                all_attempts.append(result)
-
-                if result.get("ok") and (result.get("selected_image_file") or result.get("candidates")):
-                    final_result = result
-                    break
-
-            if final_result is None:
-                final_result = max(
-                    all_attempts,
-                    key=lambda r: (
-                        1 if r.get("candidates") else 0,
-                        int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
-                    ),
-                    default={
-                        "ok": False,
-                        "page_url": "",
-                        "context_mode": FACEBOOK_URL_MODE,
-                        "modal_closed": False,
-                        "message": "All URL attempts failed",
-                        "selected_image_url": "",
-                        "selected_width": 0,
-                        "selected_height": 0,
-                        "selected_top": 0,
-                        "selected_in_post": False,
-                        "selected_post_index": -1,
-                        "selected_post_top": 0,
-                        "selected_image_file": "",
-                        "candidates": [],
-                    },
-                )
-
-            final_result["attempted_urls"] = url_candidates
-            final_result["attempts"] = [
-                {
-                    "page_url": r.get("page_url", ""),
-                    "context_mode": r.get("context_mode", ""),
-                    "ok": r.get("ok", False),
-                    "message": r.get("message", ""),
-                    "selected_width": r.get("selected_width", 0),
-                    "selected_height": r.get("selected_height", 0),
-                    "selected_image_file": r.get("selected_image_file", ""),
-                }
-                for r in all_attempts
-            ]
-
-            OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            OUTPUT_FILE.write_text(
-                json.dumps(final_result, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-
-            print(json.dumps(final_result, ensure_ascii=False, indent=2))
-            return final_result
-
-        finally:
-            await browser.close()
+    return result
 
 
-def main() -> None:
-    asyncio.run(scrape_public_facebook_image())
+def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
+    result = extract_gold_from_image_bytes(image_bytes, source_url)
+    latest = load_json(LATEST_FILE, {})
+    if not isinstance(latest, dict):
+        latest = {}
+
+    snapshot = {
+        "ok": True,
+        "source": source_url,
+        "date": result.date,
+        "time": result.time,
+        "day": result.day,
+        "k21_ss": int(result.k21.ss),
+        "k21_sb": int(result.k21.sb),
+        "k21_us": round(float(result.k21.us), 2),
+        "k21_ub": round(float(result.k21.ub), 2),
+        "k18_ss": int(result.k18.ss),
+        "k18_sb": int(result.k18.sb),
+        "k18_us": round(float(result.k18.us), 2),
+        "k18_ub": round(float(result.k18.ub), 2),
+        "raw_ocr_preview": result.raw_ocr_preview,
+        "source_w": result.debug.get("image_width", 0),
+        "source_h": result.debug.get("image_height", 0),
+        "byte_length": len(image_bytes),
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "display_timezone": APP_TIMEZONE_NAME,
+        "ocr_engine": result.ocr_engine,
+        "extraction_method": result.extraction_method,
+        "confidence": result.confidence,
+        "warnings": result.warnings,
+        "debug": result.debug,
+    }
+    change_summary = summarize_price_changes(latest, snapshot)
+    snapshot["should_notify"] = bool(change_summary["changed"])
+    snapshot["change_summary"] = change_summary
+    snapshot["change_key"] = snapshot_identity_key(snapshot)
+    snapshot["previous_values"] = {
+        k: latest.get(k)
+        for k in ["k21_ss", "k21_sb", "k21_us", "k21_ub", "k18_ss", "k18_sb", "k18_us", "k18_ub"]
+    }
+    if DEBUG_EXPORT:
+        snapshot["raw_ocr"] = result.raw_ocr
+    return snapshot
+
+
+app = FastAPI(title="Gold OCR Optimized", version="11.3.0")
+
+
+@app.get("/health")
+def health():
+    return {
+        "ok": True,
+        "service": "gold-ocr-optimized",
+        "version": "11.3.0",
+        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "display_timezone": APP_TIMEZONE_NAME,
+        "cache_enabled": CACHE_ENABLED,
+        "image_cache_enabled": IMAGE_CACHE_ENABLED,
+        "min_source_width": MIN_SOURCE_WIDTH,
+        "min_source_height": MIN_SOURCE_HEIGHT,
+    }
+
+
+@app.post("/extract", response_model=ExtractResponse)
+def extract(payload: ExtractRequest):
+    if not payload.image_url:
+        raise HTTPException(status_code=400, detail="image_url is required")
+    try:
+        image_bytes, final_url = fetch_image_bytes_from_url(str(payload.image_url))
+        result = extract_gold_from_image_bytes(image_bytes, final_url)
+        return ExtractResponse(
+            ok=True,
+            date=result.date,
+            time=result.time,
+            k21_ss=result.k21.ss,
+            k21_sb=result.k21.sb,
+            k21_us=round(float(result.k21.us), 2),
+            k21_ub=round(float(result.k21.ub), 2),
+            k18_ss=result.k18.ss,
+            k18_sb=result.k18.sb,
+            k18_us=round(float(result.k18.us), 2),
+            k18_ub=round(float(result.k18.ub), 2),
+            confidence=result.confidence,
+            extraction_method=result.extraction_method,
+            ocr_engine=result.ocr_engine,
+            warnings=result.warnings,
+            raw_ocr_preview=result.raw_ocr_preview,
+            debug=result.debug if payload.include_debug else {},
+        )
+    except Exception as exc:
+        logger.exception("Extraction failed")
+        raise HTTPException(status_code=422, detail=f"Extraction failed: {exc}")
+
+
+def main():
+    image_bytes, final_source = resolve_input_image()
+    snapshot = build_snapshot_from_image(image_bytes, final_source)
+    save_snapshot_into_history(snapshot)
+    print(json.dumps(sanitize_for_json(snapshot), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    main()
+    if APP_MODE == "api":
+        uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    else:
+        main()
