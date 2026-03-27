@@ -37,7 +37,7 @@ jobs:
 
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
-      FACEBOOK_URL_MODE: "auto"
+      FACEBOOK_URL_MODE: "mobile"
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
