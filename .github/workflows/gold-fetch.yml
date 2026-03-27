@@ -144,6 +144,7 @@ jobs:
           cat data/latest.json || true
 
       - name: Upload debug artifacts
+        
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -156,6 +157,7 @@ jobs:
             data/latest.json
             data/history.json
             data/debug
+            data/facebook_selected_image.png
           if-no-files-found: ignore
           retention-days: 7
 
