@@ -170,6 +170,12 @@ jobs:
           echo "facebook_ocr_failures.json:"
           cat data/facebook_ocr_failures.json || true
 
+      - name: Verify latest.json path
+        if: always()
+        run: |
+          echo "PWD=$(pwd)"
+          find . -name "latest.json" -type f || true
+          
       - name: Upload debug artifacts
         if: always()
         uses: actions/upload-artifact@v4
