@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-fra5-2.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGhwEY4&_nc_oc=AdrStxF7xCvnSPhnhSH-EijT7mMm7L29Loidi6pipfNcNsnhB6eEMpnj67nw7_rZzKc&_nc_zt=23&_nc_ht=scontent-fra5-2.xx&_nc_gid=6rFRP81Sh_1rjDux9O7j7A&_nc_ss=7a30f&oh=00_AfxNyxzhTgBOomNyBG4WBneMoXSm-CoZFJcR5neQwy3b-A&oe=69CC441A",
+  "source": "https://scontent-ord5-3.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGxAaAY&_nc_oc=AdruXBhtA1r3ECX-K5KZk9tZVwxVRegxq20IC3mXNCoGgmJnr2jH8Y7MDX2LZReq0TA&_nc_zt=23&_nc_ht=scontent-ord5-3.xx&_nc_gid=AfV3MZNkCzbGoJNChoi4Mg&_nc_ss=7a30f&oh=00_AfzQHy3vkHiBepEatIoTTWfLXsPqDFnQzPgKmQCZI0icKA&oe=69CC7C5A",
   "date": "0000/00/00",
   "time": "23:50",
   "day": "5ua .",
@@ -16,7 +16,7 @@
   "source_w": 526,
   "source_h": 526,
   "byte_length": 51790,
-  "updated_at_utc": "2026-03-27T13:52:35.405137+00:00",
+  "updated_at_utc": "2026-03-27T14:47:20.233431+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
@@ -46,7 +46,7 @@
     "has_blueprint": true,
     "image_sha256": "085c593b8dd3e35ace8f42615a1b0c4abdf4f723540428f1548a2159aa5db0dd",
     "blueprint_signature": "b3253a06d49ec2e41d7f33211b4cb6e6ffea0c3228a7f1ce697b321bb3631ff1",
-    "cache_hit": false,
+    "cache_hit": true,
     "fields": {
       "k21_syp_sell": {
         "crop_variant": "pad_h",
@@ -256,57 +256,25 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "debug_overlay_path": "data/debug/20260327T135235_template_fields_hybrid_657386282_122178542204861173_563926802845908987_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260327T135235_template_fields_hybrid_657386282_122178542204861173_563926802845908987_n.jpg.png",
+    "cache_cached_at": "2026-03-27T13:52:35.403572+00:00"
   },
-  "should_notify": true,
+  "should_notify": false,
   "change_summary": {
-    "changed": true,
-    "count": 8,
-    "fields": {
-      "k21_ss": {
-        "old": 16380,
-        "new": 15900
-      },
-      "k21_sb": {
-        "old": 16700,
-        "new": 15550
-      },
-      "k21_us": {
-        "old": 138.0,
-        "new": 130.0
-      },
-      "k21_ub": {
-        "old": 141.0,
-        "new": 127.0
-      },
-      "k18_ss": {
-        "old": 12118,
-        "new": 13250
-      },
-      "k18_sb": {
-        "old": 14300,
-        "new": 11150
-      },
-      "k18_us": {
-        "old": 138.0,
-        "new": 108.0
-      },
-      "k18_ub": {
-        "old": 121.0,
-        "new": 130.0
-      }
-    }
+    "changed": false,
+    "count": 0,
+    "fields": {}
   },
   "change_key": "0000/00/00|23:50|15900|15550|130.0|127.0|13250|11150|108.0|130.0",
   "previous_values": {
-    "k21_ss": 16380,
-    "k21_sb": 16700,
-    "k21_us": 138.0,
-    "k21_ub": 141.0,
-    "k18_ss": 12118,
-    "k18_sb": 14300,
-    "k18_us": 138.0,
-    "k18_ub": 121.0
+    "k21_ss": 15900,
+    "k21_sb": 15550,
+    "k21_us": 130.0,
+    "k21_ub": 127.0,
+    "k18_ss": 13250,
+    "k18_sb": 11150,
+    "k18_us": 108.0,
+    "k18_ub": 130.0
   },
   "raw_ocr": "‎Wy 5‏ اعد 2\nالتسعيرة اليومية لبيع الذهب ‎tye‏\n‏الصادرة عن\n+ جمعية الصاغة بدمشق . .. 1 =\n: : = بي ٍ\nاليوم: التاريخ: الاق\nالعيار ] سعر الثرام = ] ‎١: Sa‏\nتحن ميع شر مي ضر\n21 | 15900 15550 | 130 127 4\n| 3\n18 |13600 13250 /11150 108\nملاحظة : الاننزام بوضع النسعيرة على الواجهة بشكل واضح\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | بهذلا عيبل ةبمويلا ةريعسنلا نع ةرداصلا قشمدب ةغاصلا ةيعمج م1215 :ةعاسلا 2026/// :خيراتلا سيمخلا :مويلا ماروفلا روعس س ماولا رعس رايعلا هءارش عم ءارش عيم 21 1 130 15550 15900 8 10 111.50 13250 13600 عضاو لكشب ةمجاولا ىلع ةريعسنلا عضوب مازننالا ةظحالم 2230766 2218005 رجهملاو ابروس كنب لباقم ةفيرحلا قشمد | 1 عد اعم\nالتسعيرة اليومية لبيع الذهب ش\nالصادرة عن لاا\n‎0-٠‏ جمعية الصاغة بدمشق ‎Sg‏ اد\n3 0 5 2 1 .\nاليؤم: التاريخ: الساعة:\nالعيار : سعر الفرام ‎wd‏ سعرالترام 8\n‎Pee | “‏ اشراء ‎oe‏ شراء\n21 15900 15550 | 130 127 .\n18 | 13600 13250 11150 108 '\nملاحظة : الالنزام بوضع التسعيرة على الواجية بشكل واضع\nدمشق الحريقة مقابل بنك سوريا والمهجر (2230766(_)22418005) | بهذلا عيبل ةيمويلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا :خيراتلا مويلا مارغلارعس سءل مارغلارعس رايعلا ءارش عببم ءارش عبيم 2 12 130 1 5550 1 5900 18 1 08 111.50 13250 13600 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحالم 2230766 2218005 رجهملاو ايروس كنب لباقم ةقيرحلا قشمد"
 }
