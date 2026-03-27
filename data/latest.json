@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHjuhKx&_nc_gid=eM0PmIYzHvWRdKM9anR1Vw&ccb=1-7&_nc_sid=7b2446&oh=00_AfyoybJ-OtR2kMvaPBGQoMjFiwhHZh0TIh0bba4z34mBNg&oe=69CCE0EE",
+  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwGRVf7p&_nc_gid=A6GuPDjac1eiK68_O5R5Xw&ccb=1-7&_nc_sid=7b2446&oh=00_AfzZ0ZbZdTh4hHGlaIIxg_JIAAH_PucSuOzxUNRSrWDy2w&oe=69CCE0EE",
   "date": "2026/03/26",
   "time": "17:00",
   "day": ": ae : :",
@@ -16,11 +16,11 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 62144,
-  "updated_at_utc": "2026-03-27T22:22:27.703150+00:00",
+  "updated_at_utc": "2026-03-27T22:42:20.180670+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
-  "confidence": 0.4451527745633414,
+  "confidence": 0.4451527710412488,
   "warnings": [
     "missing_or_invalid:k21_syp_sell",
     "missing_or_invalid:k21_syp_buy",
@@ -35,7 +35,7 @@
     "sell_ratio_outside_expected_ratio:1.0214"
   ],
   "debug": {
-    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwHjuhKx&_nc_gid=eM0PmIYzHvWRdKM9anR1Vw&ccb=1-7&_nc_sid=7b2446&oh=00_AfyoybJ-OtR2kMvaPBGQoMjFiwhHZh0TIh0bba4z34mBNg&oe=69CCE0EE",
+    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=105&_nc_ohc=oKcMoIX5GIYQ7kNvwGRVf7p&_nc_gid=A6GuPDjac1eiK68_O5R5Xw&ccb=1-7&_nc_sid=7b2446&oh=00_AfzZ0ZbZdTh4hHGlaIIxg_JIAAH_PucSuOzxUNRSrWDy2w&oe=69CCE0EE",
     "image_width": 780,
     "image_height": 780,
     "display_timezone": "Asia/Dubai",
@@ -49,52 +49,52 @@
     "fields": {
       "k21_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260327T222056580088_k21_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224041714773_k21_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:contrast",
           "raw_text": "ةعاسلا هأرغلا رعس عيبم",
           "value": 0,
-          "confidence": 98.48906248807907,
+          "confidence": 98.48907142877579,
           "valid": false,
           "expected": false,
-          "score": -0.1510937511920929,
+          "score": -0.15109285712242126,
           "warning": "syp_parse_failed"
         }
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260327T222104795382_k21_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224050938898_k21_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "س.ل مارغلا ءارش",
           "value": 0,
-          "confidence": 98.78711303075154,
+          "confidence": 98.78712097803752,
           "valid": false,
           "expected": false,
-          "score": -0.12128869692484479,
+          "score": -0.12128790219624719,
           "warning": "syp_parse_failed"
         }
       },
       "k21_usd_sell": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260327T222109841808_k21_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224056422959_k21_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:binary",
           "raw_text": "خيراتلا عبيم",
           "value": 0.0,
-          "confidence": 98.87954890727997,
+          "confidence": 98.8795518875122,
           "valid": false,
           "expected": false,
-          "score": -0.11204510927200317,
+          "score": -0.1120448112487793,
           "warning": "usd_parse_failed"
         }
       },
       "k21_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260327T222114018653_k21_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224101024273_k21_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "down:binary",
@@ -109,37 +109,37 @@
       },
       "k18_syp_sell": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260327T222118055485_k18_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224105485472_k18_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:adaptive",
           "raw_text": "14 121",
           "value": 14121,
-          "confidence": 68.97721588611603,
+          "confidence": 68.97719502449036,
           "valid": true,
           "expected": true,
-          "score": 119.8977215886116,
+          "score": 119.89771950244904,
           "warning": null
         }
       },
       "k18_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260327T222122060827_k18_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224110001032_k18_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "6350 و 13950",
           "value": 13950,
-          "confidence": 81.04546864827473,
+          "confidence": 81.0454289118449,
           "valid": true,
           "expected": true,
-          "score": 121.10454686482747,
+          "score": 121.1045428911845,
           "warning": null
         }
       },
       "k18_usd_sell": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260327T222122624012_k18_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224110635394_k18_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:contrast",
@@ -154,7 +154,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260327T222124867480_k18_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224113190552_k18_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:binary",
@@ -169,22 +169,22 @@
       },
       "date": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260327T222128745247_date_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224117573641_date_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:binary",
           "raw_text": "بهذلا عيبل ةيم",
           "value": "0000/00/00",
-          "confidence": 99.98997251192729,
+          "confidence": 99.98997449874878,
           "valid": false,
           "expected": true,
-          "score": 9.99899725119273,
+          "score": 9.998997449874878,
           "warning": "date_parse_failed"
         }
       },
       "time": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260327T222133427440_time_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224122705909_time_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:adaptive",
@@ -199,7 +199,7 @@
       },
       "day": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260327T222136546056_day_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260327T224126272816_day_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:soft",
@@ -255,7 +255,7 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "debug_overlay_path": "data/debug/20260327T222227_template_fields_hybrid_651789084_122177269742861173_8640508007092135418_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260327T224220_template_fields_hybrid_651789084_122177269742861173_8640508007092135418_n.jpg.png"
   },
   "should_notify": true,
   "change_summary": {
