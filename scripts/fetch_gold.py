@@ -1301,13 +1301,22 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     warnings.extend(price_warnings)
 
     if k21 is None or k18 is None:
+        if not full_text:
+            full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+
         dk21, dk18 = build_rates_from_full_text(full_text)
         debug["full_text_price_fallback"] = {
-            "diagnostic_only": True,
+            "diagnostic_only": False,
             "k21": sanitize_for_json(dk21.__dict__) if dk21 else None,
             "k18": sanitize_for_json(dk18.__dict__) if dk18 else None,
         }
-        raise ValueError("Blueprint price extraction failed; refusing to save guessed prices")
+
+        if dk21 is not None and dk18 is not None:
+            k21, k18 = dk21, dk18
+            warnings.append("used_full_text_price_fallback")
+            debug["price_source"] = "full_text_fallback"
+        else:
+            raise ValueError("Blueprint price extraction failed and full-text fallback also failed")
 
     relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
     if relationship_warnings:
@@ -1405,7 +1414,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Optimized", version="11.0.0")
+app = FastAPI(title="Gold OCR Optimized", version="11.1.0")
 
 
 @app.get("/health")
@@ -1413,7 +1422,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr-optimized",
-        "version": "11.0.0",
+        "version": "11.1.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
         "cache_enabled": CACHE_ENABLED,
