@@ -1,9 +1,10 @@
+import hashlib
 import json
 import logging
 import os
 import re
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
@@ -33,6 +34,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DEBUG_DIR = DATA_DIR / "debug"
 DEBUG_FIELDS_DIR = DEBUG_DIR / "fields"
+CACHE_DIR = DATA_DIR / "cache"
+IMAGE_CACHE_DIR = CACHE_DIR / "images"
+OCR_CACHE_FILE = CACHE_DIR / "ocr_results.json"
 
 LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
@@ -43,6 +47,12 @@ APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "Asia/Dubai").strip() or "Asia/Dub
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 DEBUG_EXPORT = os.getenv("GOLD_DEBUG_EXPORT", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+CACHE_ENABLED = os.getenv("GOLD_CACHE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+IMAGE_CACHE_ENABLED = os.getenv("GOLD_IMAGE_CACHE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+OCR_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_OCR_CACHE_MAX_ENTRIES", "300"))
+IMAGE_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_IMAGE_CACHE_MAX_ENTRIES", "80"))
+IMAGE_CACHE_TTL_HOURS = int(os.getenv("GOLD_IMAGE_CACHE_TTL_HOURS", "72"))
 
 HEADERS = {
     "User-Agent": (
@@ -249,6 +259,106 @@ def save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(sanitize_for_json(data), ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def cache_key_for_url(url: str) -> str:
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
+
+
+def prune_image_cache() -> None:
+    if not IMAGE_CACHE_DIR.exists():
+        return
+    now = datetime.now(timezone.utc)
+    files = []
+    for path in IMAGE_CACHE_DIR.glob("*"):
+        try:
+            stat = path.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+            age = now - mtime
+            if age > timedelta(hours=IMAGE_CACHE_TTL_HOURS):
+                path.unlink(missing_ok=True)
+                continue
+            files.append((mtime, path))
+        except Exception:
+            continue
+    files.sort(reverse=True)
+    for _, path in files[IMAGE_CACHE_MAX_ENTRIES:]:
+        path.unlink(missing_ok=True)
+
+
+def load_ocr_cache() -> dict:
+    if not CACHE_ENABLED:
+        return {}
+    data = load_json(OCR_CACHE_FILE, {})
+    return data if isinstance(data, dict) else {}
+
+
+def save_ocr_cache(cache: dict) -> None:
+    if not CACHE_ENABLED:
+        return
+    items = sorted(
+        cache.items(),
+        key=lambda kv: kv[1].get("cached_at", ""),
+        reverse=True,
+    )[:OCR_CACHE_MAX_ENTRIES]
+    save_json(OCR_CACHE_FILE, dict(items))
+
+
+def extraction_result_to_cache_entry(result: ExtractionResult) -> dict:
+    return {
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "result": {
+            "date": result.date,
+            "time": result.time,
+            "day": result.day,
+            "k21": asdict(result.k21),
+            "k18": asdict(result.k18),
+            "confidence": result.confidence,
+            "raw_ocr": result.raw_ocr,
+            "raw_ocr_preview": result.raw_ocr_preview,
+            "extraction_method": result.extraction_method,
+            "ocr_engine": result.ocr_engine,
+            "warnings": result.warnings,
+            "debug": result.debug,
+        },
+    }
+
+
+def extraction_result_from_cache_entry(entry: dict) -> ExtractionResult:
+    data = entry["result"]
+    debug = dict(data.get("debug") or {})
+    debug["cache_hit"] = True
+    debug["cache_cached_at"] = entry.get("cached_at", "")
+    return ExtractionResult(
+        date=data["date"],
+        time=data["time"],
+        day=data.get("day", ""),
+        k21=GoldRate(**data["k21"]),
+        k18=GoldRate(**data["k18"]),
+        confidence=float(data["confidence"]),
+        raw_ocr=data.get("raw_ocr", ""),
+        raw_ocr_preview=data.get("raw_ocr_preview", ""),
+        extraction_method=data.get("extraction_method", "template_fields_hybrid"),
+        ocr_engine=data.get("ocr_engine", "unknown"),
+        warnings=list(data.get("warnings") or []),
+        debug=debug,
+    )
+
+
+def blueprint_signature(blueprint: dict) -> str:
+    minimal = {
+        "validation": blueprint.get("validation", {}),
+        "fields": blueprint.get("fields", {}),
+        "active_layout": blueprint.get("active_layout", ""),
+        "updated_at": blueprint.get("updated_at", ""),
+    }
+    return hashlib.sha256(
+        json.dumps(sanitize_for_json(minimal), ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
 ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
@@ -390,10 +500,33 @@ def validate_image_content_type(response: requests.Response, source_url: str) ->
 
 
 def fetch_image_bytes_from_url(url: str):
+    if IMAGE_CACHE_ENABLED:
+        try:
+            prune_image_cache()
+            IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            key = cache_key_for_url(url)
+            cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
+            if cache_file.exists():
+                logger.info("Image cache hit for URL")
+                return cache_file.read_bytes(), url
+        except Exception as exc:
+            logger.warning("Image cache read failed: %s", exc)
+
     response = SESSION.get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     validate_image_content_type(response, url)
-    return response.content, response.url
+    image_bytes = response.content
+
+    if IMAGE_CACHE_ENABLED:
+        try:
+            IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            key = cache_key_for_url(url)
+            cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
+            cache_file.write_bytes(image_bytes)
+        except Exception as exc:
+            logger.warning("Image cache write failed: %s", exc)
+
+    return image_bytes, response.url
 
 
 def read_image_bytes_from_file(file_path: str):
@@ -419,6 +552,10 @@ def resolve_input_image():
     if facebook_json.exists():
         try:
             payload = json.loads(facebook_json.read_text(encoding="utf-8"))
+            selected_file = str(payload.get("selected_image_file") or "").strip()
+            if selected_file:
+                logger.info("Resolved input image from facebook_latest_image.json selected_image_file")
+                return read_image_bytes_from_file(selected_file)
             selected = str(payload.get("selected_image_url") or "").strip()
             if selected:
                 logger.info("Resolved input image from facebook_latest_image.json selected_image_url")
@@ -531,7 +668,6 @@ def paddle_ocr(img: Image.Image):
                             if idx < len(rec_scores):
                                 confs.append(float(rec_scores[idx]) * 100.0)
             elif page and isinstance(page, list):
-                # legacy paddleocr format
                 for line in page:
                     try:
                         txt = str(line[1][0]).strip()
@@ -739,6 +875,11 @@ def run_field_ocr(field_id: str, field_cfg: dict, img: Image.Image, validation: 
     field_type = field_cfg.get("type", "text")
     preprocess_modes = [m for m in (field_cfg.get("preprocess_modes") or ["adaptive", "binary", "contrast"]) if m in KNOWN_PREPROCESS]
     ocr_engines = [e for e in (field_cfg.get("ocr_engines") or ["paddle", "tesseract"]) if e in KNOWN_ENGINES]
+
+    # Faster default: try tesseract first, then paddle only if enabled and not already first.
+    if _PADDLE_AVAILABLE and "tesseract" in ocr_engines and "paddle" in ocr_engines:
+        ocr_engines = ["tesseract", "paddle"]
+
     psm = int(field_cfg.get("psm", 7))
     whitelist = field_cfg.get("char_whitelist")
     box = field_cfg.get("box") or field_cfg
@@ -772,19 +913,28 @@ def run_field_ocr(field_id: str, field_cfg: dict, img: Image.Image, validation: 
                 valid, expected, validate_warning = validate_field_value(field_type, value, validation)
                 warning = parse_warning or validate_warning
                 score = candidate_score(valid and parsed_ok, expected, conf, warning, field_type)
-                all_candidates.append(
-                    OcrCandidate(
-                        engine=engine,
-                        mode=f"{crop_variant_name}:{mode_name}",
-                        raw_text=raw_text,
-                        value=value,
-                        confidence=conf,
-                        valid=bool(valid and parsed_ok),
-                        expected=bool(expected),
-                        score=score,
-                        warning=warning,
-                    )
+                cand = OcrCandidate(
+                    engine=engine,
+                    mode=f"{crop_variant_name}:{mode_name}",
+                    raw_text=raw_text,
+                    value=value,
+                    confidence=conf,
+                    valid=bool(valid and parsed_ok),
+                    expected=bool(expected),
+                    score=score,
+                    warning=warning,
                 )
+                all_candidates.append(cand)
+
+                # Fast early exit on strong candidate.
+                if cand.valid and cand.expected and conf >= 70:
+                    selected = cand
+                    return OcrFieldResult(
+                        crop_variant=selected.mode.split(":", 1)[0],
+                        crop_debug_path=best_crop_debug_path,
+                        selected=selected,
+                        candidates=[selected],
+                    )
 
     all_candidates.sort(key=lambda item: item.score, reverse=True)
     selected = all_candidates[0] if all_candidates else None
@@ -846,8 +996,6 @@ def full_image_text_variants(img: Image.Image):
     variants = [
         preprocess_soft(img, 2),
         preprocess_binary(img, 145, 2),
-        preprocess_adaptive(img, 2),
-        preprocess_contrast(img, 2),
     ]
     out = []
     for variant in variants:
@@ -857,12 +1005,13 @@ def full_image_text_variants(img: Image.Image):
                 out.append(txt)
         except Exception:
             pass
-        try:
-            txt, _ = paddle_ocr(variant)
-            if txt.strip():
-                out.append(txt)
-        except Exception:
-            pass
+        if _PADDLE_AVAILABLE:
+            try:
+                txt, _ = paddle_ocr(variant)
+                if txt.strip():
+                    out.append(txt)
+            except Exception:
+                pass
     return out
 
 
@@ -887,11 +1036,9 @@ def build_rates_from_full_text(full_text: str):
 def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
     warnings = []
     relationship_ok = True
-
     if k21.us <= 0 or k21.ub <= 0 or k18.us <= 0 or k18.ub <= 0:
         relationship_ok = False
         warnings.append("non_positive_usd_values")
-
     for sell, buy, prefix in [
         (k21.ss, k21.sb, "k21_syp"),
         (k18.ss, k18.sb, "k18_syp"),
@@ -901,17 +1048,12 @@ def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
         if sell < buy:
             relationship_ok = False
             warnings.append(f"{prefix}_sell_less_than_buy")
-
-    for pair_name, a, b in [
-        ("buy_ratio", k18.sb, k21.sb),
-        ("sell_ratio", k18.ss, k21.ss),
-    ]:
+    for pair_name, a, b in [("buy_ratio", k18.sb, k21.sb), ("sell_ratio", k18.ss, k21.ss)]:
         if b > 0:
             ratio = a / b
             if not (validation["min_18k_to_21k_ratio"] <= ratio <= validation["max_18k_to_21k_ratio"]):
                 relationship_ok = False
                 warnings.append(f"{pair_name}_outside_expected_ratio:{ratio:.4f}")
-
     return relationship_ok, warnings
 
 
@@ -1056,6 +1198,17 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         raise ValueError(f"Invalid image input: {exc}")
 
     blueprint = load_blueprint()
+    bp_sig = blueprint_signature(blueprint)
+    image_hash = sha256_bytes(image_bytes)
+
+    if CACHE_ENABLED:
+        cache = load_ocr_cache()
+        cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
+        entry = cache.get(cache_key)
+        if isinstance(entry, dict):
+            logger.info("OCR cache hit")
+            return extraction_result_from_cache_entry(entry)
+
     validation = DEFAULT_VALIDATION.copy()
     validation.update(blueprint.get("validation") or {})
     fields_cfg = blueprint.get("fields") or {}
@@ -1070,12 +1223,24 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "paddle_enabled": _PADDLE_AVAILABLE,
         "paddle_failure_reason": _PADDLE_FAILURE_REASON,
         "has_blueprint": bool(fields_cfg),
+        "image_sha256": image_hash,
+        "blueprint_signature": bp_sig,
+        "cache_hit": False,
     }
 
-    field_results = {
-        field_id: run_field_ocr(field_id, field_cfg, img, validation)
-        for field_id, field_cfg in fields_cfg.items()
-    }
+    # Faster execution order: required price fields first, then header fields.
+    ordered_field_ids = DEFAULT_REQUIRED_PRICE_FIELDS + ["date", "time", "day"]
+    field_results = {}
+    for field_id in ordered_field_ids:
+        field_cfg = fields_cfg.get(field_id)
+        if field_cfg:
+            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
+
+    # Add any extra fields not covered above.
+    for field_id, field_cfg in fields_cfg.items():
+        if field_id not in field_results:
+            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
+
     adapted_fields_cfg = adaptive_field_shift(fields_cfg, field_results)
     if adapted_fields_cfg != fields_cfg:
         for field_id in ["day", "date", "time"]:
@@ -1091,7 +1256,18 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         for field_id, result in field_results.items()
     }
 
-    full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+    # Only run expensive full-page OCR if required fields/header are missing.
+    need_full_text = False
+    for required in DEFAULT_REQUIRED_PRICE_FIELDS + ["date", "time"]:
+        item = field_results.get(required)
+        if not item or not item.selected or not item.selected.valid:
+            need_full_text = True
+            break
+
+    full_text = ""
+    if need_full_text:
+        full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+
     fallback_date, fallback_time, fallback_day, fallback_debug = extract_fallback_header(img)
     debug["header_fallback"] = fallback_debug
 
@@ -1100,7 +1276,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         if field_results.get("date") and field_results["date"].selected and field_results["date"].selected.valid
         else fallback_date
     )
-    if date == "0000/00/00":
+    if date == "0000/00/00" and full_text:
         date = extract_date_from_text(full_text)
         if date == "0000/00/00":
             warnings.append("header_date_failed")
@@ -1110,7 +1286,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         if field_results.get("time") and field_results["time"].selected and field_results["time"].selected.valid
         else fallback_time
     )
-    if time == "00:00":
+    if time == "00:00" and full_text:
         time = extract_time_from_text(full_text)
         if time == "00:00":
             warnings.append("header_time_failed")
@@ -1157,7 +1333,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     raw_date_preview = normalize_text(field_results["date"].selected.raw_text) if field_results.get("date") and field_results["date"].selected else ""
     raw_time_preview = normalize_text(field_results["time"].selected.raw_text) if field_results.get("time") and field_results["time"].selected else ""
 
-    return ExtractionResult(
+    result = ExtractionResult(
         date=date,
         time=time,
         day=day,
@@ -1171,6 +1347,17 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         warnings=warnings,
         debug=debug,
     )
+
+    if CACHE_ENABLED:
+        try:
+            cache = load_ocr_cache()
+            cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
+            cache[cache_key] = extraction_result_to_cache_entry(result)
+            save_ocr_cache(cache)
+        except Exception as exc:
+            logger.warning("Failed to save OCR cache: %s", exc)
+
+    return result
 
 
 def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
@@ -1218,17 +1405,19 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Final", version="10.2.0")
+app = FastAPI(title="Gold OCR Optimized", version="11.0.0")
 
 
 @app.get("/health")
 def health():
     return {
         "ok": True,
-        "service": "gold-ocr-final",
-        "version": "10.2.0",
+        "service": "gold-ocr-optimized",
+        "version": "11.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
+        "cache_enabled": CACHE_ENABLED,
+        "image_cache_enabled": IMAGE_CACHE_ENABLED,
     }
 
 
