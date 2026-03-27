@@ -1,41 +1,18 @@
 {
-  "ok": true,
+  "ok": false,
   "page_url": "https://www.facebook.com/people/%D8%AC%D9%85%D8%B9%D9%8A%D8%A9-%D8%A7%D9%84%D8%B5%D8%A7%D8%BA%D8%A9-%D8%A8%D8%AF%D9%85%D8%B4%D9%82/61575835207125/",
   "context_mode": "desktop",
   "modal_closed": true,
-  "message": "Success_with_login_wall_fallback",
-  "selected_image_url": "https://scontent-ord5-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=yiuTKHKsDN8Q7kNvwFMfDxW&_nc_oc=AdoqNfMcyp7aAJNpuDMpK8pYtyoMIBUJnoQP8zBAz8i2Ot01jQALCe3P55T7-nHPcZo&_nc_zt=23&_nc_ht=scontent-ord5-1.xx&_nc_gid=LNpkYKk1LyKD1x_o6kE8Ow&_nc_ss=7a30f&oh=00_AfyignnhwVaNoCUqMX9HcLMkotRpCz4J63Bfr5mbkzJIvQ&oe=69CC819F",
-  "selected_width": 960,
-  "selected_height": 640,
-  "selected_top": -83.265625,
-  "selected_in_post": true,
-  "selected_post_index": 0,
-  "selected_post_top": 0.0,
+  "message": "Login wall detected",
+  "selected_image_url": "",
+  "selected_width": 0,
+  "selected_height": 0,
+  "selected_top": 0,
+  "selected_in_post": false,
+  "selected_post_index": -1,
+  "selected_post_top": 0,
   "selected_image_file": "",
-  "candidates": [
-    {
-      "src": "https://scontent-ord5-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=yiuTKHKsDN8Q7kNvwFMfDxW&_nc_oc=AdoqNfMcyp7aAJNpuDMpK8pYtyoMIBUJnoQP8zBAz8i2Ot01jQALCe3P55T7-nHPcZo&_nc_zt=23&_nc_ht=scontent-ord5-1.xx&_nc_gid=LNpkYKk1LyKD1x_o6kE8Ow&_nc_ss=7a30f&oh=00_AfyignnhwVaNoCUqMX9HcLMkotRpCz4J63Bfr5mbkzJIvQ&oe=69CC819F",
-      "width": 960,
-      "height": 640,
-      "top": -83.265625,
-      "in_post": true,
-      "post_index": 0,
-      "post_top": 0.0,
-      "from_srcset": false,
-      "score": 1304400.0
-    },
-    {
-      "src": "https://scontent-ord5-3.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGxAaAY&_nc_oc=AdruXBhtA1r3ECX-K5KZk9tZVwxVRegxq20IC3mXNCoGgmJnr2jH8Y7MDX2LZReq0TA&_nc_zt=23&_nc_ht=scontent-ord5-3.xx&_nc_gid=AfV3MZNkCzbGoJNChoi4Mg&_nc_ss=7a30f&oh=00_AfzQHy3vkHiBepEatIoTTWfLXsPqDFnQzPgKmQCZI0icKA&oe=69CC7C5A",
-      "width": 526,
-      "height": 526,
-      "top": 668.109375,
-      "in_post": true,
-      "post_index": 0,
-      "post_top": 0.0,
-      "from_srcset": false,
-      "score": 1003183.96875
-    }
-  ],
+  "candidates": [],
   "attempted_urls": [
     "https://www.facebook.com/profile.php?id=61575835207125",
     "https://m.facebook.com/profile.php?id=61575835207125"
@@ -44,10 +21,18 @@
     {
       "page_url": "https://www.facebook.com/people/%D8%AC%D9%85%D8%B9%D9%8A%D8%A9-%D8%A7%D9%84%D8%B5%D8%A7%D8%BA%D8%A9-%D8%A8%D8%AF%D9%85%D8%B4%D9%82/61575835207125/",
       "context_mode": "desktop",
-      "ok": true,
-      "message": "Success_with_login_wall_fallback",
-      "selected_width": 960,
-      "selected_height": 640
+      "ok": false,
+      "message": "Login wall detected",
+      "selected_width": 0,
+      "selected_height": 0
+    },
+    {
+      "page_url": "https://m.facebook.com/61575835207125/",
+      "context_mode": "mobile",
+      "ok": false,
+      "message": "Login wall detected",
+      "selected_width": 0,
+      "selected_height": 0
     }
   ]
 }
