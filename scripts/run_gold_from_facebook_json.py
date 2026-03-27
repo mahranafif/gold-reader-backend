@@ -5,6 +5,7 @@ import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import pytesseract
 import requests
@@ -16,12 +17,12 @@ ROOT = Path(__file__).resolve().parent.parent
 FACEBOOK_JSON = ROOT / "data" / "facebook_latest_image.json"
 FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
 BLUEPRINT_FILE = ROOT / "data" / "blueprint.json"
+FAILURES_FILE = ROOT / "data" / "facebook_ocr_failures.json"
 
 POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
 LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "20"))
-ALLOW_SCRAPER_FAILURE_FALLBACK = os.getenv("FACEBOOK_ALLOW_SCRAPER_FAILURE_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.70"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
@@ -38,29 +39,6 @@ HEADERS = {
 GOLD_POSTER_REQUIRED_KEYWORDS = ["العيار", "سعر", "غرام", "جمعية"]
 
 
-
-
-def normalize_fb_image_url(url):
-    lower = (url or "").strip().lower()
-    if not lower:
-        return ""
-    upgraded = re.sub(r"_p(\d+)x(\d+)", "_s2048x2048", url, flags=re.IGNORECASE)
-
-    def _upgrade_s(match):
-        w = int(match.group(1))
-        h = int(match.group(2))
-        if w * h >= 1_000_000:
-            return match.group(0)
-        return "_s2048x2048"
-
-    return re.sub(r"_s(\d+)x(\d+)", _upgrade_s, upgraded, flags=re.IGNORECASE)
-
-
-def payload_has_any_candidate_data(payload):
-    if str(payload.get("selected_image_url") or "").strip():
-        return True
-    return any(str((candidate or {}).get("src") or "").strip() for candidate in payload.get("candidates") or [])
-
 def unique_preserve_order(items):
     seen = set()
     out = []
@@ -73,19 +51,41 @@ def unique_preserve_order(items):
     return out
 
 
+def normalize_fb_image_url(url: str) -> str:
+    u = (url or "").strip()
+    if not u:
+        return ""
+    u = re.sub(r"_p(\d+)x(\d+)", "_s1024x1024", u, flags=re.IGNORECASE)
+
+    def _upgrade_s(match: re.Match[str]) -> str:
+        w = int(match.group(1))
+        h = int(match.group(2))
+        if w * h >= 900_000:
+            return match.group(0)
+        return "_s1024x1024"
+
+    u = re.sub(r"_s(\d+)x(\d+)", _upgrade_s, u, flags=re.IGNORECASE)
+    parsed = urlparse(u)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    for key in ["stp", "efg", "_nc_eui2"]:
+        query.pop(key, None)
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+
+
 def parse_url_quality(url):
     lower = (url or "").lower()
     score = 0
 
     if "static.xx.fbcdn.net" in lower:
         score += 9999
-
     if "scontent" in lower:
-        score -= 200
-
+        score -= 300
+    if "fbcdn.net" in lower:
+        score -= 50
     if re.search(r"_p(\d+)x(\d+)", lower):
         score += 800
-
+    if re.search(r"_s(\d+)x(\d+)", lower):
+        score -= 150
     if "_p" not in lower:
         score -= 100
 
@@ -99,7 +99,7 @@ def sort_candidate_urls(urls):
 def build_candidate_urls(payload):
     urls = []
 
-    selected = normalize_fb_image_url((payload.get("selected_image_url") or "").strip())
+    selected = normalize_fb_image_url(payload.get("selected_image_url") or "")
     if selected:
         urls.append(selected)
 
@@ -109,14 +109,17 @@ def build_candidate_urls(payload):
             urls.append(src)
 
     urls = unique_preserve_order(urls)
+    urls = [u for u in urls if ("scontent" in u or "fbcdn.net" in u)]
     urls = sort_candidate_urls(urls)
-    urls = [u for u in urls if "scontent" in u]
     return urls[:MAX_CANDIDATES_TO_TRY]
 
 
 def download_image_bytes(image_url):
     response = requests.get(image_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
+    content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if content_type and not content_type.startswith("image/"):
+        raise RuntimeError(f"Unsupported content type {content_type} for {image_url}")
     return response.content
 
 
@@ -129,79 +132,61 @@ def quick_ocr_text(img):
         lang="ara+eng",
         config="--oem 3 --psm 6",
     )
-    return text.lower()
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
 def classify_gold_poster_ocr_fallback(img):
     text = quick_ocr_text(img)
-    score = 0
-    matched_keywords = []
-
-    for keyword in GOLD_POSTER_REQUIRED_KEYWORDS:
-        if keyword in text:
-            score += 1
-            matched_keywords.append(keyword)
-
-    return score >= 2, {
-        "source": "ocr_fallback",
-        "classifier_score": score,
-        "matched_keywords": matched_keywords,
-        "ocr_preview": text[:500],
+    hits = sum(1 for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text)
+    is_gold = hits >= 2
+    debug = {
+        "method": "ocr_keyword_fallback",
+        "hits": hits,
+        "keywords": GOLD_POSTER_REQUIRED_KEYWORDS,
+        "text_preview": text[:500],
+        "label": "gold_poster" if is_gold else "non_gold_poster",
+        "confidence": min(0.95, 0.35 + (hits * 0.2)),
     }
+    return is_gold, debug
 
 
-def load_blueprint():
-    if not BLUEPRINT_FILE.exists():
-        return {}
-    try:
-        return json.loads(BLUEPRINT_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+def classify_layout(img):
+    if LAYOUT_MODEL_PATH.exists():
+        clf = GoldLayoutClassifier(str(LAYOUT_MODEL_PATH))
+        result = clf.predict(img)
+        print("Layout classifier:", json.dumps(result, ensure_ascii=False))
+        label = str(result.get("label", "")).lower()
+        ok = ("gold" in label) and ("non" not in label) and (
+            float(result.get("confidence", 0.0)) >= CNN_LAYOUT_MIN_CONFIDENCE
+        )
+        return ok, result
 
-
-def maybe_switch_blueprint_for_layout(layout_label: str):
-    """
-    blueprint.json format:
-    {
-      "layouts": {
-        "layout_v1": { ...full blueprint... },
-        "layout_v2": { ...full blueprint... }
-      }
+    text = quick_ocr_text(img)
+    hits = sum(1 for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text)
+    result = {
+        "method": "ocr_keyword_fallback",
+        "hits": hits,
+        "text_preview": text[:500],
+        "label": "gold_layout" if hits >= 2 else "non_gold_layout",
+        "confidence": min(0.95, 0.35 + (hits * 0.2)),
     }
-    """
-    blueprint = load_blueprint()
-    layouts = blueprint.get("layouts") or {}
-    if not isinstance(layouts, dict):
-        return None
+    print("Layout classifier:", json.dumps(result, ensure_ascii=False))
+    return hits >= 2, result
 
-    selected = layouts.get(layout_label)
-    if not isinstance(selected, dict):
-        return None
 
-    BLUEPRINT_FILE.write_text(
-        json.dumps(selected, ensure_ascii=False, indent=2),
+def save_failures(failures):
+    FAILURES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    FAILURES_FILE.write_text(
+        json.dumps(failures, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    return layout_label
 
 
-def run_fetch_gold_for_url(image_url):
+def run_fetch_gold_with_url(image_url):
     env = os.environ.copy()
     env["GOLD_SOURCE_URL"] = image_url
-    env["GOLD_SOURCE_FILE"] = ""
-
-    result = subprocess.run(
-        [sys.executable, str(FETCH_GOLD_SCRIPT)],
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-
-    combined_output = "\n".join(
-        part for part in [result.stdout, result.stderr] if part and part.strip()
-    )
-
-    return result.returncode == 0, combined_output
+    cmd = [sys.executable, str(FETCH_GOLD_SCRIPT)]
+    return subprocess.run(cmd, env=env)
 
 
 def main():
@@ -209,119 +194,89 @@ def main():
         raise RuntimeError(f"Missing file: {FACEBOOK_JSON}")
 
     payload = json.loads(FACEBOOK_JSON.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("facebook_latest_image.json must contain a JSON object")
 
-    scraper_ok = bool(payload.get("ok"))
+    message = str(payload.get("message") or "").strip()
     candidate_urls = build_candidate_urls(payload)
 
-    if not scraper_ok:
-        message = str(payload.get("message") or "Unknown scraper error")
-        if not (ALLOW_SCRAPER_FAILURE_FALLBACK and candidate_urls):
-            raise RuntimeError(f"Facebook scrape failed: {message}")
-        print(f"Warning: Facebook scraper reported failure ({message}), but candidate image URLs were found. Continuing with fallback candidates.")
-
+    # Important change:
+    # Do not fail immediately on login wall if we still have usable scontent candidates.
     if not candidate_urls:
-        raise RuntimeError("No valid Facebook image URLs (scontent) found")
+        if not payload.get("ok", False):
+            raise RuntimeError(f"Facebook scrape failed: {message or 'no usable image candidates'}")
+        raise RuntimeError("No usable Facebook image candidates found")
+
+    print(f"Scraper status ok={payload.get('ok', False)} message={message!r}")
+    print(f"Candidate URLs to try: {len(candidate_urls)}")
 
     poster_classifier = None
-    layout_classifier = None
-
     if POSTER_MODEL_PATH.exists():
-        poster_classifier = GoldPosterClassifier(POSTER_MODEL_PATH)
-
-    if LAYOUT_MODEL_PATH.exists():
-        layout_classifier = GoldLayoutClassifier(LAYOUT_MODEL_PATH)
-
-    print(f"Trying up to {len(candidate_urls)} Facebook image candidate(s)...")
+        poster_classifier = GoldPosterClassifier(str(POSTER_MODEL_PATH))
 
     failures = []
 
-    for index, image_url in enumerate(candidate_urls, start=1):
-        quality_score, _ = parse_url_quality(image_url)
-
-        print(f"\n[{index}/{len(candidate_urls)}] Trying candidate:")
-        print(image_url)
-        print(f"Quality score: {quality_score}")
+    for idx, image_url in enumerate(candidate_urls, start=1):
+        print(f"[{idx}/{len(candidate_urls)}] Trying candidate: {image_url}")
 
         try:
             image_bytes = download_image_bytes(image_url)
             img = Image.open(BytesIO(image_bytes)).convert("RGB")
         except Exception as exc:
-            print("Download/Classify failed:", str(exc))
-            failures.append({
-                "index": index,
-                "url": image_url,
-                "stage": "download",
-                "error": str(exc),
-            })
+            failures.append({"url": image_url, "stage": "download_or_open", "error": str(exc)})
+            print(f"Download/open failed: {exc}")
             continue
 
-        is_gold = False
-        poster_debug = None
+        try:
+            if poster_classifier is not None:
+                poster_debug = poster_classifier.predict(img)
+                print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+                label = str(poster_debug.get("label", "")).lower()
+                is_gold = ("gold" in label) and ("non" not in label) and (
+                    float(poster_debug.get("confidence", 0.0)) >= CNN_POSTER_MIN_CONFIDENCE
+                )
+            else:
+                is_gold, poster_debug = classify_gold_poster_ocr_fallback(img)
+                print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
 
-        if poster_classifier is not None:
-            poster_debug = poster_classifier.predict(img)
-            poster_debug["source"] = "cnn"
-            print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+            if not is_gold:
+                failures.append(
+                    {"url": image_url, "stage": "poster_classifier", "debug": poster_debug}
+                )
+                print("Skipped candidate: classifier too weak")
+                continue
 
-            label = poster_debug["label"].lower()
-            is_gold = ("gold" in label) and ("non" not in label) and (
-                poster_debug["confidence"] >= CNN_POSTER_MIN_CONFIDENCE
+            layout_ok, layout_debug = classify_layout(img)
+            if not layout_ok:
+                failures.append(
+                    {"url": image_url, "stage": "layout_classifier", "debug": layout_debug}
+                )
+                print("Skipped candidate: layout classifier too weak")
+                continue
+
+            result = run_fetch_gold_with_url(image_url)
+            if result.returncode == 0:
+                save_failures(failures)
+                print(f"Success with candidate: {image_url}")
+                return
+
+            failures.append(
+                {"url": image_url, "stage": "fetch_gold", "returncode": result.returncode}
             )
-        else:
-            is_gold, poster_debug = classify_gold_poster_ocr_fallback(img)
-            print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+            print(f"fetch_gold.py failed with exit code {result.returncode}")
 
-        if not is_gold:
-            print("Skipped candidate: classifier too weak")
-            failures.append({
-                "index": index,
-                "url": image_url,
-                "stage": "poster_classifier",
-                "poster_debug": poster_debug,
-            })
-            continue
+        except Exception as exc:
+            failures.append({"url": image_url, "stage": "pipeline_exception", "error": str(exc)})
+            print(f"Candidate failed: {exc}")
 
-        if layout_classifier is not None:
-            layout_debug = layout_classifier.predict(img)
-            layout_debug["source"] = "cnn"
-            print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
+    save_failures(failures)
 
-            if layout_debug["confidence"] >= CNN_LAYOUT_MIN_CONFIDENCE:
-                activated = maybe_switch_blueprint_for_layout(layout_debug["label"])
-                if activated:
-                    print(f"Activated layout blueprint: {activated}")
+    if not payload.get("ok", False):
+        raise RuntimeError(
+            f"Facebook scrape reported failure ({message}), and all {len(candidate_urls)} candidates also failed"
+        )
 
-        ok, output = run_fetch_gold_for_url(image_url)
-
-        if ok:
-            print("\nOCR succeeded with candidate:")
-            print(image_url)
-            return
-
-        print("\nCandidate failed OCR:")
-        print(output[-1500:] if output else "(no output)")
-
-        failures.append({
-            "index": index,
-            "url": image_url,
-            "stage": "ocr",
-            "output_tail": output[-4000:] if output else "",
-        })
-
-    failure_report = {
-        "message": "All candidates failed",
-        "tried_count": len(candidate_urls),
-        "failures": failures,
-    }
-
-    debug_path = ROOT / "data" / "facebook_ocr_failures.json"
-    debug_path.parent.mkdir(parents=True, exist_ok=True)
-    debug_path.write_text(
-        json.dumps(failure_report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    raise RuntimeError("All candidates failed")
+    raise RuntimeError(f"All {len(candidate_urls)} candidate URLs failed")
 
 
 if __name__ == "__main__":
