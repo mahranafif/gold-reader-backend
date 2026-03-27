@@ -1,30 +1,109 @@
 {
   "template_name": "damascus_gold",
-  "reference_size": { "width": 526, "height": 526 },
-
+  "reference_size": {
+    "width": 526,
+    "height": 526
+  },
   "validation": {
     "usd_hard_min": 80,
     "usd_hard_max": 200,
     "syp_hard_min": 10000,
     "syp_hard_max": 25000,
-    "min_18k_to_21k_ratio": 0.80,
-    "max_18k_to_21k_ratio": 0.90
+    "min_18k_to_21k_ratio": 0.8,
+    "max_18k_to_21k_ratio": 0.9
   },
-
   "fields": {
-    "date": { "type": "date", "box": { "x1": 0.25, "y1": 0.12, "x2": 0.75, "y2": 0.22 } },
-    "time": { "type": "time", "box": { "x1": 0.05, "y1": 0.12, "x2": 0.30, "y2": 0.22 } },
-
-    "k21_syp_sell": { "type": "syp_price", "box": { "x1": 0.15, "y1": 0.45, "x2": 0.35, "y2": 0.60 } },
-    "k21_syp_buy":  { "type": "syp_price", "box": { "x1": 0.35, "y1": 0.45, "x2": 0.55, "y2": 0.60 } },
-
-    "k21_usd_sell": { "type": "usd_price", "box": { "x1": 0.55, "y1": 0.45, "x2": 0.75, "y2": 0.60 } },
-    "k21_usd_buy":  { "type": "usd_price", "box": { "x1": 0.75, "y1": 0.45, "x2": 0.95, "y2": 0.60 } },
-
-    "k18_syp_sell": { "type": "syp_price", "box": { "x1": 0.15, "y1": 0.60, "x2": 0.35, "y2": 0.75 } },
-    "k18_syp_buy":  { "type": "syp_price", "box": { "x1": 0.35, "y1": 0.60, "x2": 0.55, "y2": 0.75 } },
-
-    "k18_usd_sell": { "type": "usd_price", "box": { "x1": 0.55, "y1": 0.60, "x2": 0.75, "y2": 0.75 } },
-    "k18_usd_buy":  { "type": "usd_price", "box": { "x1": 0.75, "y1": 0.60, "x2": 0.95, "y2": 0.75 } }
-  }
+    "date": {
+      "type": "date",
+      "box": {
+        "x1": 0.25,
+        "y1": 0.12,
+        "x2": 0.75,
+        "y2": 0.22
+      }
+    },
+    "time": {
+      "type": "time",
+      "box": {
+        "x1": 0.05,
+        "y1": 0.12,
+        "x2": 0.3,
+        "y2": 0.22
+      }
+    },
+    "k21_syp_sell": {
+      "type": "syp_price",
+      "box": {
+        "x1": 0.15,
+        "y1": 0.45,
+        "x2": 0.35,
+        "y2": 0.6
+      }
+    },
+    "k21_syp_buy": {
+      "type": "syp_price",
+      "box": {
+        "x1": 0.35,
+        "y1": 0.45,
+        "x2": 0.55,
+        "y2": 0.6
+      }
+    },
+    "k21_usd_sell": {
+      "type": "usd_price",
+      "box": {
+        "x1": 0.55,
+        "y1": 0.45,
+        "x2": 0.75,
+        "y2": 0.6
+      }
+    },
+    "k21_usd_buy": {
+      "type": "usd_price",
+      "box": {
+        "x1": 0.75,
+        "y1": 0.45,
+        "x2": 0.95,
+        "y2": 0.6
+      }
+    },
+    "k18_syp_sell": {
+      "type": "syp_price",
+      "box": {
+        "x1": 0.15,
+        "y1": 0.6,
+        "x2": 0.35,
+        "y2": 0.75
+      }
+    },
+    "k18_syp_buy": {
+      "type": "syp_price",
+      "box": {
+        "x1": 0.35,
+        "y1": 0.6,
+        "x2": 0.55,
+        "y2": 0.75
+      }
+    },
+    "k18_usd_sell": {
+      "type": "usd_price",
+      "box": {
+        "x1": 0.55,
+        "y1": 0.6,
+        "x2": 0.75,
+        "y2": 0.75
+      }
+    },
+    "k18_usd_buy": {
+      "type": "usd_price",
+      "box": {
+        "x1": 0.75,
+        "y1": 0.6,
+        "x2": 0.95,
+        "y2": 0.75
+      }
+    }
+  },
+  "active_layout": "layout_v1",
+  "layout_selected_by": "run_gold_from_facebook_json"
 }
