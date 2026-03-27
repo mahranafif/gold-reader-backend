@@ -21,6 +21,7 @@ POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
 LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "20"))
+ALLOW_SCRAPER_FAILURE_FALLBACK = os.getenv("FACEBOOK_ALLOW_SCRAPER_FAILURE_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.70"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
@@ -36,6 +37,29 @@ HEADERS = {
 
 GOLD_POSTER_REQUIRED_KEYWORDS = ["العيار", "سعر", "غرام", "جمعية"]
 
+
+
+
+def normalize_fb_image_url(url):
+    lower = (url or "").strip().lower()
+    if not lower:
+        return ""
+    upgraded = re.sub(r"_p(\d+)x(\d+)", "_s2048x2048", url, flags=re.IGNORECASE)
+
+    def _upgrade_s(match):
+        w = int(match.group(1))
+        h = int(match.group(2))
+        if w * h >= 1_000_000:
+            return match.group(0)
+        return "_s2048x2048"
+
+    return re.sub(r"_s(\d+)x(\d+)", _upgrade_s, upgraded, flags=re.IGNORECASE)
+
+
+def payload_has_any_candidate_data(payload):
+    if str(payload.get("selected_image_url") or "").strip():
+        return True
+    return any(str((candidate or {}).get("src") or "").strip() for candidate in payload.get("candidates") or [])
 
 def unique_preserve_order(items):
     seen = set()
@@ -75,12 +99,12 @@ def sort_candidate_urls(urls):
 def build_candidate_urls(payload):
     urls = []
 
-    selected = (payload.get("selected_image_url") or "").strip()
+    selected = normalize_fb_image_url((payload.get("selected_image_url") or "").strip())
     if selected:
         urls.append(selected)
 
     for candidate in payload.get("candidates") or []:
-        src = str(candidate.get("src") or "").strip()
+        src = normalize_fb_image_url(str(candidate.get("src") or "").strip())
         if src:
             urls.append(src)
 
@@ -186,10 +210,15 @@ def main():
 
     payload = json.loads(FACEBOOK_JSON.read_text(encoding="utf-8"))
 
-    if not payload.get("ok"):
-        raise RuntimeError(f"Facebook scrape failed: {payload.get('message')}")
-
+    scraper_ok = bool(payload.get("ok"))
     candidate_urls = build_candidate_urls(payload)
+
+    if not scraper_ok:
+        message = str(payload.get("message") or "Unknown scraper error")
+        if not (ALLOW_SCRAPER_FAILURE_FALLBACK and candidate_urls):
+            raise RuntimeError(f"Facebook scrape failed: {message}")
+        print(f"Warning: Facebook scraper reported failure ({message}), but candidate image URLs were found. Continuing with fallback candidates.")
+
     if not candidate_urls:
         raise RuntimeError("No valid Facebook image URLs (scontent) found")
 
