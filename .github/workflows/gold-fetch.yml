@@ -27,42 +27,34 @@ jobs:
       GOLD_OCR_MODE: prefer_blueprint
       GOLD_DEBUG_EXPORT: "true"
 
+      GOLD_CACHE_ENABLED: "false"
+      GOLD_IMAGE_CACHE_ENABLED: "false"
+      GOLD_OCR_CACHE_MAX_ENTRIES: "0"
+      GOLD_IMAGE_CACHE_MAX_ENTRIES: "0"
+      GOLD_IMAGE_CACHE_TTL_HOURS: "0"
+      GOLD_MIN_SOURCE_WIDTH: "800"
+      GOLD_MIN_SOURCE_HEIGHT: "800"
+
+      FACEBOOK_HEADLESS: "true"
+      FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
       FACEBOOK_URL_MODE: "mobile"
+      FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
+      FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
+      FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
+      FACEBOOK_MAX_SCROLL_STEPS: "6"
+      FACEBOOK_SCROLL_DELAY_MS: "1200"
       FACEBOOK_MAX_CANDIDATES_TO_TRY: "20"
       FACEBOOK_MAX_CANDIDATES_PER_POST: "15"
-      FACEBOOK_MAX_POSTS_TO_SCAN: "10"
       FACEBOOK_MAX_POST_GROUPS: "5"
+      FACEBOOK_MAX_POSTS_TO_SCAN: "10"
       FACEBOOK_MIN_CANDIDATE_WIDTH: "250"
       FACEBOOK_MIN_CANDIDATE_HEIGHT: "250"
       FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "400"
       FACEBOOK_PREFERRED_CANDIDATE_HEIGHT: "400"
       FACEBOOK_HIGH_RES_WIDTH: "900"
       FACEBOOK_HIGH_RES_HEIGHT: "900"
-      
-      GOLD_CACHE_ENABLED: "false"
-      GOLD_IMAGE_CACHE_ENABLED: "false"
-      GOLD_OCR_CACHE_MAX_ENTRIES: "300"
-      GOLD_IMAGE_CACHE_MAX_ENTRIES: "80"
-      GOLD_IMAGE_CACHE_TTL_HOURS: "72"
-      GOLD_MIN_SOURCE_WIDTH: "800"
-      GOLD_MIN_SOURCE_HEIGHT: "800"
-
-     
-
-
-      FACEBOOK_HEADLESS: "true"
-      FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
-     
-      FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
-      FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
-      FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "5"
-      FACEBOOK_SCROLL_DELAY_MS: "1200"
-  
       FACEBOOK_FAST_RESOURCE_BLOCKING: "true"
       FACEBOOK_SAVE_DEBUG_SCREENSHOT: "true"
-
-      
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       DISABLE_PADDLE: "false"
@@ -87,11 +79,6 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Clear stale OCR/image cache
-        run: |
-          rm -rf data/cache || true
-          mkdir -p data/cache/images
-          
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -103,15 +90,6 @@ jobs:
         with:
           path: ~/.paddleocr
           key: ${{ runner.os }}-paddleocr-v1
-
-      - name: Restore OCR/image cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            data/cache
-          key: ${{ runner.os }}-gold-ocr-cache-${{ github.ref_name }}
-          restore-keys: |
-            ${{ runner.os }}-gold-ocr-cache-
 
       - name: Install system dependencies
         run: |
@@ -153,6 +131,12 @@ jobs:
           mkdir -p data/cache/images
           mkdir -p models
 
+      - name: Clear stale cache and outputs
+        run: |
+          rm -rf data/cache || true
+          rm -f data/latest.json data/facebook_ocr_failures.json || true
+          mkdir -p data/cache/images
+
       - name: Verify CNN model files
         run: |
           echo "Checking model files..."
@@ -168,8 +152,6 @@ jobs:
         run: |
           echo "facebook_latest_image.json:"
           cat data/facebook_latest_image.json || true
-          echo "facebook_selected_image.png:"
-          ls -lah data/facebook_selected_image.png || true
 
       - name: Show blueprint
         if: always()
@@ -196,12 +178,10 @@ jobs:
           path: |
             data/facebook_latest_image.json
             data/facebook_page_debug.png
-            data/facebook_selected_image.png
             data/login_wall.png
             data/facebook_ocr_failures.json
             data/latest.json
             data/history.json
-            data/cache
             data/debug
           if-no-files-found: ignore
           retention-days: 7
