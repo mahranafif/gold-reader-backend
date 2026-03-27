@@ -5,6 +5,8 @@ import random
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from playwright.async_api import BrowserContext, Page, Route, async_playwright
@@ -121,27 +123,9 @@ def build_url_candidates(url: str, mode: str) -> list[str]:
 
 
 def normalize_fb_image_url(url: str) -> str:
-    if not url:
-        return ""
-
-    u = url.strip()
-    u = re.sub(r"_p(\d+)x(\d+)", "_s1024x1024", u, flags=re.IGNORECASE)
-
-    def _upgrade_s(match: re.Match[str]) -> str:
-        w = int(match.group(1))
-        h = int(match.group(2))
-        if w * h >= 1_000_000:
-            return match.group(0)
-        return "_s1024x1024"
-
-    u = re.sub(r"_s(\d+)x(\d+)", _upgrade_s, u, flags=re.IGNORECASE)
-
-    parsed = urlparse(u)
-    query = parse_qs(parsed.query, keep_blank_values=True)
-    for key in ["stp", "efg", "_nc_eui2"]:
-        query.pop(key, None)
-
-    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+    # Important: keep the exact URL Facebook gave us.
+    # Do not force _p... -> _s... or request another size.
+    return (url or "").strip()
 
 
 def is_bad_url(url: str) -> bool:
@@ -328,6 +312,65 @@ async def dismiss_login_modal(page: Page) -> bool:
         pass
 
     return False
+
+
+async def save_selected_image_as_rendered(page: Page, image_url: str) -> str:
+    """
+    Save the selected image exactly as rendered in the page, using element screenshot.
+    This avoids 403 hotlink failures later and avoids requesting a different image size.
+    """
+    if not image_url:
+        return ""
+
+    out_file = OUTPUT_FILE.parent / "facebook_selected_image.png"
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    handle = await page.evaluate_handle(
+        """
+        (target) => {
+          const imgs = Array.from(document.images || []);
+          const normalize = (u) => (u || '').trim();
+          const targetNorm = normalize(target);
+
+          for (const img of imgs) {
+            const current = normalize(img.currentSrc || '');
+            const src = normalize(img.src || '');
+            if (current === targetNorm || src === targetNorm) {
+              return img;
+            }
+          }
+
+          // Fallback: compare without query string
+          const stripQuery = (u) => normalize(u).split('?')[0];
+          for (const img of imgs) {
+            const current = stripQuery(img.currentSrc || '');
+            const src = stripQuery(img.src || '');
+            if (current === stripQuery(targetNorm) || src === stripQuery(targetNorm)) {
+              return img;
+            }
+          }
+
+          return null;
+        }
+        """,
+        image_url,
+    )
+
+    element = handle.as_element()
+    if element is None:
+        return ""
+
+    try:
+        await element.scroll_into_view_if_needed(timeout=2000)
+    except Exception:
+        pass
+
+    try:
+        await page.wait_for_timeout(250)
+        await element.screenshot(path=str(out_file))
+        return str(out_file.relative_to(ROOT))
+    except Exception:
+        return ""
 
 
 async def collect_dom_candidates(page: Page) -> list[ImageCandidate]:
@@ -642,10 +685,12 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 "selected_in_post": False,
                 "selected_post_index": -1,
                 "selected_post_top": 0,
+                "selected_image_file": "",
                 "candidates": [],
             }
 
         best = best_snapshot[0]
+        selected_image_file = await save_selected_image_as_rendered(page, best.src)
         return {
             "ok": True,
             "page_url": page.url,
@@ -659,6 +704,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "selected_in_post": best.in_post,
             "selected_post_index": best.post_index,
             "selected_post_top": best.post_top,
+            "selected_image_file": selected_image_file,
             "candidates": [asdict(c) for c in best_snapshot],
         }
 
