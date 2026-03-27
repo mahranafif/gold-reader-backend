@@ -24,7 +24,8 @@ LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "20"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
-CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.68"))
+CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
+CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
 
 HEADERS = {
@@ -171,6 +172,16 @@ def classify_layout_ocr_fallback(img):
     return hits >= 2, result
 
 
+def poster_keyword_guard(img):
+    text = quick_ocr_text(img)
+    hits = [kw for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text]
+    return {
+        "hits": hits,
+        "hit_count": len(hits),
+        "text_preview": text[:500],
+    }
+
+
 def save_failures(failures):
     FAILURES_FILE.parent.mkdir(parents=True, exist_ok=True)
     FAILURES_FILE.write_text(
@@ -225,6 +236,32 @@ def maybe_switch_blueprint_for_layout(layout_label: str):
         return None
 
 
+def evaluate_poster_classifier(poster_debug: dict):
+    label = str(poster_debug.get("label", "")).lower()
+    all_probs = poster_debug.get("all_probs", {}) or {}
+    gold_conf = float(all_probs.get("gold", poster_debug.get("confidence", 0.0)))
+    non_gold_conf = float(all_probs.get("non_gold", 0.0))
+    margin = gold_conf - non_gold_conf
+
+    is_gold = (
+        ("gold" in label)
+        and ("non" not in label)
+        and gold_conf >= CNN_POSTER_MIN_CONFIDENCE
+        and margin >= CNN_POSTER_MIN_MARGIN
+    )
+
+    decision = {
+        "label": label,
+        "gold_conf": gold_conf,
+        "non_gold_conf": non_gold_conf,
+        "margin": margin,
+        "threshold": CNN_POSTER_MIN_CONFIDENCE,
+        "min_margin": CNN_POSTER_MIN_MARGIN,
+        "accepted": is_gold,
+    }
+    return is_gold, decision
+
+
 def main():
     if not FACEBOOK_JSON.exists():
         raise RuntimeError(f"Missing file: {FACEBOOK_JSON}")
@@ -266,20 +303,37 @@ def main():
                 poster_debug["source"] = "cnn"
                 print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
 
-                label = str(poster_debug.get("label", "")).lower()
-                confidence = float(poster_debug.get("confidence", 0.0))
-                is_gold = ("gold" in label) and ("non" not in label) and (
-                    confidence >= CNN_POSTER_MIN_CONFIDENCE
-                )
+                is_gold, poster_decision = evaluate_poster_classifier(poster_debug)
+                print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
             else:
                 is_gold, poster_debug = classify_gold_poster_ocr_fallback(img)
+                poster_decision = {
+                    "accepted": is_gold,
+                    "source": "ocr",
+                }
                 print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+                print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
+
+            if is_gold:
+                keyword_guard = poster_keyword_guard(img)
+                print("Poster keyword guard:", json.dumps(keyword_guard, ensure_ascii=False))
+                if keyword_guard["hit_count"] < 2:
+                    is_gold = False
+                    poster_decision["accepted"] = False
+                    poster_decision["rejected_by_keyword_guard"] = True
+                    poster_decision["keyword_guard"] = keyword_guard
 
             if not is_gold:
                 failures.append(
-                    {"index": index, "url": image_url, "stage": "poster_classifier", "poster_debug": poster_debug}
+                    {
+                        "index": index,
+                        "url": image_url,
+                        "stage": "poster_classifier",
+                        "poster_debug": poster_debug,
+                        "poster_decision": poster_decision,
+                    }
                 )
-                print("Skipped candidate: classifier too weak")
+                print("Skipped candidate: classifier too weak or keyword guard failed")
                 continue
 
             if layout_classifier is not None:
