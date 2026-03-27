@@ -15,7 +15,7 @@ FACEBOOK_PAGE_URL = os.getenv(
     "FACEBOOK_PAGE_URL",
     "https://m.facebook.com/profile.php?id=61575835207125",
 ).strip()
-FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "auto").strip().lower()
+FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
 HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 OUTPUT_FILE = Path(os.getenv("FACEBOOK_OUTPUT_JSON", "data/facebook_latest_image.json"))
@@ -112,8 +112,8 @@ def build_url_candidates(url: str, mode: str) -> list[str]:
         add(desktop)
         add(mobile)
     else:
-        add(desktop)
         add(mobile)
+        add(desktop)
 
     return variants
 
@@ -155,7 +155,7 @@ def size_hint_bonus(url: str) -> float:
         return 300000.0
     if "p780x980" in lower or "p780x780" in lower:
         return 220000.0
-    if "p526x296" in lower:
+    if "p526x296" in lower or "s540x540" in lower or "p540x" in lower:
         return -500000.0
     return 0.0
 
@@ -227,7 +227,6 @@ async def dismiss_login_modal(page: Page) -> bool:
         'div[role="button"]',
         'button',
     ]
-
     for selector in selectors:
         try:
             locator = page.locator(selector)
@@ -273,7 +272,7 @@ def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
         return "desktop"
     if host.startswith("m."):
         return "mobile"
-    return "desktop" if fallback_mode == "auto" else fallback_mode
+    return "mobile" if fallback_mode == "auto" else fallback_mode
 
 
 async def maybe_scroll(page: Page, step: int) -> None:
@@ -512,28 +511,30 @@ async def collect_viewer_candidates(page: Page) -> list[ImageCandidate]:
     return out
 
 
-def viewer_url_matches_top_post(viewer: ImageCandidate, top_post_candidates: list[ImageCandidate]) -> bool:
-    base_names = set()
-    for c in top_post_candidates:
-        try:
-            name = Path(urlparse(c.src).path).name
-            if name:
-                base_names.add(name.split("?")[0])
-        except Exception:
-            pass
-
+def viewer_url_matches_top_post(viewer: ImageCandidate, top_post_candidates: list[ImageCandidate], top_feed_candidate: ImageCandidate) -> bool:
     try:
         viewer_name = Path(urlparse(viewer.src).path).name
     except Exception:
         viewer_name = ""
 
-    if viewer_name and viewer_name in base_names:
-        return True
+    stems = set()
+    for c in top_post_candidates:
+        try:
+            name = Path(urlparse(c.src).path).name
+            stem = name.split(".")[0]
+            if stem:
+                stems.add(stem)
+        except Exception:
+            pass
 
-    for name in base_names:
-        stem = name.split(".")[0]
+    for stem in stems:
         if stem and stem in viewer_name:
             return True
+
+    if viewer.width >= 780 and viewer.height >= 780:
+        if viewer.width >= top_feed_candidate.width and viewer.height >= top_feed_candidate.height:
+            return True
+
     return False
 
 
@@ -566,8 +567,11 @@ async def try_upgrade_top_post_with_viewer(page: Page, top_feed_candidate: Image
     await page.wait_for_timeout(600)
 
     viewer_candidates = await collect_viewer_candidates(page)
-    matched = [c for c in viewer_candidates if viewer_url_matches_top_post(c, top_post_candidates)]
-    matched.sort(key=lambda c: c.score, reverse=True)
+    matched = [
+        c for c in viewer_candidates
+        if viewer_url_matches_top_post(c, top_post_candidates, top_feed_candidate)
+    ]
+    matched.sort(key=lambda c: (c.width * c.height, c.score), reverse=True)
     return matched
 
 
@@ -619,11 +623,10 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 for group in post_groups:
                     ordered_candidates.extend(group["candidates"])
 
-                # viewer upgrade only for latest feed post
                 top_group = post_groups[0] if post_groups else None
                 if top_group and top_group["candidates"]:
                     top_feed_candidate = top_group["candidates"][0]
-                    if not top_feed_candidate.is_high_res:
+                    if top_feed_candidate.width < 780 or top_feed_candidate.height < 780:
                         upgraded = await try_upgrade_top_post_with_viewer(page, top_feed_candidate, top_group["candidates"])
                         if upgraded:
                             viewer_used = True
@@ -649,7 +652,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
 
                 if ordered_candidates:
                     top = ordered_candidates[0]
-                    if top.is_high_res:
+                    if top.width >= 780 and top.height >= 780:
                         break
 
             if step < MAX_SCROLL_STEPS:
