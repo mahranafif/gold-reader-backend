@@ -24,10 +24,10 @@ SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page
 REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "6"))
 SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1200"))
-MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "10"))
-MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "5"))
-MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "15"))
-MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "20"))
+MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "4"))
+MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "2"))
+MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "6"))
+MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "8"))
 
 MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "250"))
 MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "250"))
@@ -73,7 +73,7 @@ class ImageCandidate:
 def is_login_wall(html: str, page_url: str = "") -> bool:
     lower = html.lower()
     url_lower = page_url.lower()
-    wall_signals = (
+    signals = (
         "facebook.com/login",
         "/login/",
         "log in",
@@ -85,14 +85,13 @@ def is_login_wall(html: str, page_url: str = "") -> bool:
         "عرض المزيد على فيسبوك",
         "يجب تسجيل الدخول",
     )
-    return any(sig in lower for sig in wall_signals) or "/login" in url_lower
+    return any(sig in lower for sig in signals) or "/login" in url_lower
 
 
 def build_url_candidates(url: str, mode: str) -> list[str]:
     url = url.strip()
     if not url:
         return []
-
     variants: list[str] = []
 
     def add(u: str) -> None:
@@ -165,25 +164,24 @@ def size_hint_bonus(url: str) -> float:
 
 
 def compute_candidate_score(c: ImageCandidate) -> float:
+    # Recency is enforced by grouping/order outside this score.
     area_score = float(c.area)
     ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
     size_bonus = 50000.0 if c.is_preferred else 0.0
-    post_bonus = 100000.0 if c.in_post else -50000.0
-    early_post_bonus = max(0.0, 80000.0 - (c.post_index * 25000.0))
     srcset_bonus = 15000.0 if c.from_srcset else 0.0
     high_res_bonus = 250000.0 if c.is_high_res else 0.0
     viewer_like_bonus = 180000.0 if c.viewer_like else 0.0
-    top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 35.0
+    post_bonus = 60000.0 if c.in_post else 0.0
+    top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 20.0
 
     return (
         area_score
         + size_bonus
         - ratio_penalty
-        + post_bonus
-        + early_post_bonus
         + srcset_bonus
         + high_res_bonus
         + viewer_like_bonus
+        + post_bonus
         + size_hint_bonus(c.src)
         - top_penalty
     )
@@ -259,7 +257,6 @@ async def dismiss_login_modal(page: Page) -> bool:
                   rect.left > window.innerWidth * 0.55 &&
                   rect.width > 10 &&
                   rect.height > 10;
-
                 if (
                   nearTopRight &&
                   (
@@ -362,12 +359,10 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
 
           const all = Array.from(document.querySelectorAll('article, div, section'));
           const posts = [];
-
           for (const el of all) {{
             if (!isLikelyPostContainer(el)) continue;
             const rect = el.getBoundingClientRect();
             const top = rect.top + window.scrollY;
-
             const imgs = Array.from(el.querySelectorAll('img')).map(img => {{
               const r = img.getBoundingClientRect();
               return {{
@@ -381,10 +376,7 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 viewer_like: false,
               }};
             }});
-
-            if (imgs.length > 0) {{
-              posts.push({{ el, top, images: imgs }});
-            }}
+            if (imgs.length > 0) posts.push({{ el, top, images: imgs }});
           }}
 
           posts.sort((a, b) => a.top - b.top);
@@ -395,30 +387,20 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
             if (!parentAlreadyIncluded) deduped.push(post);
           }}
 
-          return deduped.slice(0, {MAX_POSTS_TO_SCAN}).map((post, idx) => ({{
+          return deduped.slice(0, %d).map((post, idx) => ({{
             post_index: idx,
             post_top: post.top,
             images: post.images,
           }}));
         }}
-        """,
+        """ % MAX_POSTS_TO_SCAN,
         viewer_mode,
     )
 
     candidates: list[ImageCandidate] = []
     seen: set[str] = set()
 
-    def add_candidate(
-        src: str,
-        width: int,
-        height: int,
-        top: float,
-        in_post: bool,
-        post_index: int,
-        post_top: float,
-        from_srcset: bool = False,
-        viewer_like: bool = False,
-    ) -> None:
+    def add_candidate(src, width, height, top, in_post, post_index, post_top, from_srcset=False, viewer_like=False):
         src = normalize_fb_image_url((src or "").strip())
         if not src or src in seen:
             return
@@ -426,7 +408,6 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
             return
         if width < MIN_CANDIDATE_WIDTH or height < MIN_CANDIDATE_HEIGHT:
             return
-
         seen.add(src)
         c = ImageCandidate(
             src=src,
@@ -468,7 +449,6 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 post_index = int(post.get("post_index") or 0)
                 post_top = float(post.get("post_top") or 0.0)
                 images = post.get("images") or []
-
                 for item in images:
                     width = int(item.get("width") or 0)
                     height = int(item.get("height") or 0)
@@ -489,20 +469,20 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                                 approx_h = max(int(height * (approx_w / max(width, 1))), height)
                             add_candidate(candidate_url, approx_w, approx_h, top, in_post, post_index, post_top, from_srcset=True)
 
+    return candidates
+
+
+def order_candidates_latest_first(candidates: list[ImageCandidate]) -> list[ImageCandidate]:
     grouped: dict[int, list[ImageCandidate]] = {}
     for c in candidates:
         grouped.setdefault(c.post_index, []).append(c)
 
     ordered_final: list[ImageCandidate] = []
-    group_limit = MAX_CANDIDATES_TO_TRY if viewer_mode else MAX_POST_GROUPS
-    per_group_limit = 5 if viewer_mode else MAX_CANDIDATES_PER_POST
-
-    for post_index in sorted(grouped)[:group_limit]:
+    for post_index in sorted(grouped)[:MAX_POST_GROUPS]:
         group = grouped[post_index]
         group.sort(key=lambda c: c.score, reverse=True)
-        ordered_final.extend(group[:per_group_limit])
+        ordered_final.extend(group[:MAX_CANDIDATES_PER_POST])
 
-    ordered_final.sort(key=lambda c: c.score, reverse=True)
     return ordered_final[:MAX_CANDIDATES_TO_TRY]
 
 
@@ -513,7 +493,6 @@ async def maybe_scroll(page: Page, step: int) -> None:
         await page.mouse.move(random.randint(40, 420), random.randint(120, 700))
     except Exception:
         pass
-
     delay = random.randint(max(500, SCROLL_DELAY_MS - 250), SCROLL_DELAY_MS + 450)
     if step < 2:
         delay += 250
@@ -533,7 +512,6 @@ async def create_context(browser, mode: str) -> BrowserContext:
             viewport={"width": 390, "height": 844},
             device_scale_factor=2,
         )
-
     await setup_context(context)
     return context
 
@@ -549,7 +527,7 @@ def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
 
 async def try_open_viewer_and_collect(page: Page) -> list[ImageCandidate]:
     try:
-        await page.evaluate(
+        clicked = await page.evaluate(
             """
             () => {
               const imgs = Array.from(document.images || []);
@@ -566,6 +544,8 @@ async def try_open_viewer_and_collect(page: Page) -> list[ImageCandidate]:
             }
             """
         )
+        if not clicked:
+            return []
     except Exception:
         return []
 
@@ -607,27 +587,32 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                     await page.wait_for_timeout(700)
 
             try:
-                candidates = await collect_dom_candidates(page, viewer_mode=False)
+                feed_candidates = collect = await collect_dom_candidates(page, viewer_mode=False)
+                ordered_candidates = order_candidates_latest_first(feed_candidates)
             except Exception as exc:
-                candidates = []
+                ordered_candidates = []
                 last_error = f"candidate extraction failed: {exc}"
             else:
                 last_error = ""
 
-            if candidates:
-                best_snapshot = candidates
-                top = candidates[0]
+            if ordered_candidates:
+                best_snapshot = ordered_candidates
 
+                top = ordered_candidates[0]
                 if not top.is_high_res:
                     viewer_candidates = await try_open_viewer_and_collect(page)
                     if viewer_candidates:
                         viewer_used = True
-                        merged = {}
-                        for c in viewer_candidates + candidates:
-                            existing = merged.get(c.src)
-                            if existing is None or c.score > existing.score:
-                                merged[c.src] = c
-                        best_snapshot = sorted(merged.values(), key=lambda c: c.score, reverse=True)
+                        # Keep post-order priority: viewer candidates first only for the current visible/latest context,
+                        # then fill from ordered feed candidates without global reshuffle.
+                        merged = []
+                        seen = set()
+                        for c in viewer_candidates + ordered_candidates:
+                            if c.src in seen:
+                                continue
+                            seen.add(c.src)
+                            merged.append(c)
+                        best_snapshot = merged[:MAX_CANDIDATES_TO_TRY]
 
                 top = best_snapshot[0]
                 if top.is_high_res and (top.in_post or top.viewer_like):
@@ -714,11 +699,7 @@ async def scrape_public_facebook_image() -> dict:
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=HEADLESS,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-            ],
+            args=["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--no-sandbox"],
         )
 
         all_attempts: list[dict] = []
@@ -758,6 +739,7 @@ async def scrape_public_facebook_image() -> dict:
                     all_attempts,
                     key=lambda r: (
                         1 if r.get("candidates") else 0,
+                        -int(r.get("selected_post_index", 9999) if isinstance(r.get("selected_post_index"), int) else 9999),
                         int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
                     ),
                     default={
@@ -788,6 +770,7 @@ async def scrape_public_facebook_image() -> dict:
                     "message": r.get("message", ""),
                     "selected_width": r.get("selected_width", 0),
                     "selected_height": r.get("selected_height", 0),
+                    "selected_post_index": r.get("selected_post_index", -1),
                     "viewer_used": r.get("viewer_used", False),
                 }
                 for r in all_attempts
