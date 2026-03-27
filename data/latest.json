@@ -1,797 +1,164 @@
 {
   "ok": true,
-  "source": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwEg0drD&_nc_gid=yU8vBM2_UkC_JWznhR5yGg&ccb=1-7&_nc_sid=7b2446&oh=00_AfxhjbIGpkm13shS6LRSBc3tkleoOjqHJ0P2VwNf_MY2kQ&oe=69C9E250",
+  "source": "https://scontent-fra5-2.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGhwEY4&_nc_oc=AdrStxF7xCvnSPhnhSH-EijT7mMm7L29Loidi6pipfNcNsnhB6eEMpnj67nw7_rZzKc&_nc_zt=23&_nc_ht=scontent-fra5-2.xx&_nc_gid=6rFRP81Sh_1rjDux9O7j7A&_nc_ss=7a30f&oh=00_AfxNyxzhTgBOomNyBG4WBneMoXSm-CoZFJcR5neQwy3b-A&oe=69CC441A",
   "date": "0000/00/00",
-  "time": "00:00",
-  "k21_ss": 16380,
-  "k21_sb": 16700,
-  "k21_us": 138.0,
-  "k21_ub": 141.0,
-  "k18_ss": 12118,
-  "k18_sb": 14300,
-  "k18_us": 138.0,
-  "k18_ub": 121.0,
-  "raw_ocr_preview": "day=ا 3222 | date=1 ‏الذهب‎ a ‏وميه‎ | time=55 | k21_syp_sell=16380 | k21_syp_buy=16700 | k21_usd_sell=138.0 | k21_usd_buy=141.0 | k18_syp_sell=12118 | k18_syp_buy=14300 | k18_usd_sell=138.0 | k18_usd_buy=121.0",
-  "source_w": 390,
-  "source_h": 390,
-  "byte_length": 23106,
-  "updated_at_utc": "2026-03-25T17:53:35.509618+00:00",
+  "time": "23:50",
+  "day": "5ua .",
+  "k21_ss": 15900,
+  "k21_sb": 15550,
+  "k21_us": 130.0,
+  "k21_ub": 127.0,
+  "k18_ss": 13250,
+  "k18_sb": 11150,
+  "k18_us": 108.0,
+  "k18_ub": 130.0,
+  "raw_ocr_preview": "بهذلا عيبل | : 1",
+  "source_w": 526,
+  "source_h": 526,
+  "byte_length": 51790,
+  "updated_at_utc": "2026-03-27T13:52:35.405137+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
-  "confidence": 0.28929545454545447,
-  "has_blueprint": true,
-  "ocr_word_count": 11,
+  "confidence": 0.341489346464475,
   "warnings": [
     "header_date_failed",
-    "header_time_failed",
-    "missing_price_fields:k21_syp_sell,k21_syp_buy,k21_usd_sell,k21_usd_buy,k18_syp_sell,k18_syp_buy,k18_usd_sell,k18_usd_buy",
+    "missing_or_invalid:k21_syp_sell",
+    "missing_or_invalid:k21_syp_buy",
+    "missing_or_invalid:k21_usd_sell",
+    "missing_or_invalid:k21_usd_buy",
+    "missing_or_invalid:k18_syp_sell",
+    "missing_or_invalid:k18_usd_sell",
+    "missing_or_invalid:k18_usd_buy",
     "used_full_text_price_fallback",
-    "k21_syp_sell_not_gt_buy",
-    "k18_syp_sell_not_gt_buy",
-    "k21_usd_sell_not_gt_buy",
-    "21k_not_gt_18k",
-    "missing_required_fields:date,time"
+    "k18_usd_sell_less_than_buy",
+    "buy_ratio_outside_expected_ratio:0.7170",
+    "missing_required_fields:date"
   ],
   "debug": {
-    "source_url": "https://scontent-iad3-1.xx.fbcdn.net/v/t39.30808-6/651690656_122177052974861173_886124130613687903_n.jpg?stp=dst-webp_e15_q70_s390x390_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-iad3-1.xx&_nc_cat=101&_nc_ohc=UGoHM1N2pSAQ7kNvwEg0drD&_nc_gid=yU8vBM2_UkC_JWznhR5yGg&ccb=1-7&_nc_sid=7b2446&oh=00_AfxhjbIGpkm13shS6LRSBc3tkleoOjqHJ0P2VwNf_MY2kQ&oe=69C9E250",
-    "image_width": 390,
-    "image_height": 390,
+    "source_url": "https://scontent-fra5-2.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGhwEY4&_nc_oc=AdrStxF7xCvnSPhnhSH-EijT7mMm7L29Loidi6pipfNcNsnhB6eEMpnj67nw7_rZzKc&_nc_zt=23&_nc_ht=scontent-fra5-2.xx&_nc_gid=6rFRP81Sh_1rjDux9O7j7A&_nc_ss=7a30f&oh=00_AfxNyxzhTgBOomNyBG4WBneMoXSm-CoZFJcR5neQwy3b-A&oe=69CC441A",
+    "image_width": 526,
+    "image_height": 526,
     "display_timezone": "Asia/Dubai",
     "opencv_available": true,
     "paddle_enabled": true,
     "paddle_failure_reason": null,
-    "alignment": {
-      "opencv_available": true,
-      "alignment_enabled": true,
-      "alignment_mode": "resize_only",
-      "reference_size": {
-        "width": 526,
-        "height": 526
-      }
-    },
+    "has_blueprint": true,
+    "image_sha256": "085c593b8dd3e35ace8f42615a1b0c4abdf4f723540428f1548a2159aa5db0dd",
+    "blueprint_signature": "b3253a06d49ec2e41d7f33211b4cb6e6ffea0c3228a7f1ce697b321bb3631ff1",
+    "cache_hit": false,
     "fields": {
-      "day": {
-        "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T175259580392_day_base.png",
-        "selected": {
-          "engine": "tesseract",
-          "mode": "down:soft",
-          "raw_text": "ا 3222",
-          "value": "ا 3222",
-          "confidence": 39.0,
-          "valid": true,
-          "expected": true,
-          "score": 116.9,
-          "warning": null
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "down:soft",
-            "raw_text": "ا 3222",
-            "value": "ا 3222",
-            "confidence": 39.0,
-            "valid": true,
-            "expected": true,
-            "score": 116.9,
-            "warning": null
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:soft",
-            "raw_text": "3",
-            "value": "3",
-            "confidence": 39.0,
-            "valid": true,
-            "expected": true,
-            "score": 116.9,
-            "warning": null
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:soft",
-            "raw_text": "مم",
-            "value": "مم",
-            "confidence": 22.0,
-            "valid": true,
-            "expected": true,
-            "score": 115.2,
-            "warning": null
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:soft",
-            "raw_text": "bee oie",
-            "value": "bee 0ie",
-            "confidence": 16.0,
-            "valid": true,
-            "expected": true,
-            "score": 114.6,
-            "warning": null
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": "",
-            "confidence": 0.0,
-            "valid": false,
-            "expected": true,
-            "score": 0.0,
-            "warning": "empty_text"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": "",
-            "confidence": 0.0,
-            "valid": false,
-            "expected": true,
-            "score": 0.0,
-            "warning": "empty_text"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:soft",
-            "raw_text": "",
-            "value": "",
-            "confidence": 0.0,
-            "valid": false,
-            "expected": true,
-            "score": 0.0,
-            "warning": "empty_text"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:soft",
-            "raw_text": "",
-            "value": "",
-            "confidence": 0.0,
-            "valid": false,
-            "expected": true,
-            "score": 0.0,
-            "warning": "empty_text"
-          }
-        ]
-      },
-      "date": {
+      "k21_syp_sell": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T175302051955_date_base.png",
+        "crop_debug_path": "data/debug/fields/20260327T135014520432_k21_syp_sell_base_adaptive.png",
         "selected": {
-          "engine": "tesseract",
-          "mode": "pad_h:contrast",
-          "raw_text": "١ ‏الذهب‎ a ‏ومية‎",
-          "value": "0000/00/00",
-          "confidence": 75.25,
-          "valid": false,
-          "expected": true,
-          "score": 7.524999999999999,
-          "warning": "date_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:contrast",
-            "raw_text": "١ ‏الذهب‎ a ‏ومية‎",
-            "value": "0000/00/00",
-            "confidence": 75.25,
-            "valid": false,
-            "expected": true,
-            "score": 7.524999999999999,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:contrast",
-            "raw_text": "مية لبيع الذهب | 1",
-            "value": "0000/00/00",
-            "confidence": 71.8,
-            "valid": false,
-            "expected": true,
-            "score": 7.18,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "مية لبيع الذهب '",
-            "value": "0000/00/00",
-            "confidence": 69.5,
-            "valid": false,
-            "expected": true,
-            "score": 6.949999999999999,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "0 ‏الذهب‎ us lea",
-            "value": "0000/00/00",
-            "confidence": 63.5,
-            "valid": false,
-            "expected": true,
-            "score": 6.350000000000001,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "8 ‏لبيع الذهب‎ ass",
-            "value": "0000/00/00",
-            "confidence": 62.75,
-            "valid": false,
-            "expected": true,
-            "score": 6.274999999999999,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "‎ie‏ لبيع الذهب",
-            "value": "0000/00/00",
-            "confidence": 62.666666666666664,
-            "valid": false,
-            "expected": true,
-            "score": 6.266666666666666,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "15 5 fos 7 : 3 0",
-            "value": "0000/00/00",
-            "confidence": 48.0,
-            "valid": false,
-            "expected": true,
-            "score": 4.800000000000001,
-            "warning": "date_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "a ga ‏وي‎",
-            "value": "0000/00/00",
-            "confidence": 39.666666666666664,
-            "valid": false,
-            "expected": true,
-            "score": 3.966666666666667,
-            "warning": "date_parse_failed"
-          }
-        ]
-      },
-      "time": {
-        "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T175306878187_time_base.png",
-        "selected": {
-          "engine": "tesseract",
-          "mode": "up:adaptive",
-          "raw_text": "55",
-          "value": "00:00",
-          "confidence": 66.0,
-          "valid": false,
-          "expected": true,
-          "score": 6.600000000000001,
-          "warning": "time_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "55",
-            "value": "00:00",
-            "confidence": 66.0,
-            "valid": false,
-            "expected": true,
-            "score": 6.600000000000001,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "7 . 7",
-            "value": "00:00",
-            "confidence": 57.333333333333336,
-            "valid": false,
-            "expected": true,
-            "score": 5.733333333333334,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "ا",
-            "value": "00:00",
-            "confidence": 48.0,
-            "valid": false,
-            "expected": true,
-            "score": 4.800000000000001,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "ا",
-            "value": "00:00",
-            "confidence": 48.0,
-            "valid": false,
-            "expected": true,
-            "score": 4.800000000000001,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "ا",
-            "value": "00:00",
-            "confidence": 46.0,
-            "valid": false,
-            "expected": true,
-            "score": 4.600000000000001,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "— a",
-            "value": "00:00",
-            "confidence": 39.0,
-            "valid": false,
-            "expected": true,
-            "score": 3.9000000000000004,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:contrast",
-            "raw_text": "ا",
-            "value": "00:00",
-            "confidence": 27.0,
-            "valid": false,
-            "expected": true,
-            "score": 2.6999999999999993,
-            "warning": "time_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "ee",
-            "value": "00:00",
-            "confidence": 25.0,
-            "valid": false,
-            "expected": true,
-            "score": 2.5,
-            "warning": "time_parse_failed"
-          }
-        ]
-      },
-      "k21_usd_buy": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T175224562201_k21_usd_buy_base.png",
-        "selected": {
-          "engine": "tesseract",
-          "mode": "base:adaptive",
-          "raw_text": "=",
-          "value": 0.0,
-          "confidence": 93.0,
+          "engine": "paddle",
+          "mode": "pad_h:binary",
+          "raw_text": ":ةعاسلا رغلا رعس عببم",
+          "value": 0,
+          "confidence": 96.4688241481781,
           "valid": false,
           "expected": false,
-          "score": -0.6999999999999993,
-          "warning": "usd_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "=",
-            "value": 0.0,
-            "confidence": 93.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.6999999999999993,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "العيار",
-            "value": 0.0,
-            "confidence": 92.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.7999999999999989,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "العيار",
-            "value": 0.0,
-            "confidence": 91.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.9000000000000004,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "العيار",
-            "value": 0.0,
-            "confidence": 91.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.9000000000000004,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "1 العيار",
-            "value": 1.0,
-            "confidence": 67.5,
-            "valid": false,
-            "expected": false,
-            "score": -3.25,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:adaptive",
-            "raw_text": "2 7 =",
-            "value": 27.0,
-            "confidence": 64.66666666666667,
-            "valid": false,
-            "expected": false,
-            "score": -3.5333333333333323,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "hi] te. ‏اليو‎",
-            "value": 0.0,
-            "confidence": 57.333333333333336,
-            "valid": false,
-            "expected": false,
-            "score": -4.266666666666666,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:contrast",
-            "raw_text": "حت",
-            "value": 0.0,
-            "confidence": 27.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.3,
-            "warning": "usd_parse_failed"
-          }
-        ]
+          "score": -0.35311758518218994,
+          "warning": "syp_parse_failed"
+        }
+      },
+      "k21_syp_buy": {
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260327T135117561965_k21_syp_buy_base_adaptive.png",
+        "selected": {
+          "engine": "paddle",
+          "mode": "base:binary",
+          "raw_text": "سءل مارنلا ءارش",
+          "value": 0,
+          "confidence": 96.35265866915385,
+          "valid": false,
+          "expected": false,
+          "score": -0.3647341330846139,
+          "warning": "syp_parse_failed"
+        }
       },
       "k21_usd_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T175228939623_k21_usd_sell_base.png",
+        "crop_debug_path": "data/debug/fields/20260327T135122691013_k21_usd_sell_base_adaptive.png",
         "selected": {
-          "engine": "tesseract",
+          "engine": "paddle",
           "mode": "base:binary",
-          "raw_text": "5",
-          "value": 5.0,
-          "confidence": 81.0,
+          "raw_text": "يراتلا",
+          "value": 0.0,
+          "confidence": 99.78957176208496,
           "valid": false,
           "expected": false,
-          "score": -1.9000000000000004,
+          "score": -0.021042823791503906,
+          "warning": "usd_parse_failed"
+        }
+      },
+      "k21_usd_buy": {
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260327T135126701494_k21_usd_buy_base_adaptive.png",
+        "selected": {
+          "engine": "paddle",
+          "mode": "base:contrast",
+          "raw_text": "مؤيلا رايعلا",
+          "value": 0.0,
+          "confidence": 99.84757602214813,
+          "valid": false,
+          "expected": false,
+          "score": -0.015242397785186768,
+          "warning": "usd_parse_failed"
+        }
+      },
+      "k18_syp_sell": {
+        "crop_variant": "pad_s",
+        "crop_debug_path": "data/debug/fields/20260327T135131033473_k18_syp_sell_base_adaptive.png",
+        "selected": {
+          "engine": "paddle",
+          "mode": "pad_s:binary",
+          "raw_text": "130 111.50",
+          "value": 130111,
+          "confidence": 97.47473299503326,
+          "valid": false,
+          "expected": false,
+          "score": -0.2525267004966736,
           "warning": "outside_hard_range"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "5",
-            "value": 5.0,
-            "confidence": 81.0,
-            "valid": false,
-            "expected": false,
-            "score": -1.9000000000000004,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "0",
-            "value": 0.0,
-            "confidence": 60.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.0,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:contrast",
-            "raw_text": "د",
-            "value": 0.0,
-            "confidence": 52.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.8,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "= ;",
-            "value": 0.0,
-            "confidence": 40.5,
-            "valid": false,
-            "expected": false,
-            "score": -5.95,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "aa",
-            "value": 0.0,
-            "confidence": 26.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.4,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "a",
-            "value": 0.0,
-            "confidence": 26.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.4,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "==",
-            "value": 0.0,
-            "confidence": 13.0,
-            "valid": false,
-            "expected": false,
-            "score": -8.7,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": 0.0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "usd_parse_failed"
-          }
-        ]
+        }
       },
-      "k21_syp_buy": {
+      "k18_syp_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T175232930531_k21_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260327T135135492370_k18_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "down:adaptive",
-          "raw_text": "a",
-          "value": 0,
-          "confidence": 65.0,
-          "valid": false,
+          "mode": "down:contrast",
+          "raw_text": "| 050 3",
+          "value": 10503,
+          "confidence": 61.0,
+          "valid": true,
           "expected": false,
-          "score": -3.5,
-          "warning": "syp_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "down:adaptive",
-            "raw_text": "a",
-            "value": 0,
-            "confidence": 65.0,
-            "valid": false,
-            "expected": false,
-            "score": -3.5,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "عام اس",
-            "value": 0,
-            "confidence": 42.5,
-            "valid": false,
-            "expected": false,
-            "score": -5.75,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "ee",
-            "value": 0,
-            "confidence": 42.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.8,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "ee",
-            "value": 0,
-            "confidence": 42.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.8,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:adaptive",
-            "raw_text": "“=r ; =",
-            "value": 0,
-            "confidence": 40.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "م",
-            "value": 0,
-            "confidence": 35.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.5,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "mam 2",
-            "value": 2,
-            "confidence": 28.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.199999999999999,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:contrast",
-            "raw_text": "ae",
-            "value": 0,
-            "confidence": 21.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.9,
-            "warning": "syp_parse_failed"
-          }
-        ]
+          "score": 109.1,
+          "warning": null
+        }
       },
-      "k21_syp_sell": {
-        "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260325T175237885378_k21_syp_sell_base.png",
+      "k18_usd_sell": {
+        "crop_variant": "pad_s",
+        "crop_debug_path": "data/debug/fields/20260327T135140123507_k18_usd_sell_base_adaptive.png",
         "selected": {
-          "engine": "tesseract",
-          "mode": "pad_h:adaptive",
-          "raw_text": "=",
-          "value": 0,
-          "confidence": 52.0,
+          "engine": "paddle",
+          "mode": "pad_s:contrast",
+          "raw_text": "900 600",
+          "value": 900600.0,
+          "confidence": 92.45332777500153,
           "valid": false,
           "expected": false,
-          "score": -4.8,
-          "warning": "syp_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:adaptive",
-            "raw_text": "=",
-            "value": 0,
-            "confidence": 52.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.8,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "2 ْ",
-            "value": 2,
-            "confidence": 47.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.3,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "0",
-            "value": 0,
-            "confidence": 43.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.7,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "-",
-            "value": 0,
-            "confidence": 40.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:adaptive",
-            "raw_text": "mT",
-            "value": 0,
-            "confidence": 40.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:contrast",
-            "raw_text": "للكت",
-            "value": 0,
-            "confidence": 37.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.3,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "a",
-            "value": 0,
-            "confidence": 21.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.9,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "اد",
-            "value": 0,
-            "confidence": 14.0,
-            "valid": false,
-            "expected": false,
-            "score": -8.6,
-            "warning": "syp_parse_failed"
-          }
-        ]
+          "score": -0.7546672224998474,
+          "warning": "outside_hard_range"
+        }
       },
       "k18_usd_buy": {
-        "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260325T175242696341_k18_usd_buy_base.png",
+        "crop_variant": "pad_s",
+        "crop_debug_path": "data/debug/fields/20260327T135144174216_k18_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "down:binary",
+          "mode": "pad_s:binary",
           "raw_text": "2",
           "value": 2.0,
           "confidence": 95.0,
@@ -799,467 +166,83 @@
           "expected": false,
           "score": -0.5,
           "warning": "outside_hard_range"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "down:binary",
-            "raw_text": "2",
-            "value": 2.0,
-            "confidence": 95.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.5,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:binary",
-            "raw_text": "2",
-            "value": 2.0,
-            "confidence": 93.0,
-            "valid": false,
-            "expected": false,
-            "score": -0.6999999999999993,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "3",
-            "value": 3.0,
-            "confidence": 88.0,
-            "valid": false,
-            "expected": false,
-            "score": -1.1999999999999993,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:contrast",
-            "raw_text": "8",
-            "value": 8.0,
-            "confidence": 88.0,
-            "valid": false,
-            "expected": false,
-            "score": -1.1999999999999993,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "2",
-            "value": 2.0,
-            "confidence": 73.0,
-            "valid": false,
-            "expected": false,
-            "score": -2.6999999999999993,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "3",
-            "value": 3.0,
-            "confidence": 66.0,
-            "valid": false,
-            "expected": false,
-            "score": -3.3999999999999995,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "3",
-            "value": 3.0,
-            "confidence": 66.0,
-            "valid": false,
-            "expected": false,
-            "score": -3.3999999999999995,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:contrast",
-            "raw_text": "a",
-            "value": 0.0,
-            "confidence": 59.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.1,
-            "warning": "usd_parse_failed"
-          }
-        ]
+        }
       },
-      "k18_usd_sell": {
-        "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260325T175246734535_k18_usd_sell_base.png",
+      "date": {
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260327T135148211382_date_base_adaptive.png",
         "selected": {
-          "engine": "tesseract",
-          "mode": "pad_s:adaptive",
-          "raw_text": "=",
-          "value": 0.0,
-          "confidence": 42.0,
+          "engine": "paddle",
+          "mode": "base:binary",
+          "raw_text": "بهذلا عيبل",
+          "value": "0000/00/00",
+          "confidence": 99.99611973762512,
           "valid": false,
-          "expected": false,
-          "score": -5.8,
-          "warning": "usd_parse_failed"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:adaptive",
-            "raw_text": "=",
-            "value": 0.0,
-            "confidence": 42.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.8,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "اه",
-            "value": 0.0,
-            "confidence": 41.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.8999999999999995,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:binary",
-            "raw_text": "١ 0",
-            "value": 10.0,
-            "confidence": 36.5,
-            "valid": false,
-            "expected": false,
-            "score": -6.35,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "a",
-            "value": 0.0,
-            "confidence": 36.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.4,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:adaptive",
-            "raw_text": "lo",
-            "value": 10.0,
-            "confidence": 24.0,
-            "valid": false,
-            "expected": false,
-            "score": -7.6,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": 0.0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "",
-            "value": 0.0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "usd_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "",
-            "value": 0.0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "usd_parse_failed"
-          }
-        ]
+          "expected": true,
+          "score": 9.999611973762512,
+          "warning": "date_parse_failed"
+        }
       },
-      "k18_syp_buy": {
+      "time": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260325T175250808187_k18_syp_buy_base.png",
+        "crop_debug_path": "data/debug/fields/20260327T135152863363_time_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:binary",
-          "raw_text": "5 مم",
-          "value": 5,
-          "confidence": 58.0,
+          "raw_text": ": |",
+          "value": "00:00",
+          "confidence": 70.0,
           "valid": false,
-          "expected": false,
-          "score": -4.199999999999999,
-          "warning": "outside_hard_range"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "up:binary",
-            "raw_text": "5 مم",
-            "value": 5,
-            "confidence": 58.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.199999999999999,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:contrast",
-            "raw_text": "مم",
-            "value": 0,
-            "confidence": 50.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:adaptive",
-            "raw_text": "on",
-            "value": 0,
-            "confidence": 35.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.5,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:binary",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:binary",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:contrast",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          }
-        ]
+          "expected": true,
+          "score": 7.0,
+          "warning": "time_parse_failed"
+        }
       },
-      "k18_syp_sell": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260325T175255446828_k18_syp_sell_base.png",
+      "day": {
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260327T135156278957_day_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "base:contrast",
-          "raw_text": "“|",
-          "value": 1,
-          "confidence": 66.0,
-          "valid": false,
-          "expected": false,
-          "score": -3.3999999999999995,
-          "warning": "outside_hard_range"
-        },
-        "candidates": [
-          {
-            "engine": "tesseract",
-            "mode": "base:contrast",
-            "raw_text": "“|",
-            "value": 1,
-            "confidence": 66.0,
-            "valid": false,
-            "expected": false,
-            "score": -3.3999999999999995,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:adaptive",
-            "raw_text": "ll",
-            "value": 11,
-            "confidence": 63.0,
-            "valid": false,
-            "expected": false,
-            "score": -3.6999999999999993,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "up:contrast",
-            "raw_text": "va |",
-            "value": 1,
-            "confidence": 57.0,
-            "valid": false,
-            "expected": false,
-            "score": -4.3,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "base:adaptive",
-            "raw_text": "اد",
-            "value": 0,
-            "confidence": 50.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.0,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "down:adaptive",
-            "raw_text": "“ell",
-            "value": 11,
-            "confidence": 41.0,
-            "valid": false,
-            "expected": false,
-            "score": -5.8999999999999995,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_s:adaptive",
-            "raw_text": "اك",
-            "value": 0,
-            "confidence": 38.0,
-            "valid": false,
-            "expected": false,
-            "score": -6.199999999999999,
-            "warning": "syp_parse_failed"
-          },
-          {
-            "engine": "tesseract",
-            "mode": "pad_h:adaptive",
-            "raw_text": ") a1 8",
-            "value": 18,
-            "confidence": 35.333333333333336,
-            "valid": false,
-            "expected": false,
-            "score": -6.466666666666667,
-            "warning": "outside_hard_range"
-          },
-          {
-            "engine": "paddle",
-            "mode": "base:adaptive",
-            "raw_text": "",
-            "value": 0,
-            "confidence": 0.0,
-            "valid": false,
-            "expected": false,
-            "score": -10.0,
-            "warning": "syp_parse_failed"
-          }
-        ]
+          "mode": "down:soft",
+          "raw_text": "Sua .",
+          "value": "5ua .",
+          "confidence": 48.0,
+          "valid": true,
+          "expected": true,
+          "score": 117.8,
+          "warning": null
+        }
       }
     },
     "header_fallback": {
       "header_box": [
         0,
-        66,
-        390,
-        128
+        135,
+        526,
+        219
       ],
-      "header_best_text": "لبسعيره اليومية ‎ee Bp) RA‏ اير\n‎te.‏ الصادرة ‎١ 9 3 ١ 7 59 (SSF‏ 00\n2 ممصم ‎VV) oe‏",
-      "header_attempts": [
-        {
-          "preprocess": "soft",
-          "engine": "paddle",
-          "text": "",
-          "confidence": 0.0
-        },
-        {
-          "preprocess": "soft",
-          "engine": "tesseract",
-          "text": "فس ‎SE fae ee oD‏\nالسادرة عن\n+ جمعبة الصاغة بدمشق هد | | |",
-          "confidence": 43.333333333333336
-        },
-        {
-          "preprocess": "binary",
-          "engine": "paddle",
-          "text": "",
-          "confidence": 0.0
-        },
-        {
-          "preprocess": "binary",
-          "engine": "tesseract",
-          "text": "",
-          "confidence": 0.0
-        },
-        {
-          "preprocess": "adaptive",
-          "engine": "paddle",
-          "text": "",
-          "confidence": 0.0
-        },
-        {
-          "preprocess": "adaptive",
-          "engine": "tesseract",
-          "text": "لبسعيره اليومية ‎ee Bp) RA‏ اير\n‎te.‏ الصادرة ‎١ 9 3 ١ 7 59 (SSF‏ 00\n2 ممصم ‎VV) oe‏",
-          "confidence": 45.6
-        }
-      ]
+      "header_best_text": "Seeman ‏جمعية الصاغة‎ 38\n‏تن‎ 1 ac Ps ea\n‏و ا‎ t 3 ‏بده‎ aeUall ‏ف يه‎ se\nm Oe a Eee Oe - : ‏د‎ ae. ‏و‎ coe gets 2 ge ARS\nWE 1 Sos. gy the, sees aes? see\nHE HT ince Wy, ١ gO os. ee sete baat a 3\nY oF ae Ae 52 007 ‏عدن‎ tye nes ay Ne\n000 ‏اليه لم رح ا‎\n\nBett ‏ا‎ een"
     },
+    "full_text_price_fallback": {
+      "diagnostic_only": false,
+      "k21": {
+        "ub": 127.0,
+        "us": 130.0,
+        "sb": 15550,
+        "ss": 15900
+      },
+      "k18": {
+        "ub": 130.0,
+        "us": 108.0,
+        "sb": 11150,
+        "ss": 13250
+      }
+    },
+    "price_source": "full_text_fallback",
     "relationship_ok": false,
     "relationship_warnings": [
-      "k21_syp_sell_not_gt_buy",
-      "k18_syp_sell_not_gt_buy",
-      "k21_usd_sell_not_gt_buy",
-      "21k_not_gt_18k"
+      "k18_usd_sell_less_than_buy",
+      "buy_ratio_outside_expected_ratio:0.7170"
     ],
     "validation": {
       "usd_hard_min": 80,
@@ -1273,18 +256,48 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "ocr_word_count": 11,
-    "has_blueprint": true,
-    "extraction_method": "template_fields_hybrid",
-    "debug_overlay_path": "data/debug/20260325T175335_template_fields_hybrid_651690656_122177052974861173_886124130613687903_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260327T135235_template_fields_hybrid_657386282_122178542204861173_563926802845908987_n.jpg.png"
   },
-  "should_notify": false,
+  "should_notify": true,
   "change_summary": {
-    "changed": false,
-    "count": 0,
-    "fields": {}
+    "changed": true,
+    "count": 8,
+    "fields": {
+      "k21_ss": {
+        "old": 16380,
+        "new": 15900
+      },
+      "k21_sb": {
+        "old": 16700,
+        "new": 15550
+      },
+      "k21_us": {
+        "old": 138.0,
+        "new": 130.0
+      },
+      "k21_ub": {
+        "old": 141.0,
+        "new": 127.0
+      },
+      "k18_ss": {
+        "old": 12118,
+        "new": 13250
+      },
+      "k18_sb": {
+        "old": 14300,
+        "new": 11150
+      },
+      "k18_us": {
+        "old": 138.0,
+        "new": 108.0
+      },
+      "k18_ub": {
+        "old": 121.0,
+        "new": 130.0
+      }
+    }
   },
-  "change_key": "0000/00/00|00:00|16380|16700|138.0|141.0|12118|14300|138.0|121.0",
+  "change_key": "0000/00/00|23:50|15900|15550|130.0|127.0|13250|11150|108.0|130.0",
   "previous_values": {
     "k21_ss": 16380,
     "k21_sb": 16700,
@@ -1295,5 +308,5 @@
     "k18_us": 138.0,
     "k18_ub": 121.0
   },
-  "raw_ocr": "J o*%s\n‏النسعيرة اليومبة لبيع الذهب 3و‎\n‏السادرة عن‎\n=f ‏جمعبة الصاغة بدمشو أ‎ >\nee A = 1 /\n‏اليؤم: التاريخ: الساعة:‎\nSra ‏سحي‎ | ed ‏1م‎ gill pee 1\n‏ب‎ wd ‏لعبار ميع ضر ميع‎ |\n4 138 141 | 16380 16700 21 |\n12118 1211 ‏مووود‎ 14300 _ 18\n‏الاتنزام بوضع التسعيرة على الؤاجية بشكل واضح‎ Aba dle\n)223176(_])223005( ‏بشت سهريا والسهجر‎ Sebo dy yall ‏دمشق‎ | * * *\nالتسعيرة اليومية لبيع الذهب\nالصادرة عن 0 ا\nجمعية الصاغة بدمشق ون\n8 . =\nعي\n‎sega!‏ التاريخ: الساعة:\nالعيار سبي ع ا اين\n‎or oe 3‏ د 7\n21 141200016350000 138 -\n18 14300 13950 121 118 '\nملاحظة الالنزام بوضع النسعيرة على الواجهة بشكل واضع\nدمشق الحريقة مقابل بنك سوريا والمهجر (221510005)_ )2230766( | Se Bera aed ‏لجيه‎ Speen!\n3 a Z er 20 Where RT a\nbedisdcll ‏التاريخ: رموه‎ seb ‏اليوم:‎\n‎oe col ‏د‎ eo ‏لعف‎ |\nlo Glan colo _ i\ntap @ilem coll WH |)\n\nDORAN ‏بود التسعيرة علي‎ Y TTD LED)\n(2230766) (2248005) ‏دمشق” الحريقة > مقابل بنك سوريا والمهجر‎"
+  "raw_ocr": "‎Wy 5‏ اعد 2\nالتسعيرة اليومية لبيع الذهب ‎tye‏\n‏الصادرة عن\n+ جمعية الصاغة بدمشق . .. 1 =\n: : = بي ٍ\nاليوم: التاريخ: الاق\nالعيار ] سعر الثرام = ] ‎١: Sa‏\nتحن ميع شر مي ضر\n21 | 15900 15550 | 130 127 4\n| 3\n18 |13600 13250 /11150 108\nملاحظة : الاننزام بوضع النسعيرة على الواجهة بشكل واضح\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | بهذلا عيبل ةبمويلا ةريعسنلا نع ةرداصلا قشمدب ةغاصلا ةيعمج م1215 :ةعاسلا 2026/// :خيراتلا سيمخلا :مويلا ماروفلا روعس س ماولا رعس رايعلا هءارش عم ءارش عيم 21 1 130 15550 15900 8 10 111.50 13250 13600 عضاو لكشب ةمجاولا ىلع ةريعسنلا عضوب مازننالا ةظحالم 2230766 2218005 رجهملاو ابروس كنب لباقم ةفيرحلا قشمد | 1 عد اعم\nالتسعيرة اليومية لبيع الذهب ش\nالصادرة عن لاا\n‎0-٠‏ جمعية الصاغة بدمشق ‎Sg‏ اد\n3 0 5 2 1 .\nاليؤم: التاريخ: الساعة:\nالعيار : سعر الفرام ‎wd‏ سعرالترام 8\n‎Pee | “‏ اشراء ‎oe‏ شراء\n21 15900 15550 | 130 127 .\n18 | 13600 13250 11150 108 '\nملاحظة : الالنزام بوضع التسعيرة على الواجية بشكل واضع\nدمشق الحريقة مقابل بنك سوريا والمهجر (2230766(_)22418005) | بهذلا عيبل ةيمويلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا :خيراتلا مويلا مارغلارعس سءل مارغلارعس رايعلا ءارش عببم ءارش عبيم 2 12 130 1 5550 1 5900 18 1 08 111.50 13250 13600 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحالم 2230766 2218005 رجهملاو ايروس كنب لباقم ةقيرحلا قشمد"
 }
