@@ -39,6 +39,7 @@ HIGH_RES_HEIGHT = int(os.getenv("FACEBOOK_HIGH_RES_HEIGHT", "900"))
 SAVE_DEBUG_SCREENSHOT = os.getenv("FACEBOOK_SAVE_DEBUG_SCREENSHOT", "true").strip().lower() in {"1", "true", "yes", "on"}
 FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+
 @dataclass
 class ImageCandidate:
     src: str
@@ -68,30 +69,44 @@ class ImageCandidate:
     def is_preferred(self) -> bool:
         return self.width >= PREFERRED_CANDIDATE_WIDTH and self.height >= PREFERRED_CANDIDATE_HEIGHT
 
+
 def is_login_wall(html: str, page_url: str = "") -> bool:
     lower = html.lower()
     url_lower = page_url.lower()
     wall_signals = (
-        "facebook.com/login", "/login/", "log in", "login",
-        "see more on facebook", "you must log in", "create new account",
-        "تسجيل الدخول", "عرض المزيد على فيسبوك", "يجب تسجيل الدخول",
+        "facebook.com/login",
+        "/login/",
+        "log in",
+        "login",
+        "see more on facebook",
+        "you must log in",
+        "create new account",
+        "تسجيل الدخول",
+        "عرض المزيد على فيسبوك",
+        "يجب تسجيل الدخول",
     )
     return any(sig in lower for sig in wall_signals) or "/login" in url_lower
+
 
 def build_url_candidates(url: str, mode: str) -> list[str]:
     url = url.strip()
     if not url:
         return []
-    variants = []
-    def add(u: str):
+
+    variants: list[str] = []
+
+    def add(u: str) -> None:
         u = u.strip()
         if u and u not in variants:
             variants.append(u)
+
     parsed = urlparse(url)
     host = parsed.netloc.lower()
     add(url)
+
     if "facebook.com" not in host:
         return variants
+
     if mode == "mobile":
         add(urlunparse(parsed._replace(netloc="m.facebook.com")))
         add(urlunparse(parsed._replace(netloc="www.facebook.com")))
@@ -101,10 +116,13 @@ def build_url_candidates(url: str, mode: str) -> list[str]:
     else:
         add(urlunparse(parsed._replace(netloc="m.facebook.com")))
         add(urlunparse(parsed._replace(netloc="www.facebook.com")))
+
     return variants
+
 
 def normalize_fb_image_url(url: str) -> str:
     return (url or "").strip()
+
 
 def is_bad_url(url: str) -> bool:
     lower = url.lower().strip()
@@ -112,60 +130,97 @@ def is_bad_url(url: str) -> bool:
         return True
     if "scontent" not in lower and "fbcdn.net" not in lower:
         return True
+
     bad_parts = [
-        "static.xx.fbcdn.net", "rsrc.php", "emoji", "profile_pic", "safe_image.php",
-        "lookaside", "icon", "logo", "profile", "cover_photo",
-        "/v/t1.", "/v/t39.2365-6/", "/v/t15.5256-10/",
+        "static.xx.fbcdn.net",
+        "rsrc.php",
+        "emoji",
+        "profile_pic",
+        "safe_image.php",
+        "lookaside",
+        "icon",
+        "logo",
+        "profile",
+        "cover_photo",
+        "/v/t1.",
+        "/v/t39.2365-6/",
+        "/v/t15.5256-10/",
     ]
     return any(part in lower for part in bad_parts)
 
-def viewer_bonus(url: str) -> float:
-    lower = url.lower()
-    bonus = 0.0
-    if "_s1024x1024" in lower:
-        bonus += 500000.0
-    elif "_s960x960" in lower:
-        bonus += 420000.0
-    elif "_s720x720" in lower:
-        bonus += 250000.0
-    if "_p526x296" in lower:
-        bonus -= 450000.0
-    elif "_p" in lower:
-        bonus -= 250000.0
-    if "stp=dst-jpg" in lower and "_p" not in lower:
-        bonus += 80000.0
-    return bonus
 
-def app_style_score(c: ImageCandidate) -> float:
+def size_hint_bonus(url: str) -> float:
+    lower = url.lower()
+    if "s1024x1024" in lower:
+        return 500000.0
+    if "s960x960" in lower:
+        return 420000.0
+    if "s780x780" in lower:
+        return 300000.0
+    if "p780x980" in lower or "p780x780" in lower:
+        return 220000.0
+    if "p526x296" in lower:
+        return -500000.0
+    return 0.0
+
+
+def compute_candidate_score(c: ImageCandidate) -> float:
     area_score = float(c.area)
     ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
     size_bonus = 50000.0 if c.is_preferred else 0.0
     post_bonus = 100000.0 if c.in_post else -50000.0
     early_post_bonus = max(0.0, 80000.0 - (c.post_index * 25000.0))
     srcset_bonus = 15000.0 if c.from_srcset else 0.0
-    top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 35.0
     high_res_bonus = 250000.0 if c.is_high_res else 0.0
     viewer_like_bonus = 180000.0 if c.viewer_like else 0.0
-    return area_score + size_bonus - ratio_penalty + post_bonus + early_post_bonus + srcset_bonus + high_res_bonus + viewer_like_bonus + viewer_bonus(c.src) - top_penalty
+    top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 35.0
+
+    return (
+        area_score
+        + size_bonus
+        - ratio_penalty
+        + post_bonus
+        + early_post_bonus
+        + srcset_bonus
+        + high_res_bonus
+        + viewer_like_bonus
+        + size_hint_bonus(c.src)
+        - top_penalty
+    )
+
 
 async def route_handler(route: Route) -> None:
     if not FAST_RESOURCE_BLOCKING:
         await route.continue_()
         return
+
     req = route.request
     url = req.url.lower()
     resource_type = req.resource_type
+
     if resource_type in {"font", "media", "websocket"}:
         await route.abort()
         return
-    noisy_parts = ["doubleclick", "analytics", "googletagmanager", "google-analytics", "/tr?", "facebook.com/tr/", "connect.facebook.net"]
+
+    noisy_parts = [
+        "doubleclick",
+        "analytics",
+        "googletagmanager",
+        "google-analytics",
+        "/tr?",
+        "facebook.com/tr/",
+        "connect.facebook.net",
+    ]
     if any(part in url for part in noisy_parts):
         await route.abort()
         return
+
     await route.continue_()
+
 
 async def setup_context(context: BrowserContext) -> None:
     await context.route("**/*", route_handler)
+
 
 async def dismiss_login_modal(page: Page) -> bool:
     selectors = [
@@ -178,6 +233,7 @@ async def dismiss_login_modal(page: Page) -> bool:
         '[role="dialog"] [aria-label="إغلاق"]',
         '[role="dialog"] [role="button"]',
     ]
+
     for selector in selectors:
         try:
             locator = page.locator(selector).first
@@ -187,32 +243,52 @@ async def dismiss_login_modal(page: Page) -> bool:
                 return True
         except Exception:
             pass
+
     try:
-        clicked = await page.evaluate("""
+        clicked = await page.evaluate(
+            """
             () => {
               const els = Array.from(document.querySelectorAll('[role="button"], button, div, svg'));
               for (const el of els) {
                 const label = (el.getAttribute('aria-label') || '').toLowerCase();
                 const text = (el.textContent || '').toLowerCase().trim();
                 const rect = el.getBoundingClientRect();
-                const nearTopRight = rect.top >= 0 && rect.top < window.innerHeight * 0.45 && rect.left > window.innerWidth * 0.55 && rect.width > 10 && rect.height > 10;
-                if (nearTopRight && (label.includes('close') || label.includes('إغلاق') || text === 'close' || text === 'إغلاق')) {
+                const nearTopRight =
+                  rect.top >= 0 &&
+                  rect.top < window.innerHeight * 0.45 &&
+                  rect.left > window.innerWidth * 0.55 &&
+                  rect.width > 10 &&
+                  rect.height > 10;
+
+                if (
+                  nearTopRight &&
+                  (
+                    label.includes('close') ||
+                    label.includes('إغلاق') ||
+                    text === 'close' ||
+                    text === 'إغلاق'
+                  )
+                ) {
                   el.click();
                   return true;
                 }
               }
               return false;
             }
-        """)
+            """
+        )
         if clicked:
             await page.wait_for_timeout(600)
             return True
     except Exception:
         pass
+
     return False
 
+
 async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[ImageCandidate]:
-    raw = await page.evaluate(f"""
+    raw = await page.evaluate(
+        f"""
         (viewerMode) => {{
           function parseSrcset(srcset) {{
             const out = [];
@@ -237,14 +313,29 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
             if (!el || !el.getBoundingClientRect) return false;
             const rect = el.getBoundingClientRect();
             if (rect.width < 220 || rect.height < 180) return false;
+
             const role = (el.getAttribute('role') || '').toLowerCase();
             const dataPagelet = (el.getAttribute('data-pagelet') || '').toLowerCase();
             const aria = (el.getAttribute('aria-label') || '').toLowerCase();
             const className = (el.className || '').toString().toLowerCase();
             const tag = (el.tagName || '').toLowerCase();
             const text = (el.innerText || '').trim();
-            if (tag === 'article' || role === 'article' || dataPagelet.includes('feed') || dataPagelet.includes('timeline') || aria.includes('post') || className.includes('story')) return true;
-            if (text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 240) return true;
+
+            if (
+              tag === 'article' ||
+              role === 'article' ||
+              dataPagelet.includes('feed') ||
+              dataPagelet.includes('timeline') ||
+              aria.includes('post') ||
+              className.includes('story')
+            ) {{
+              return true;
+            }}
+
+            if (text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 240) {{
+              return true;
+            }}
+
             return false;
           }}
 
@@ -261,17 +352,22 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 in_post: false,
                 post_index: idx,
                 post_top: r.top + window.scrollY,
-                viewer_like: r.width > window.innerWidth * 0.55 || r.height > window.innerHeight * 0.45 || (img.closest('[role="dialog"]') != null),
+                viewer_like:
+                  r.width > window.innerWidth * 0.55 ||
+                  r.height > window.innerHeight * 0.45 ||
+                  (img.closest('[role="dialog"]') != null),
               }};
             }});
           }}
 
           const all = Array.from(document.querySelectorAll('article, div, section'));
           const posts = [];
+
           for (const el of all) {{
             if (!isLikelyPostContainer(el)) continue;
             const rect = el.getBoundingClientRect();
             const top = rect.top + window.scrollY;
+
             const imgs = Array.from(el.querySelectorAll('img')).map(img => {{
               const r = img.getBoundingClientRect();
               return {{
@@ -285,26 +381,44 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 viewer_like: false,
               }};
             }});
-            if (imgs.length > 0) posts.push({{ el, top, images: imgs }});
+
+            if (imgs.length > 0) {{
+              posts.push({{ el, top, images: imgs }});
+            }}
           }}
+
           posts.sort((a, b) => a.top - b.top);
+
           const deduped = [];
           for (const post of posts) {{
             const parentAlreadyIncluded = deduped.some(p => p.el.contains(post.el));
             if (!parentAlreadyIncluded) deduped.push(post);
           }}
-          return deduped.slice(0, %d).map((post, idx) => ({{
+
+          return deduped.slice(0, {MAX_POSTS_TO_SCAN}).map((post, idx) => ({{
             post_index: idx,
             post_top: post.top,
             images: post.images,
           }}));
         }}
-    """ % MAX_POSTS_TO_SCAN, viewer_mode)
+        """,
+        viewer_mode,
+    )
 
-    candidates = []
-    seen = set()
+    candidates: list[ImageCandidate] = []
+    seen: set[str] = set()
 
-    def add_candidate(src, width, height, top, in_post, post_index, post_top, from_srcset=False, viewer_like=False):
+    def add_candidate(
+        src: str,
+        width: int,
+        height: int,
+        top: float,
+        in_post: bool,
+        post_index: int,
+        post_top: float,
+        from_srcset: bool = False,
+        viewer_like: bool = False,
+    ) -> None:
         src = normalize_fb_image_url((src or "").strip())
         if not src or src in seen:
             return
@@ -312,9 +426,20 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
             return
         if width < MIN_CANDIDATE_WIDTH or height < MIN_CANDIDATE_HEIGHT:
             return
+
         seen.add(src)
-        c = ImageCandidate(src=src, width=width, height=height, top=top, in_post=in_post, post_index=post_index, post_top=post_top, from_srcset=from_srcset, viewer_like=viewer_like)
-        c.score = app_style_score(c)
+        c = ImageCandidate(
+            src=src,
+            width=width,
+            height=height,
+            top=top,
+            in_post=in_post,
+            post_index=post_index,
+            post_top=post_top,
+            from_srcset=from_srcset,
+            viewer_like=viewer_like,
+        )
+        c.score = compute_candidate_score(c)
         candidates.append(c)
 
     if isinstance(raw, list):
@@ -324,8 +449,10 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 height = int(item.get("height") or 0)
                 top = float(item.get("top") or 0.0)
                 viewer_like = bool(item.get("viewer_like") or False)
+
                 add_candidate(str(item.get("currentSrc") or ""), width, height, top, False, idx, top, viewer_like=viewer_like)
                 add_candidate(str(item.get("src") or ""), width, height, top, False, idx, top, viewer_like=viewer_like)
+
                 srcset_items = item.get("srcset") or []
                 if isinstance(srcset_items, list):
                     for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
@@ -341,13 +468,16 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                 post_index = int(post.get("post_index") or 0)
                 post_top = float(post.get("post_top") or 0.0)
                 images = post.get("images") or []
+
                 for item in images:
                     width = int(item.get("width") or 0)
                     height = int(item.get("height") or 0)
                     top = float(item.get("top") or 0.0)
                     in_post = bool(item.get("in_post") or False)
+
                     add_candidate(str(item.get("currentSrc") or ""), width, height, top, in_post, post_index, post_top)
                     add_candidate(str(item.get("src") or ""), width, height, top, in_post, post_index, post_top)
+
                     srcset_items = item.get("srcset") or []
                     if isinstance(srcset_items, list):
                         for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
@@ -359,13 +489,14 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
                                 approx_h = max(int(height * (approx_w / max(width, 1))), height)
                             add_candidate(candidate_url, approx_w, approx_h, top, in_post, post_index, post_top, from_srcset=True)
 
-    grouped = {}
+    grouped: dict[int, list[ImageCandidate]] = {}
     for c in candidates:
         grouped.setdefault(c.post_index, []).append(c)
 
-    ordered_final = []
+    ordered_final: list[ImageCandidate] = []
     group_limit = MAX_CANDIDATES_TO_TRY if viewer_mode else MAX_POST_GROUPS
     per_group_limit = 5 if viewer_mode else MAX_CANDIDATES_PER_POST
+
     for post_index in sorted(grouped)[:group_limit]:
         group = grouped[post_index]
         group.sort(key=lambda c: c.score, reverse=True)
@@ -374,6 +505,7 @@ async def collect_dom_candidates(page: Page, viewer_mode: bool = False) -> list[
     ordered_final.sort(key=lambda c: c.score, reverse=True)
     return ordered_final[:MAX_CANDIDATES_TO_TRY]
 
+
 async def maybe_scroll(page: Page, step: int) -> None:
     amount = random.randint(850, 1450)
     await page.mouse.wheel(0, amount)
@@ -381,10 +513,12 @@ async def maybe_scroll(page: Page, step: int) -> None:
         await page.mouse.move(random.randint(40, 420), random.randint(120, 700))
     except Exception:
         pass
+
     delay = random.randint(max(500, SCROLL_DELAY_MS - 250), SCROLL_DELAY_MS + 450)
     if step < 2:
         delay += 250
     await page.wait_for_timeout(delay)
+
 
 async def create_context(browser, mode: str) -> BrowserContext:
     if mode == "desktop":
@@ -399,8 +533,10 @@ async def create_context(browser, mode: str) -> BrowserContext:
             viewport={"width": 390, "height": 844},
             device_scale_factor=2,
         )
+
     await setup_context(context)
     return context
+
 
 def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
     host = urlparse(url).netloc.lower()
@@ -410,9 +546,11 @@ def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
         return "mobile"
     return fallback_mode
 
+
 async def try_open_viewer_and_collect(page: Page) -> list[ImageCandidate]:
     try:
-        await page.evaluate("""
+        await page.evaluate(
+            """
             () => {
               const imgs = Array.from(document.images || []);
               for (const img of imgs) {
@@ -426,39 +564,48 @@ async def try_open_viewer_and_collect(page: Page) -> list[ImageCandidate]:
               }
               return false;
             }
-        """)
+            """
+        )
     except Exception:
         return []
+
     await page.wait_for_timeout(1800)
     await dismiss_login_modal(page)
     await page.wait_for_timeout(600)
+
     viewer_candidates = await collect_dom_candidates(page, viewer_mode=True)
     viewer_candidates.sort(key=lambda c: c.score, reverse=True)
     return viewer_candidates[:MAX_CANDIDATES_TO_TRY]
+
 
 async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
     context_mode = preferred_context_mode_for_url(url, default_mode)
     context = await create_context(browser, context_mode)
     page = await context.new_page()
     page.set_default_timeout(REQUEST_TIMEOUT_MS)
+
     try:
         await page.goto(url, wait_until="domcontentloaded")
         await page.wait_for_timeout(1000)
+
         modal_closed = await dismiss_login_modal(page)
         await page.wait_for_timeout(350)
-        best_snapshot = []
+
+        best_snapshot: list[ImageCandidate] = []
         last_error = ""
         saw_login_wall = False
         viewer_used = False
 
         for step in range(MAX_SCROLL_STEPS + 1):
             html = await page.content()
+
             if is_login_wall(html, page.url):
                 saw_login_wall = True
                 closed = await dismiss_login_modal(page)
                 if closed:
                     modal_closed = True
                     await page.wait_for_timeout(700)
+
             try:
                 candidates = await collect_dom_candidates(page, viewer_mode=False)
             except Exception as exc:
@@ -470,11 +617,9 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             if candidates:
                 best_snapshot = candidates
                 top = candidates[0]
+
                 if not top.is_high_res:
-                    try:
-                        viewer_candidates = await try_open_viewer_and_collect(page)
-                    except Exception:
-                        viewer_candidates = []
+                    viewer_candidates = await try_open_viewer_and_collect(page)
                     if viewer_candidates:
                         viewer_used = True
                         merged = {}
@@ -483,9 +628,11 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                             if existing is None or c.score > existing.score:
                                 merged[c.src] = c
                         best_snapshot = sorted(merged.values(), key=lambda c: c.score, reverse=True)
+
                 top = best_snapshot[0]
                 if top.is_high_res and (top.in_post or top.viewer_like):
                     break
+
             if step < MAX_SCROLL_STEPS:
                 await maybe_scroll(page, step)
 
@@ -556,18 +703,27 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "selected_image_file": "",
             "candidates": [],
         }
+
     finally:
         await context.close()
 
+
 async def scrape_public_facebook_image() -> dict:
     url_candidates = build_url_candidates(FACEBOOK_PAGE_URL, FACEBOOK_URL_MODE)
+
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=HEADLESS,
-            args=["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--no-sandbox"],
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ],
         )
-        all_attempts = []
-        final_result = None
+
+        all_attempts: list[dict] = []
+        final_result: dict | None = None
+
         try:
             for attempt_url in url_candidates:
                 try:
@@ -590,7 +746,9 @@ async def scrape_public_facebook_image() -> dict:
                         "selected_image_file": "",
                         "candidates": [],
                     }
+
                 all_attempts.append(result)
+
                 if result.get("ok") and (result.get("selected_image_url") or result.get("candidates")):
                     final_result = result
                     break
@@ -598,7 +756,10 @@ async def scrape_public_facebook_image() -> dict:
             if final_result is None:
                 final_result = max(
                     all_attempts,
-                    key=lambda r: (1 if r.get("candidates") else 0, int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0)),
+                    key=lambda r: (
+                        1 if r.get("candidates") else 0,
+                        int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
+                    ),
                     default={
                         "ok": False,
                         "page_url": "",
@@ -636,11 +797,14 @@ async def scrape_public_facebook_image() -> dict:
             OUTPUT_FILE.write_text(json.dumps(final_result, ensure_ascii=False, indent=2), encoding="utf-8")
             print(json.dumps(final_result, ensure_ascii=False, indent=2))
             return final_result
+
         finally:
             await browser.close()
 
+
 def main() -> None:
     asyncio.run(scrape_public_facebook_image())
+
 
 if __name__ == "__main__":
     main()
