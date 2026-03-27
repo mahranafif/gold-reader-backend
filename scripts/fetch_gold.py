@@ -53,6 +53,8 @@ IMAGE_CACHE_ENABLED = os.getenv("GOLD_IMAGE_CACHE_ENABLED", "true").strip().lowe
 OCR_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_OCR_CACHE_MAX_ENTRIES", "300"))
 IMAGE_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_IMAGE_CACHE_MAX_ENTRIES", "80"))
 IMAGE_CACHE_TTL_HOURS = int(os.getenv("GOLD_IMAGE_CACHE_TTL_HOURS", "72"))
+MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "800"))
+MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "800"))
 
 HEADERS = {
     "User-Agent": (
@@ -1033,6 +1035,25 @@ def build_rates_from_full_text(full_text: str):
     return None, None
 
 
+def sanitize_price_relationships(k21: GoldRate, k18: GoldRate):
+    warnings = []
+
+    if k21.us < k21.ub:
+        k21 = GoldRate(ub=k21.us, us=k21.ub, sb=k21.sb, ss=k21.ss)
+        warnings.append("auto_swapped_k21_usd_buy_sell")
+    if k18.us < k18.ub:
+        k18 = GoldRate(ub=k18.us, us=k18.ub, sb=k18.sb, ss=k18.ss)
+        warnings.append("auto_swapped_k18_usd_buy_sell")
+    if k21.ss < k21.sb:
+        k21 = GoldRate(ub=k21.ub, us=k21.us, sb=k21.ss, ss=k21.sb)
+        warnings.append("auto_swapped_k21_syp_buy_sell")
+    if k18.ss < k18.sb:
+        k18 = GoldRate(ub=k18.ub, us=k18.us, sb=k18.ss, ss=k18.sb)
+        warnings.append("auto_swapped_k18_syp_buy_sell")
+
+    return k21, k18, warnings
+
+
 def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
     warnings = []
     relationship_ok = True
@@ -1197,6 +1218,12 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     except UnidentifiedImageError as exc:
         raise ValueError(f"Invalid image input: {exc}")
 
+    if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+        raise ValueError(
+            f"Source image too small for reliable OCR: {img.width}x{img.height} "
+            f"(minimum {MIN_SOURCE_WIDTH}x{MIN_SOURCE_HEIGHT})"
+        )
+
     blueprint = load_blueprint()
     bp_sig = blueprint_signature(blueprint)
     image_hash = sha256_bytes(image_bytes)
@@ -1318,6 +1345,9 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         else:
             raise ValueError("Blueprint price extraction failed and full-text fallback also failed")
 
+    k21, k18, auto_fix_warnings = sanitize_price_relationships(k21, k18)
+    warnings.extend(auto_fix_warnings)
+
     relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
     if relationship_warnings:
         warnings.extend(relationship_warnings)
@@ -1414,7 +1444,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Optimized", version="11.1.0")
+app = FastAPI(title="Gold OCR Optimized", version="11.2.0")
 
 
 @app.get("/health")
@@ -1422,11 +1452,13 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr-optimized",
-        "version": "11.1.0",
+        "version": "11.2.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
         "cache_enabled": CACHE_ENABLED,
         "image_cache_enabled": IMAGE_CACHE_ENABLED,
+        "min_source_width": MIN_SOURCE_WIDTH,
+        "min_source_height": MIN_SOURCE_HEIGHT,
     }
 
 
