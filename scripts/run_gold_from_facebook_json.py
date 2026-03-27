@@ -52,24 +52,8 @@ def unique_preserve_order(items):
 
 
 def normalize_fb_image_url(url: str) -> str:
-    u = (url or "").strip()
-    if not u:
-        return ""
-    u = re.sub(r"_p(\d+)x(\d+)", "_s1024x1024", u, flags=re.IGNORECASE)
-
-    def _upgrade_s(match: re.Match[str]) -> str:
-        w = int(match.group(1))
-        h = int(match.group(2))
-        if w * h >= 900_000:
-            return match.group(0)
-        return "_s1024x1024"
-
-    u = re.sub(r"_s(\d+)x(\d+)", _upgrade_s, u, flags=re.IGNORECASE)
-    parsed = urlparse(u)
-    query = parse_qs(parsed.query, keep_blank_values=True)
-    for key in ["stp", "efg", "_nc_eui2"]:
-        query.pop(key, None)
-    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+    # Keep the exact URL as scraped from Facebook.
+    return (url or "").strip()
 
 
 def parse_url_quality(url):
@@ -99,6 +83,10 @@ def sort_candidate_urls(urls):
 def build_candidate_urls(payload):
     urls = []
 
+    selected_file = str(payload.get("selected_image_file") or "").strip()
+    if selected_file:
+        urls.append(selected_file)
+
     selected = normalize_fb_image_url(payload.get("selected_image_url") or "")
     if selected:
         urls.append(selected)
@@ -109,13 +97,20 @@ def build_candidate_urls(payload):
             urls.append(src)
 
     urls = unique_preserve_order(urls)
-    urls = [u for u in urls if ("scontent" in u or "fbcdn.net" in u)]
+    urls = [u for u in urls if (u.endswith(".png") or u.endswith(".jpg") or u.endswith(".jpeg") or "scontent" in u or "fbcdn.net" in u)]
     urls = sort_candidate_urls(urls)
     return urls[:MAX_CANDIDATES_TO_TRY]
 
 
 def download_image_bytes(image_url):
-    response = requests.get(image_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+    local_path = Path(image_url)
+    if local_path.exists():
+        return local_path.read_bytes()
+
+    headers = dict(HEADERS)
+    headers["Referer"] = "https://www.facebook.com/"
+    headers["Origin"] = "https://www.facebook.com"
+    response = requests.get(image_url, headers=headers, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
     if content_type and not content_type.startswith("image/"):
