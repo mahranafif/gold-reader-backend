@@ -27,8 +27,8 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
 CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
-MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "800"))
-MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "800"))
+MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "780"))
+MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "780"))
 
 HEADERS = {
     "User-Agent": (
@@ -58,28 +58,50 @@ def normalize_fb_image_url(url: str) -> str:
     return (url or "").strip()
 
 
-def is_thumbnail_url(url: str) -> bool:
+def is_low_quality_url(url: str) -> bool:
     lower = (url or "").lower()
-    return "_p" in lower or "_q" in lower or "p526x296" in lower
+
+    # Good / acceptable transformed sizes
+    if "s1024x1024" in lower or "s960x960" in lower or "s780x780" in lower:
+        return False
+    if "p780x980" in lower or "p780x780" in lower:
+        return False
+
+    # Known tiny previews / thumbnails
+    tiny_markers = [
+        "s130x130",
+        "s160x160",
+        "s320x320",
+        "s480x480",
+        "p320x320",
+        "p480x480",
+        "p526x296",
+    ]
+    return any(marker in lower for marker in tiny_markers)
 
 
 def parse_url_quality(url: str):
     lower = (url or "").lower()
     score = 0
-    if "_s1024x1024" in lower:
+
+    if "s1024x1024" in lower:
         score -= 100000
-    elif "_s960x960" in lower:
+    elif "s960x960" in lower:
         score -= 90000
-    elif "_s720x720" in lower:
+    elif "s780x780" in lower:
+        score -= 80000
+    elif "p780x980" in lower or "p780x780" in lower:
         score -= 70000
-    elif "_p" in lower:
-        score += 100000
+    elif "p526x296" in lower:
+        score += 120000
+
     if "static.xx.fbcdn.net" in lower:
         score += 999999
     if "scontent" in lower:
         score -= 300
     if "fbcdn.net" in lower:
         score -= 50
+
     return score, url
 
 
@@ -89,6 +111,7 @@ def sort_candidate_urls(urls):
 
 def build_candidate_urls(payload):
     urls = []
+
     selected = normalize_fb_image_url(payload.get("selected_image_url") or "")
     if selected:
         urls.append(selected)
@@ -274,9 +297,9 @@ def main():
     for index, image_url in enumerate(candidate_urls, start=1):
         print(f"[{index}/{len(candidate_urls)}] Trying candidate: {image_url}")
 
-        if is_thumbnail_url(image_url):
-            failures.append({"index": index, "url": image_url, "stage": "thumbnail_url_rejected"})
-            print("Skipped candidate: Facebook thumbnail URL")
+        if is_low_quality_url(image_url):
+            failures.append({"index": index, "url": image_url, "stage": "low_quality_url_rejected"})
+            print("Skipped candidate: low quality URL")
             continue
 
         try:
