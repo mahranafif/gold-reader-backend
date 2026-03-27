@@ -27,8 +27,8 @@ jobs:
       GOLD_OCR_MODE: prefer_blueprint
       GOLD_DEBUG_EXPORT: "true"
 
-      GOLD_CACHE_ENABLED: "true"
-      GOLD_IMAGE_CACHE_ENABLED: "true"
+      GOLD_CACHE_ENABLED: "false"
+      GOLD_IMAGE_CACHE_ENABLED: "false"
       GOLD_OCR_CACHE_MAX_ENTRIES: "300"
       GOLD_IMAGE_CACHE_MAX_ENTRIES: "80"
       GOLD_IMAGE_CACHE_TTL_HOURS: "72"
@@ -85,6 +85,11 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
+      - name: Clear stale OCR/image cache
+        run: |
+          rm -rf data/cache || true
+          mkdir -p data/cache/images
+          
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
