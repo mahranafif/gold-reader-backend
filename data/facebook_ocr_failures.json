@@ -1,12 +1,25 @@
 [
   {
-    "url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=yiuTKHKsDN8Q7kNvwFqqITW&_nc_oc=Adr11G6Qxvd6XJ-uxNhUNi-iG2XpfM5RL5uIDOmbByU_9SqNtbJ4r2_G5c_zji6Gw2E&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=Mqw5ujnhxrQXwIMRjJTimg&_nc_ss=7a30f&oh=00_AfyshxyLa8yxyTAHc_neWBdmnToeY0FweYLZJm23dSD0lA&oe=69CBA09F",
-    "stage": "download_or_open",
-    "error": "403 Client Error: Forbidden for url: https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=yiuTKHKsDN8Q7kNvwFqqITW&_nc_oc=Adr11G6Qxvd6XJ-uxNhUNi-iG2XpfM5RL5uIDOmbByU_9SqNtbJ4r2_G5c_zji6Gw2E&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=Mqw5ujnhxrQXwIMRjJTimg&_nc_ss=7a30f&oh=00_AfyshxyLa8yxyTAHc_neWBdmnToeY0FweYLZJm23dSD0lA&oe=69CBA09F"
+    "url": "https://scontent-ord5-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=yiuTKHKsDN8Q7kNvwFyeK1J&_nc_oc=AdpRN3XjoeIYy6xhqF3Hy-D0JyOb_DhLsTXZ5KtIuxzmp6SiDBniiF9G284PcRpS7wQ&_nc_zt=23&_nc_ht=scontent-ord5-1.xx&_nc_gid=dQKW-i2354UN6WL_WTioTg&_nc_ss=7a30f&oh=00_Afwdn7qqebShwf2M4BtoRKlQTV9ZoGGk1iqcrdP26h4Y7Q&oe=69CBA09F",
+    "stage": "poster_classifier",
+    "debug": {
+      "label": "gold",
+      "confidence": 0.6928796768188477,
+      "all_probs": {
+        "gold": 0.6928796768188477,
+        "non_gold": 0.30712032318115234
+      }
+    }
   },
   {
-    "url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGJo6xs&_nc_oc=AdqaWqr5aP25zk-A8JAX9f4jCZiiGIlbKuM8wE8OKlUfUzef1OIQK4U92vF1uD2YnpA&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=ltxm98PV75ydoDUeXklEgw&_nc_ss=7a30f&oh=00_AfwprCePbwoffQ4mZfJ0T0kJQoulWyduhF8Om3er00soFw&oe=69CB9B5A",
-    "stage": "download_or_open",
-    "error": "403 Client Error: Forbidden for url: https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwGJo6xs&_nc_oc=AdqaWqr5aP25zk-A8JAX9f4jCZiiGIlbKuM8wE8OKlUfUzef1OIQK4U92vF1uD2YnpA&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=ltxm98PV75ydoDUeXklEgw&_nc_ss=7a30f&oh=00_AfwprCePbwoffQ4mZfJ0T0kJQoulWyduhF8Om3er00soFw&oe=69CB9B5A"
+    "url": "https://scontent-ord5-3.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=107&ccb=1-7&_nc_sid=7b2446&_nc_ohc=z_E1p_nENvsQ7kNvwFQdNns&_nc_oc=AdoQCx8t_pIBEx-6rwIuaAmZ4k9CMiq7T6WbCI5TeKeUM1elV-q0_3xPwU3F9x1-81U&_nc_zt=23&_nc_ht=scontent-ord5-3.xx&_nc_gid=nUvX6esFj2kL7Pg73V15zA&_nc_ss=7a30f&oh=00_Afx8CjRZWyA6Ufken9jVoOVxg20Y3Ipe6Ub47NUNQ-xJMQ&oe=69CB9B5A",
+    "stage": "layout_classifier",
+    "debug": {
+      "label": "layout_v1",
+      "confidence": 1.0,
+      "all_probs": {
+        "layout_v1": 1.0
+      }
+    }
   }
 ]
