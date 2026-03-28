@@ -1,4 +1,4 @@
-name: Fetch Gold OCR From Facebook Public Page
+\name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
