@@ -33,8 +33,8 @@ MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "250"))
 MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "250"))
 PREFERRED_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_PREFERRED_CANDIDATE_WIDTH", "400"))
 PREFERRED_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_PREFERRED_CANDIDATE_HEIGHT", "400"))
-HIGH_RES_WIDTH = int(os.getenv("FACEBOOK_HIGH_RES_WIDTH", "900"))
-HIGH_RES_HEIGHT = int(os.getenv("FACEBOOK_HIGH_RES_HEIGHT", "900"))
+HIGH_RES_WIDTH = int(os.getenv("FACEBOOK_HIGH_RES_WIDTH", "780"))
+HIGH_RES_HEIGHT = int(os.getenv("FACEBOOK_HIGH_RES_HEIGHT", "780"))
 
 SAVE_DEBUG_SCREENSHOT = os.getenv("FACEBOOK_SAVE_DEBUG_SCREENSHOT", "true").strip().lower() in {"1", "true", "yes", "on"}
 FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {"1", "true", "yes", "on"}
@@ -50,7 +50,6 @@ class ImageCandidate:
     post_index: int
     post_top: float
     from_srcset: bool = False
-    viewer_like: bool = False
     score: float = 0.0
 
     @property
@@ -62,12 +61,12 @@ class ImageCandidate:
         return self.width / self.height if self.height else 0.0
 
     @property
-    def is_high_res(self) -> bool:
-        return self.width >= HIGH_RES_WIDTH and self.height >= HIGH_RES_HEIGHT
-
-    @property
     def is_preferred(self) -> bool:
         return self.width >= PREFERRED_CANDIDATE_WIDTH and self.height >= PREFERRED_CANDIDATE_HEIGHT
+
+    @property
+    def is_big_enough(self) -> bool:
+        return self.width >= HIGH_RES_WIDTH and self.height >= HIGH_RES_HEIGHT
 
 
 def is_login_wall(html: str, page_url: str = "") -> bool:
@@ -161,22 +160,21 @@ def size_hint_bonus(url: str) -> float:
 
 
 def compute_candidate_score(c: ImageCandidate) -> float:
+    # Feed-only ranking. Post order is enforced outside score.
     area_score = float(c.area)
     ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
     size_bonus = 50000.0 if c.is_preferred else 0.0
     srcset_bonus = 15000.0 if c.from_srcset else 0.0
-    high_res_bonus = 250000.0 if c.is_high_res else 0.0
+    big_bonus = 200000.0 if c.is_big_enough else 0.0
     post_bonus = 80000.0 if c.in_post else 0.0
-    viewer_like_bonus = 25000.0 if c.viewer_like else 0.0
     top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 20.0
     return (
         area_score
         + size_bonus
         - ratio_penalty
         + srcset_bonus
-        + high_res_bonus
+        + big_bonus
         + post_bonus
-        + viewer_like_bonus
         + size_hint_bonus(c.src)
         - top_penalty
     )
@@ -186,6 +184,7 @@ async def route_handler(route: Route) -> None:
     if not FAST_RESOURCE_BLOCKING:
         await route.continue_()
         return
+
     req = route.request
     url = req.url.lower()
     resource_type = req.resource_type
@@ -393,7 +392,7 @@ def build_post_candidates(post: dict) -> list[ImageCandidate]:
             post_index=post_index,
             post_top=post_top,
             from_srcset=from_srcset,
-            viewer_like=False,
+            score=0.0,
         )
         c.score = compute_candidate_score(c)
         out.append(c)
@@ -421,169 +420,12 @@ def build_post_candidates(post: dict) -> list[ImageCandidate]:
     return out[:MAX_CANDIDATES_PER_POST]
 
 
-async def collect_viewer_candidates(page: Page) -> list[ImageCandidate]:
-    raw = await page.evaluate(
-        """
-        () => {
-          function parseSrcset(srcset) {
-            const out = [];
-            for (const part of (srcset || '').split(',')) {
-              const item = part.trim();
-              if (!item) continue;
-              const pieces = item.split(/\\s+/);
-              const url = pieces[0] || '';
-              let width = 0;
-              for (const p of pieces.slice(1)) {
-                if (p.endsWith('w')) {
-                  const n = parseInt(p.slice(0, -1), 10);
-                  if (!isNaN(n)) width = n;
-                }
-              }
-              if (url) out.push({ url, width });
-            }
-            return out;
-          }
-
-          return Array.from(document.images || []).map((img) => {
-            const r = img.getBoundingClientRect();
-            return {
-              currentSrc: img.currentSrc || '',
-              src: img.src || '',
-              srcset: parseSrcset(img.getAttribute('srcset') || ''),
-              width: img.naturalWidth || 0,
-              height: img.naturalHeight || 0,
-              top: r.top + window.scrollY,
-              viewer_like:
-                r.width > window.innerWidth * 0.55 ||
-                r.height > window.innerHeight * 0.45 ||
-                (img.closest('[role="dialog"]') != null),
-            };
-          });
-        }
-        """
-    )
-    seen: set[str] = set()
-    out: list[ImageCandidate] = []
-
-    def add_candidate(src, width, height, top, from_srcset=False, viewer_like=False):
-        src = normalize_fb_image_url((src or "").strip())
-        if not src or src in seen:
-            return
-        if is_bad_url(src):
-            return
-        if width < MIN_CANDIDATE_WIDTH or height < MIN_CANDIDATE_HEIGHT:
-            return
-        seen.add(src)
-        c = ImageCandidate(
-            src=src,
-            width=width,
-            height=height,
-            top=float(top or 0.0),
-            in_post=False,
-            post_index=-1,
-            post_top=float(top or 0.0),
-            from_srcset=from_srcset,
-            viewer_like=viewer_like,
-        )
-        c.score = compute_candidate_score(c)
-        out.append(c)
-
-    if isinstance(raw, list):
-        for item in raw:
-            width = int(item.get("width") or 0)
-            height = int(item.get("height") or 0)
-            top = float(item.get("top") or 0.0)
-            viewer_like = bool(item.get("viewer_like") or False)
-            add_candidate(item.get("currentSrc") or "", width, height, top, False, viewer_like)
-            add_candidate(item.get("src") or "", width, height, top, False, viewer_like)
-            srcset_items = item.get("srcset") or []
-            if isinstance(srcset_items, list):
-                for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
-                    candidate_url = str(entry.get("url") or "").strip()
-                    declared_width = int(entry.get("width") or 0)
-                    approx_w = max(width, declared_width) if declared_width > 0 else width
-                    approx_h = height
-                    if approx_w > 0 and height > 0 and width > 0:
-                        approx_h = max(int(height * (approx_w / max(width, 1))), height)
-                    add_candidate(candidate_url, approx_w, approx_h, top, True, viewer_like)
-
-    out.sort(key=lambda c: c.score, reverse=True)
-    return out
-
-
-def viewer_url_matches_top_post(viewer: ImageCandidate, top_post_candidates: list[ImageCandidate], top_feed_candidate: ImageCandidate) -> bool:
-    try:
-        viewer_name = Path(urlparse(viewer.src).path).name
-    except Exception:
-        viewer_name = ""
-
-    stems = set()
-    for c in top_post_candidates:
-        try:
-            name = Path(urlparse(c.src).path).name
-            stem = name.split(".")[0]
-            if stem:
-                stems.add(stem)
-        except Exception:
-            pass
-
-    for stem in stems:
-        if stem and stem in viewer_name:
-            return True
-
-    if viewer.width >= 780 and viewer.height >= 780:
-        if viewer.width >= top_feed_candidate.width and viewer.height >= top_feed_candidate.height:
-            return True
-
-    return False
-
-
-async def try_upgrade_top_post_with_viewer(page: Page, top_feed_candidate: ImageCandidate, top_post_candidates: list[ImageCandidate]) -> list[ImageCandidate]:
-    try:
-        clicked = await page.evaluate(
-            """
-            (targetUrl) => {
-              const imgs = Array.from(document.images || []);
-              for (const img of imgs) {
-                const current = img.currentSrc || img.src || '';
-                if (current === targetUrl) {
-                  img.click();
-                  return true;
-                }
-              }
-              return false;
-            }
-            """,
-            top_feed_candidate.src,
-        )
-    except Exception:
-        clicked = False
-
-    if not clicked:
-        return []
-
-    await page.wait_for_timeout(1800)
-    await dismiss_login_modal(page)
-    await page.wait_for_timeout(600)
-
-    viewer_candidates = await collect_viewer_candidates(page)
-    matched = [
-        c for c in viewer_candidates
-        if viewer_url_matches_top_post(c, top_post_candidates, top_feed_candidate)
-    ]
-    matched.sort(key=lambda c: (c.width * c.height, c.score), reverse=True)
-    return matched
-
-
 def build_post_locked_order(post_groups: list[dict]) -> list[ImageCandidate]:
     ordered: list[ImageCandidate] = []
-
     if len(post_groups) >= 1:
         ordered.extend(post_groups[0]["candidates"][:4])
-
     if len(post_groups) >= 2:
         ordered.extend(post_groups[1]["candidates"][:2])
-
     return ordered[:MAX_CANDIDATES_TO_TRY]
 
 
@@ -603,7 +445,6 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
         ordered_candidates: list[ImageCandidate] = []
         saw_login_wall = False
         last_error = ""
-        viewer_used = False
 
         for step in range(MAX_SCROLL_STEPS + 1):
             html = await page.content()
@@ -632,39 +473,6 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                     })
 
                 ordered_candidates = build_post_locked_order(post_groups)
-
-                # Upgrade only post 0, never let post 1 outrank it.
-                top_group = post_groups[0] if post_groups else None
-                if top_group and top_group["candidates"]:
-                    top_feed_candidate = top_group["candidates"][0]
-                    if top_feed_candidate.width < 780 or top_feed_candidate.height < 780:
-                        upgraded = await try_upgrade_top_post_with_viewer(page, top_feed_candidate, top_group["candidates"])
-                        if upgraded:
-                            viewer_used = True
-                            merged = []
-                            seen = set()
-
-                            for c in upgraded[:4]:
-                                if c.src not in seen:
-                                    seen.add(c.src)
-                                    c.in_post = True
-                                    c.post_index = top_group["post_index"]
-                                    c.post_top = top_group["post_top"]
-                                    merged.append(c)
-
-                            for c in top_group["candidates"][:4]:
-                                if c.src not in seen:
-                                    seen.add(c.src)
-                                    merged.append(c)
-
-                            if len(post_groups) >= 2:
-                                for c in post_groups[1]["candidates"][:2]:
-                                    if c.src not in seen:
-                                        seen.add(c.src)
-                                        merged.append(c)
-
-                            ordered_candidates = merged[:MAX_CANDIDATES_TO_TRY]
-
                 ordered_candidates = [
                     c for c in ordered_candidates
                     if c.in_post and 0 <= c.post_index < MAX_POST_GROUPS
@@ -689,7 +497,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 "page_url": page.url,
                 "context_mode": context_mode,
                 "modal_closed": modal_closed,
-                "viewer_used": viewer_used,
+                "viewer_used": False,
                 "message": "Success_with_login_wall_fallback" if saw_login_wall else "Success",
                 "selected_image_url": best.src,
                 "selected_width": best.width,
@@ -716,7 +524,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "page_url": page.url,
             "context_mode": context_mode,
             "modal_closed": modal_closed,
-            "viewer_used": viewer_used,
+            "viewer_used": False,
             "message": "Login wall detected" if saw_login_wall else (last_error or "No usable images found"),
             "selected_image_url": "",
             "selected_width": 0,
