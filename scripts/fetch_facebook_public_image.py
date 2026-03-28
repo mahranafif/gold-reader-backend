@@ -22,12 +22,12 @@ OUTPUT_FILE = Path(os.getenv("FACEBOOK_OUTPUT_JSON", "data/facebook_latest_image
 SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page_debug.png"))
 
 REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
-MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "6"))
-SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1200"))
-MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "4"))
+MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "4"))
+SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1600"))
+MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "2"))
 MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "2"))
-MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "6"))
-MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "8"))
+MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "4"))
+MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "6"))
 
 MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "250"))
 MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "250"))
@@ -278,7 +278,7 @@ def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
 async def maybe_scroll(page: Page, step: int) -> None:
     amount = random.randint(850, 1450)
     await page.mouse.wheel(0, amount)
-    delay = random.randint(max(500, SCROLL_DELAY_MS - 250), SCROLL_DELAY_MS + 450)
+    delay = random.randint(max(600, SCROLL_DELAY_MS - 250), SCROLL_DELAY_MS + 450)
     if step < 2:
         delay += 250
     await page.wait_for_timeout(delay)
@@ -575,6 +575,18 @@ async def try_upgrade_top_post_with_viewer(page: Page, top_feed_candidate: Image
     return matched
 
 
+def build_post_locked_order(post_groups: list[dict]) -> list[ImageCandidate]:
+    ordered: list[ImageCandidate] = []
+
+    if len(post_groups) >= 1:
+        ordered.extend(post_groups[0]["candidates"][:4])
+
+    if len(post_groups) >= 2:
+        ordered.extend(post_groups[1]["candidates"][:2])
+
+    return ordered[:MAX_CANDIDATES_TO_TRY]
+
+
 async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
     context_mode = preferred_context_mode_for_url(url, default_mode)
     context = await create_context(browser, context_mode)
@@ -619,10 +631,9 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                         "candidates": build_post_candidates(p),
                     })
 
-                ordered_candidates = []
-                for group in post_groups:
-                    ordered_candidates.extend(group["candidates"])
+                ordered_candidates = build_post_locked_order(post_groups)
 
+                # Upgrade only post 0, never let post 1 outrank it.
                 top_group = post_groups[0] if post_groups else None
                 if top_group and top_group["candidates"]:
                     top_feed_candidate = top_group["candidates"][0]
@@ -632,17 +643,26 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                             viewer_used = True
                             merged = []
                             seen = set()
-                            for c in upgraded:
+
+                            for c in upgraded[:4]:
                                 if c.src not in seen:
                                     seen.add(c.src)
                                     c.in_post = True
                                     c.post_index = top_group["post_index"]
                                     c.post_top = top_group["post_top"]
                                     merged.append(c)
-                            for c in ordered_candidates:
+
+                            for c in top_group["candidates"][:4]:
                                 if c.src not in seen:
                                     seen.add(c.src)
                                     merged.append(c)
+
+                            if len(post_groups) >= 2:
+                                for c in post_groups[1]["candidates"][:2]:
+                                    if c.src not in seen:
+                                        seen.add(c.src)
+                                        merged.append(c)
+
                             ordered_candidates = merged[:MAX_CANDIDATES_TO_TRY]
 
                 ordered_candidates = [
