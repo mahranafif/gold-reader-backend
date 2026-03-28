@@ -1,4 +1,3 @@
-
 import json
 import os
 import re
@@ -43,7 +42,6 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
 }
 
-# Use keyword guard as a soft signal only.
 GOLD_POSTER_REQUIRED_KEYWORDS = ["العيار", "سعر", "غرام", "جمعية"]
 ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
@@ -60,22 +58,6 @@ def is_low_quality_url(url: str) -> bool:
         return False
     tiny_markers = ["s130x130", "s160x160", "s320x320", "s480x480", "p320x320", "p480x480", "p526x296"]
     return any(marker in lower for marker in tiny_markers)
-
-
-def parse_url_quality(url: str):
-    lower = (url or "").lower()
-    score = 0
-    if "s1024x1024" in lower:
-        score -= 100000
-    elif "s960x960" in lower:
-        score -= 90000
-    elif "s780x780" in lower:
-        score -= 80000
-    elif "p780x980" in lower or "p780x780" in lower:
-        score -= 70000
-    elif "p526x296" in lower:
-        score += 120000
-    return score, url
 
 
 def normalize_digits(text: str) -> str:
@@ -105,9 +87,7 @@ def parse_date_safely(text: str) -> str:
     try:
         month_i = int(month)
         day_i = int(day)
-        if not (1 <= month_i <= 12):
-            return "0000/00/00"
-        if not (1 <= day_i <= 31):
+        if not (1 <= month_i <= 12) or not (1 <= day_i <= 31):
             return "0000/00/00"
         return f"{int(year):04d}/{month_i:02d}/{day_i:02d}"
     except Exception:
@@ -149,41 +129,12 @@ def parse_header_signals(img: Image.Image) -> dict:
     return {"text": text[:1200], "date": date, "time": time}
 
 
-def classify_gold_poster_ocr_fallback(img):
-    text = quick_ocr_text(img)
-    hits = sum(1 for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text)
-    is_gold = hits >= 2
-    debug = {
-        "method": "ocr_keyword_fallback",
-        "hits": hits,
-        "keywords": GOLD_POSTER_REQUIRED_KEYWORDS,
-        "text_preview": text[:500],
-        "label": "gold_poster" if is_gold else "non_gold_poster",
-        "confidence": min(0.95, 0.35 + (hits * 0.2)),
-        "source": "ocr",
-    }
-    return is_gold, debug
-
-
-def classify_layout_ocr_fallback(img):
-    text = quick_ocr_text(img)
-    hits = sum(1 for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text)
-    result = {
-        "method": "ocr_keyword_fallback",
-        "hits": hits,
-        "text_preview": text[:500],
-        "label": "layout_v1" if hits >= 1 else "unknown_layout",
-        "confidence": min(0.95, 0.35 + (hits * 0.2)),
-        "source": "ocr",
-    }
-    return hits >= 1, result
-
-
 def poster_keyword_guard(img):
     text = quick_ocr_text(img)
     hits = [kw for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text]
-    has_21 = "21" in normalize_digits(text)
-    has_18 = "18" in normalize_digits(text)
+    normalized = normalize_digits(text)
+    has_21 = "21" in normalized
+    has_18 = "18" in normalized
     return {
         "hits": hits,
         "hit_count": len(hits),
@@ -268,7 +219,7 @@ def evaluate_poster_classifier(poster_debug: dict):
         "min_margin": CNN_POSTER_MIN_MARGIN,
         "accepted": is_gold,
     }
-    return is_gold, decision
+    return is_gold, decision, gold_conf, margin
 
 
 def load_latest_result() -> dict:
@@ -296,14 +247,10 @@ def recency_points(snapshot: dict, approx_rank: int):
     score = 0
     reasons = []
 
-    # Keep newest-post preference first, then previous one.
     if approx_rank == 0:
         score += 140
     elif approx_rank == 1:
         score += 80
-    elif approx_rank == 999:
-        score += 60
-        reasons.append("rank_missing_from_scraper")
     else:
         score += max(0, 30 - approx_rank * 10)
         reasons.append(f"rank_{approx_rank}")
@@ -328,7 +275,7 @@ def recency_points(snapshot: dict, approx_rank: int):
     return score, reasons
 
 
-def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_guard: dict):
+def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_guard: dict, gold_conf: float, margin: float):
     score = 0
     reasons = []
 
@@ -336,6 +283,16 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_gu
         score += 60
     else:
         reasons.append("classifier_failed")
+
+    if gold_conf >= 0.95:
+        score += 40
+    elif gold_conf >= 0.90:
+        score += 25
+
+    if margin >= 0.90:
+        score += 25
+    elif margin >= 0.70:
+        score += 10
 
     if header.get("date") != "0000/00/00":
         score += 120
@@ -347,7 +304,6 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_gu
     else:
         reasons.append("header_time_missing")
 
-    # Soft keyword signal only. Never reject a strong CNN positive just because OCR keywords are weak.
     hit_count = int(keyword_guard.get("hit_count") or 0)
     if hit_count >= 2:
         score += 30
@@ -358,7 +314,9 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_gu
         reasons.append("no_keyword_hits")
 
     if keyword_guard.get("has_21") and keyword_guard.get("has_18"):
-        score += 20
+        score += 35
+    elif keyword_guard.get("has_21") or keyword_guard.get("has_18"):
+        score += 10
 
     warnings = snapshot.get("warnings") or []
     if "used_full_text_price_fallback" not in warnings:
@@ -384,9 +342,9 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_gu
     return score, reasons
 
 
-def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, snapshot: dict, keyword_guard: dict):
+def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, snapshot: dict, keyword_guard: dict, gold_conf: float, margin: float):
     rec_pts, rec_reasons = recency_points(snapshot, approx_rank)
-    content_pts, content_reasons = content_points(header, snapshot, classifier_ok, keyword_guard)
+    content_pts, content_reasons = content_points(header, snapshot, classifier_ok, keyword_guard, gold_conf, margin)
     total = rec_pts + content_pts
     return total, {
         "approx_rank": approx_rank,
@@ -395,6 +353,8 @@ def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, s
         "content_points": content_pts,
         "content_reasons": content_reasons,
         "keyword_guard": keyword_guard,
+        "gold_conf": gold_conf,
+        "margin": margin,
         "total": total,
     }
 
@@ -410,7 +370,6 @@ def build_flat_candidates(payload: dict) -> list[dict]:
         if approx_rank is None:
             approx_rank = item.get("selected_rank")
         if approx_rank is None:
-            # Keep scraper order if rank is missing
             approx_rank = 0 if idx == 0 else 1 if idx == 1 else 999
         out.append({
             "src": src,
@@ -419,7 +378,7 @@ def build_flat_candidates(payload: dict) -> list[dict]:
             "approx_post_rank": int(approx_rank),
             "score": float(item.get("score") or 0.0),
         })
-    out.sort(key=lambda x: (x["approx_post_rank"], x["score"], -parse_url_quality(x["src"])[0]))
+    out.sort(key=lambda x: (x["approx_post_rank"], -x["score"]))
     deduped = []
     seen = set()
     for item in out:
@@ -428,6 +387,18 @@ def build_flat_candidates(payload: dict) -> list[dict]:
         seen.add(item["src"])
         deduped.append(item)
     return deduped[:MAX_CANDIDATES_TO_TRY]
+
+
+def is_rank0_rescue_candidate(approx_rank: int, poster_accepted: bool, gold_conf: float, margin: float, keyword_guard: dict, layout_conf: float) -> bool:
+    return (
+        approx_rank == 0
+        and poster_accepted
+        and gold_conf >= 0.95
+        and margin >= 0.90
+        and layout_conf >= 0.99
+        and keyword_guard.get("has_21")
+        and keyword_guard.get("has_18")
+    )
 
 
 def main():
@@ -459,6 +430,7 @@ def main():
 
     failures: list[dict[str, Any]] = []
     best_candidate: dict[str, Any] | None = None
+    rescued_rank0: dict[str, Any] | None = None
 
     for idx, cand in enumerate(candidates, start=1):
         image_url = cand["src"]
@@ -491,20 +463,18 @@ def main():
         print("Header signals:", json.dumps(header, ensure_ascii=False))
 
         try:
-            if poster_classifier is not None:
-                poster_debug = poster_classifier.predict(img)
-                poster_debug["source"] = "cnn"
-                print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
-                is_gold, poster_decision = evaluate_poster_classifier(poster_debug)
-            else:
-                is_gold, poster_debug = classify_gold_poster_ocr_fallback(img)
-                poster_decision = {"accepted": is_gold, "source": "ocr"}
+            if poster_classifier is None:
+                raise RuntimeError("Missing poster classifier")
+            poster_debug = poster_classifier.predict(img)
+            poster_debug["source"] = "cnn"
+            print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+            poster_accepted, poster_decision, gold_conf, margin = evaluate_poster_classifier(poster_debug)
             print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
 
             keyword_guard = poster_keyword_guard(img)
             print("Poster keyword guard:", json.dumps(keyword_guard, ensure_ascii=False))
 
-            if not is_gold:
+            if not poster_accepted:
                 failures.append({
                     "index": idx, "rank": approx_rank, "url": image_url,
                     "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision,
@@ -512,33 +482,24 @@ def main():
                 print("Skipped candidate: classifier too weak")
                 continue
 
-            if layout_classifier is not None:
-                layout_debug = layout_classifier.predict(img)
-                layout_debug["source"] = "cnn"
-                print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
-                layout_conf = float(layout_debug.get("confidence", 0.0))
-                layout_label = str(layout_debug.get("label", "")).strip()
-                if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
-                    activated = maybe_switch_blueprint_for_layout(layout_label)
-                    if activated:
-                        print(f"Activated layout blueprint: {activated}")
-                else:
-                    failures.append({
-                        "index": idx, "rank": approx_rank, "url": image_url,
-                        "stage": "layout_classifier", "layout_debug": layout_debug,
-                    })
-                    print("Skipped candidate: layout classifier too weak")
-                    continue
+            if layout_classifier is None:
+                raise RuntimeError("Missing layout classifier")
+            layout_debug = layout_classifier.predict(img)
+            layout_debug["source"] = "cnn"
+            print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
+            layout_conf = float(layout_debug.get("confidence", 0.0))
+            layout_label = str(layout_debug.get("label", "")).strip()
+            if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
+                activated = maybe_switch_blueprint_for_layout(layout_label)
+                if activated:
+                    print(f"Activated layout blueprint: {activated}")
             else:
-                layout_ok, layout_debug = classify_layout_ocr_fallback(img)
-                print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
-                if not layout_ok:
-                    failures.append({
-                        "index": idx, "rank": approx_rank, "url": image_url,
-                        "stage": "layout_classifier", "layout_debug": layout_debug,
-                    })
-                    print("Skipped candidate: layout classifier too weak")
-                    continue
+                failures.append({
+                    "index": idx, "rank": approx_rank, "url": image_url,
+                    "stage": "layout_classifier", "layout_debug": layout_debug,
+                })
+                print("Skipped candidate: layout classifier too weak")
+                continue
 
             result = run_fetch_gold_with_url(image_url)
             if result.returncode != 0:
@@ -555,7 +516,9 @@ def main():
                 print("fetch_gold.py succeeded but latest.json missing/empty")
                 continue
 
-            total_score, detail = total_candidate_score(approx_rank, True, header, snapshot, keyword_guard)
+            total_score, detail = total_candidate_score(
+                approx_rank, True, header, snapshot, keyword_guard, gold_conf, margin
+            )
             print("Candidate total score:", json.dumps(detail, ensure_ascii=False))
 
             candidate_record = {
@@ -571,6 +534,10 @@ def main():
             if best_candidate is None or total_score > best_candidate["total_score"]:
                 best_candidate = candidate_record
 
+            if is_rank0_rescue_candidate(approx_rank, poster_accepted, gold_conf, margin, keyword_guard, layout_conf):
+                rescued_rank0 = candidate_record
+                print("Stored rank-0 rescue candidate")
+
             if approx_rank == 0 and total_score >= 280:
                 save_failures(failures)
                 print(f"Accepted strong newest-post candidate: {image_url}")
@@ -582,13 +549,19 @@ def main():
 
     save_failures(failures)
 
-    if best_candidate:
-        rerun = run_fetch_gold_with_url(best_candidate["url"])
+    final_choice = best_candidate
+    if rescued_rank0 is not None:
+        if final_choice is None or rescued_rank0["total_score"] >= final_choice["total_score"] - 120:
+            final_choice = rescued_rank0
+            print("Using rank-0 rescue candidate as final choice")
+
+    if final_choice:
+        rerun = run_fetch_gold_with_url(final_choice["url"])
         if rerun.returncode == 0:
-            print(f"Accepted best overall candidate after scoring: {best_candidate['url']}")
+            print(f"Accepted best overall candidate after scoring: {final_choice['url']}")
             return
 
-    raise RuntimeError(f"All candidates failed. Best scored candidate: {best_candidate['url'] if best_candidate else 'none'}")
+    raise RuntimeError(f"All candidates failed. Best scored candidate: {final_choice['url'] if final_choice else 'none'}")
 
 
 if __name__ == "__main__":
