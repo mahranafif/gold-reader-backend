@@ -1,3 +1,4 @@
+
 import hashlib
 import json
 import logging
@@ -715,51 +716,71 @@ def find_header_box(img: Image.Image):
     return best_box
 
 
-def extract_date_from_text(text: str) -> str:
+def parse_date_safely(text: str) -> str:
     text = normalize_digits(text)
-    now = app_now()
-    year_candidates = [now.year, now.year - 1, now.year + 1, now.year + 2, now.year + 3]
-    patterns = [
-        r"(\d{1,2})\s*[/\-]\s*(\d{1,2})\s*[/\-]\s*(\d{2,4})",
-        r"(\d{1,2})\s*[/\-]\s*(\d{1,2})",
-    ]
-    for pat in patterns:
-        for m in re.finditer(pat, text):
-            parts = [int(x) for x in m.groups()]
-            if len(parts) == 3:
-                d, mo, y = parts
-                if y < 100:
-                    y += 2000
-            else:
-                d, mo = parts
-                y = now.year
-            if mo > 12 and d <= 12:
-                d, mo = mo, d
-            if y not in year_candidates and not (now.year - 1 <= y <= now.year + 3):
-                continue
-            if 1 <= d <= 31 and 1 <= mo <= 12:
-                return f"{y:04d}/{mo:02d}/{d:02d}"
-    return "0000/00/00"
+    text = text.replace("Z", "2").replace("z", "2").replace("O", "0").replace("o", "0")
+    text = text.replace("\\", "/").replace("|", "/").replace(" ", "")
+    m = re.search(r"(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})", text)
+    if not m:
+        # fallback dd/mm/yyyy
+        m = re.search(r"(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})", text)
+        if not m:
+            return "0000/00/00"
+        day, month, year = m.groups()
+    else:
+        year, month, day = m.groups()
+
+    try:
+        month_i = int(month)
+        day_i = int(day)
+        if not (1 <= month_i <= 12):
+            return "0000/00/00"
+        if not (1 <= day_i <= 31):
+            return "0000/00/00"
+        return f"{int(year):04d}/{month_i:02d}/{day_i:02d}"
+    except Exception:
+        return "0000/00/00"
 
 
-def extract_time_from_text(text: str) -> str:
+def parse_time_safely(text: str) -> str:
     text = normalize_digits(text)
-    text = text.replace("؛", ":").replace(";", ":").replace(",", ":")
-    m = re.search(r"(\d{1,2})\s*[:.]\s*(\d{2})", text)
+    text = text.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
+    text = text.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
+    m = re.search(r"(\d{1,2})[:](\d{2})", text)
     if not m:
         return "00:00"
-    hh = int(m.group(1))
-    mm = int(m.group(2))
-    lower = text.lower()
-    if "م" in text or "pm" in lower:
-        if 1 <= hh <= 11:
-            hh += 12
-    elif "ص" in text or "am" in lower:
-        if hh == 12:
-            hh = 0
-    if 0 <= hh <= 23 and 0 <= mm <= 59:
-        return f"{hh:02d}:{mm:02d}"
-    return "00:00"
+    hour = int(m.group(1))
+    minute = int(m.group(2))
+    is_pm = "م" in text or "pm" in text.lower()
+    is_am = "ص" in text or "am" in text.lower()
+    if is_pm and hour < 12:
+        hour += 12
+    if is_am and hour == 12:
+        hour = 0
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return "00:00"
+    return f"{hour:02d}:{minute:02d}"
+
+
+def extract_day_safely(text: str) -> str:
+    text = normalize_text(text)
+    day_names = ["الاثنين", "الثلاثاء", "الاربعاء", "الخميس", "الجمعة", "السبت", "الاحد"]
+    for day in day_names:
+        if day in text:
+            return day
+    # allow OCR-distorted common variants
+    candidates = re.findall(r"[\u0600-\u06FF ]{3,}", text)
+    if candidates:
+        return max(candidates, key=len).strip()
+    return ""
+
+
+def extract_header_from_text(raw_text: str) -> tuple[str, str, str]:
+    normalized = normalize_text(raw_text)
+    date = parse_date_safely(normalized)
+    time = parse_time_safely(normalized)
+    day = extract_day_safely(normalized)
+    return date, time, day
 
 
 def extract_fallback_header(img: Image.Image):
@@ -776,23 +797,18 @@ def extract_fallback_header(img: Image.Image):
         txt, _ = tesseract_ocr(variant, psm=6)
         if text_density_score(txt) > text_density_score(best_text):
             best_text = txt
-    text = normalize_text(best_text)
-    date = extract_date_from_text(text)
-    time = extract_time_from_text(text)
-    day = ""
-    letters = re.findall(r"[\u0600-\u06FF ]{3,}", text)
-    if letters:
-        day = max(letters, key=len).strip()
+
+    date, time, day = extract_header_from_text(best_text)
     return date, time, day, {"header_box": header_box, "header_best_text": best_text}
 
 
 def parse_numeric_value(text: str, field_type: str):
     text = normalize_digits(text)
     if field_type == "date":
-        value = extract_date_from_text(text)
+        value = parse_date_safely(text)
         return value, value != "0000/00/00", None if value != "0000/00/00" else "date_parse_failed"
     if field_type == "time":
-        value = extract_time_from_text(text)
+        value = parse_time_safely(text)
         return value, value != "00:00", None if value != "00:00" else "time_parse_failed"
     if field_type == "arabic_text":
         norm = normalize_text(text)
@@ -1284,19 +1300,51 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     fallback_date, fallback_time, fallback_day, fallback_debug = extract_fallback_header(img)
     debug["header_fallback"] = fallback_debug
 
-    date = field_results["date"].selected.value if field_results.get("date") and field_results["date"].selected and field_results["date"].selected.valid else fallback_date
-    if date == "0000/00/00" and full_text:
-        date = extract_date_from_text(full_text)
-        if date == "0000/00/00":
-            warnings.append("header_date_failed")
+    header_text_sources = []
+    if fallback_debug.get("header_best_text"):
+        header_text_sources.append(str(fallback_debug["header_best_text"]))
+    if full_text:
+        header_text_sources.append(full_text)
+    combined_header_text = " | ".join(header_text_sources)
 
-    time = field_results["time"].selected.value if field_results.get("time") and field_results["time"].selected and field_results["time"].selected.valid else fallback_time
-    if time == "00:00" and full_text:
-        time = extract_time_from_text(full_text)
-        if time == "00:00":
-            warnings.append("header_time_failed")
+    # Header parsing patch: trust safe parsing from raw OCR text more than broken crop fields
+    parsed_header_date, parsed_header_time, parsed_header_day = extract_header_from_text(combined_header_text)
 
-    day = field_results["day"].selected.value if field_results.get("day") and field_results["day"].selected and field_results["day"].selected.valid else fallback_day
+    date = parsed_header_date
+    if date == "0000/00/00":
+        item = field_results.get("date")
+        if item and item.selected and item.selected.valid:
+            date = str(item.selected.value)
+        elif fallback_date != "0000/00/00":
+            date = fallback_date
+
+    time = parsed_header_time
+    if time == "00:00":
+        item = field_results.get("time")
+        if item and item.selected and item.selected.valid:
+            time = str(item.selected.value)
+        elif fallback_time != "00:00":
+            time = fallback_time
+
+    day = parsed_header_day
+    if not day:
+        item = field_results.get("day")
+        if item and item.selected and item.selected.valid:
+            day = str(item.selected.value)
+        elif fallback_day:
+            day = fallback_day
+
+    debug["header_parser"] = {
+        "combined_header_text_preview": combined_header_text[:1000],
+        "parsed_date": date,
+        "parsed_time": time,
+        "parsed_day": day,
+    }
+
+    if date == "0000/00/00":
+        warnings.append("header_date_failed")
+    if time == "00:00":
+        warnings.append("header_time_failed")
 
     k21, k18, price_warnings = build_rates_from_fields(field_results)
     warnings.extend(price_warnings)
@@ -1418,7 +1466,7 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Optimized", version="11.3.0")
+app = FastAPI(title="Gold OCR Optimized", version="11.4.0")
 
 
 @app.get("/health")
@@ -1426,7 +1474,7 @@ def health():
     return {
         "ok": True,
         "service": "gold-ocr-optimized",
-        "version": "11.3.0",
+        "version": "11.4.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
         "cache_enabled": CACHE_ENABLED,
