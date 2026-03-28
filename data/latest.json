@@ -1,41 +1,41 @@
 {
   "ok": true,
-  "source": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ams2-1.xx&_nc_cat=105&_nc_ohc=vwDOsDI7870Q7kNvwHRTAVG&_nc_gid=DowjHDsAfZ9Q5XZ8X3rxmw&ccb=1-7&_nc_sid=7b2446&oh=00_Afz6nXo6L-Xv-Dc-PGWppcNCefosa_NbE_SqmCEiq0aAIw&oe=69CE326E",
-  "date": "2026/03/01",
-  "time": "14:35",
-  "day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا مويلا مارغلارعس س",
-  "k21_ss": 16350,
-  "k21_sb": 13969,
-  "k21_us": 138.0,
-  "k21_ub": 95.0,
-  "k18_ss": 16700,
-  "k18_sb": 16350,
-  "k18_us": 138.0,
-  "k18_ub": 121.0,
-  "raw_ocr_preview": "بهذلا عيبل هيم | P0 1 1",
+  "source": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/658127020_122178897326861173_7857147228522658428_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=103&_nc_ohc=L4dQU9h_fRsQ7kNvwG-47Z2&_nc_gid=-1i3w06NUe_qXb4z_x-0-A&ccb=1-7&_nc_sid=7b2446&oh=00_AfzHubsZgvORE8HUAes9Uhx9TqK7TJ4JFq7a_KIfrMPn4g&oe=69CE3F75",
+  "date": "0000/00/00",
+  "time": "22:50",
+  "day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا",
+  "k21_ss": 15950,
+  "k21_sb": 15600,
+  "k21_us": 129.0,
+  "k21_ub": 110.5,
+  "k18_ss": 15600,
+  "k18_sb": 13300,
+  "k18_us": 126.0,
+  "k18_ub": 107.5,
+  "raw_ocr_preview": "بهذلا عيبل هيم | 0",
   "source_w": 780,
   "source_h": 780,
-  "byte_length": 62144,
-  "updated_at_utc": "2026-03-28T21:32:29.486937+00:00",
+  "byte_length": 67758,
+  "updated_at_utc": "2026-03-28T22:14:04.707689+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
-  "confidence": 0.4451527710412488,
+  "confidence": 0.3998513849052516,
   "warnings": [
+    "header_date_failed",
     "missing_or_invalid:k21_syp_sell",
     "missing_or_invalid:k21_syp_buy",
     "missing_or_invalid:k21_usd_sell",
     "missing_or_invalid:k21_usd_buy",
+    "missing_or_invalid:k18_syp_buy",
     "missing_or_invalid:k18_usd_buy",
     "used_full_text_price_fallback",
-    "auto_swapped_k21_usd_buy_sell",
-    "auto_swapped_k18_usd_buy_sell",
     "auto_swapped_k18_syp_buy_sell",
-    "buy_ratio_outside_expected_ratio:1.1704",
-    "sell_ratio_outside_expected_ratio:1.0214"
+    "sell_ratio_outside_expected_ratio:0.9781",
+    "missing_required_fields:date"
   ],
   "debug": {
-    "source_url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/651789084_122177269742861173_8640508007092135418_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ams2-1.xx&_nc_cat=105&_nc_ohc=vwDOsDI7870Q7kNvwHRTAVG&_nc_gid=DowjHDsAfZ9Q5XZ8X3rxmw&ccb=1-7&_nc_sid=7b2446&oh=00_Afz6nXo6L-Xv-Dc-PGWppcNCefosa_NbE_SqmCEiq0aAIw&oe=69CE326E",
+    "source_url": "https://scontent-sjc3-1.xx.fbcdn.net/v/t39.30808-6/658127020_122178897326861173_7857147228522658428_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-sjc3-1.xx&_nc_cat=103&_nc_ohc=L4dQU9h_fRsQ7kNvwG-47Z2&_nc_gid=-1i3w06NUe_qXb4z_x-0-A&ccb=1-7&_nc_sid=7b2446&oh=00_AfzHubsZgvORE8HUAes9Uhx9TqK7TJ4JFq7a_KIfrMPn4g&oe=69CE3F75",
     "image_width": 780,
     "image_height": 780,
     "display_timezone": "Asia/Dubai",
@@ -43,118 +43,118 @@
     "paddle_enabled": true,
     "paddle_failure_reason": null,
     "has_blueprint": true,
-    "image_sha256": "3b3035d299dae747e1a71f02d194370d900a54a34d69b3f3ebe014c899a2d846",
+    "image_sha256": "363161cafc3cfb38bf9c842a728d043f5e8f3aad3cb8ae5e64d9323ab083e4dc",
     "blueprint_signature": "b3253a06d49ec2e41d7f33211b4cb6e6ffea0c3228a7f1ce697b321bb3631ff1",
     "cache_hit": false,
     "fields": {
       "k21_syp_sell": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260328T213051455606_k21_syp_sell_base_adaptive.png",
+        "crop_variant": "pad_h",
+        "crop_debug_path": "data/debug/fields/20260328T221213624639_k21_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "base:contrast",
-          "raw_text": "ةعاسلا هأرغلا رعس عيبم",
+          "mode": "pad_h:binary",
+          "raw_text": "ةعاسلا مارغلا رعس عببم",
           "value": 0,
-          "confidence": 98.48907142877579,
+          "confidence": 99.5367482304573,
           "valid": false,
           "expected": false,
-          "score": -0.15109285712242126,
+          "score": -0.04632517695426941,
           "warning": "syp_parse_failed"
         }
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260328T213100359853_k21_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T221222392726_k21_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "س.ل مارغلا ءارش",
           "value": 0,
-          "confidence": 98.78712097803752,
+          "confidence": 97.59161074956258,
           "valid": false,
           "expected": false,
-          "score": -0.12128790219624719,
+          "score": -0.24083892504374127,
           "warning": "syp_parse_failed"
         }
       },
       "k21_usd_sell": {
-        "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T213105854907_k21_usd_sell_base_adaptive.png",
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260328T221227668449_k21_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "pad_s:binary",
-          "raw_text": "خيراتلا عبيم",
+          "mode": "up:contrast",
+          "raw_text": "يراتلا",
           "value": 0.0,
-          "confidence": 98.8795518875122,
+          "confidence": 99.80048537254333,
           "valid": false,
           "expected": false,
-          "score": -0.1120448112487793,
+          "score": -0.019951462745666504,
           "warning": "usd_parse_failed"
         }
       },
       "k21_usd_buy": {
-        "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T213110440608_k21_usd_buy_base_adaptive.png",
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260328T221232087806_k21_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "down:binary",
-          "raw_text": "مويلا رايعلا",
+          "mode": "up:contrast",
+          "raw_text": "رايعلا",
           "value": 0.0,
-          "confidence": 99.76213872432709,
+          "confidence": 99.98028874397278,
           "valid": false,
           "expected": false,
-          "score": -0.02378612756729126,
+          "score": -0.001971125602722168,
           "warning": "usd_parse_failed"
         }
       },
       "k18_syp_sell": {
-        "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T213114946582_k18_syp_sell_base_adaptive.png",
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260328T221236592523_k18_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "pad_s:adaptive",
-          "raw_text": "14 121",
-          "value": 14121,
-          "confidence": 68.97719502449036,
+          "mode": "base:binary",
+          "raw_text": "12 110.50",
+          "value": 12110,
+          "confidence": 84.36206579208374,
           "valid": true,
           "expected": true,
-          "score": 119.89771950244904,
+          "score": 121.43620657920837,
           "warning": null
         }
       },
       "k18_syp_buy": {
-        "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260328T213119441241_k18_syp_buy_base_adaptive.png",
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260328T221237198056_k18_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "base:binary",
-          "raw_text": "6350 و 13950",
-          "value": 13950,
-          "confidence": 81.0454289118449,
-          "valid": true,
-          "expected": true,
-          "score": 121.1045428911845,
-          "warning": null
+          "mode": "up:binary",
+          "raw_text": "5600",
+          "value": 5600,
+          "confidence": 95.10096311569214,
+          "valid": false,
+          "expected": false,
+          "score": -0.48990368843078613,
+          "warning": "outside_hard_range"
         }
       },
       "k18_usd_sell": {
-        "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T213120083801_k18_usd_sell_base_adaptive.png",
+        "crop_variant": "up",
+        "crop_debug_path": "data/debug/fields/20260328T221242115407_k18_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "down:contrast",
-          "raw_text": "9 0",
-          "value": 90.0,
-          "confidence": 80.5,
+          "mode": "up:binary",
+          "raw_text": "09 1",
+          "value": 91.0,
+          "confidence": 65.0,
           "valid": true,
           "expected": true,
-          "score": 121.05,
+          "score": 119.5,
           "warning": null
         }
       },
       "k18_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T213122634629_k18_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T221246502707_k18_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:binary",
@@ -169,46 +169,46 @@
       },
       "date": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T213126978334_date_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T221250871460_date_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:binary",
           "raw_text": "بهذلا عيبل ةيم",
           "value": "0000/00/00",
-          "confidence": 99.98997449874878,
+          "confidence": 99.99307195345561,
           "valid": false,
           "expected": true,
-          "score": 9.998997449874878,
+          "score": 9.999307195345562,
           "warning": "date_parse_failed"
         }
       },
       "time": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260328T213132094112_time_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T221256019299_time_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "up:adaptive",
-          "raw_text": "Po 1 1",
+          "mode": "up:binary",
+          "raw_text": "0",
           "value": "00:00",
-          "confidence": 68.0,
+          "confidence": 62.0,
           "valid": false,
           "expected": true,
-          "score": 6.800000000000001,
+          "score": 6.199999999999999,
           "warning": "time_parse_failed"
         }
       },
       "day": {
-        "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T213135623768_day_base_adaptive.png",
+        "crop_variant": "pad_s",
+        "crop_debug_path": "data/debug/fields/20260328T221259664554_day_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "down:soft",
-          "raw_text": ": ae : :",
-          "value": ": ae : :",
-          "confidence": 56.25,
+          "mode": "pad_s:soft",
+          "raw_text": "ee |",
+          "value": "ee 1",
+          "confidence": 49.0,
           "valid": true,
           "expected": true,
-          "score": 118.625,
+          "score": 117.9,
           "warning": null
         }
       }
@@ -216,38 +216,37 @@
     "header_fallback": {
       "header_box": [
         0,
-        184,
+        161,
         780,
-        308
+        285
       ],
-      "header_best_text": "WA WA RA eee et ‘ ‏ل يق‎ rer ne\nWAR eye aD 0 ‏الح ا ا‎ te et ‏له‎ eS 7 oye\nAVA AA Een een) 8 ESE Mosk Ce eo Re\nHE rf 1 baad pe aa foal | PL a yD dh Bayh ‏ا‎ ae ‏ير 3 06 ميو‎ ee\n017 1 ‏ا‎ AVAL A eines” 2\nBOS Bd SED ‏اي‎ ٠ 7 a ‏م‎ ١ 7 / 0 Bye Dae\nPE Mey ‏و ف‎ 95 = ener, nT 2 Ne\n000 ‏ار‎ > aD 7. ye py RE diy ‏بع‎ gts ao aa en! ere\not WEEE fae oe Me eke gaa ae * oe 8\nNPE ‏حسم‎ SS ج١‎ OS SPE. ‏طول اخ رون‎ 0\n1 SESS ‏ل ا مسح ا‎ RC Re ‏ا اا و ا‎ 2"
+      "header_best_text": "0 Sa chars a . 0 cues 4 ‏دا‎\n‎ANY een 7 oy ty NE ee ‏الح‎ ١ #2 2 re\n0 SAN 0 = rls My. \\ ys 5 os ‏د 30 لان‎ 8 win Mes\nVl. rn aes 5 0 ١ 1 3 . ‏ا ل‎ Ne 5 1 at\n111 ee ow xt 1 ‏يي ار‎ a ‏ما اميه ل لم‎ etd ‏ين‎\n‎alee na ‏صم‎ Ks 0 LL CA ry ete eT 0 ‏ان‎ ge OAS ro,\n11 81 Rss ea ca a eg ag eS RS 4 1\n‏ا‎ Ome ye BS ‏ه داوس ب اا لاو ل‎ ’ we eat\ni 183 BI kaos Sa ed gp) A 000 ‏#جمعدة الصاعة‎ is\"\nFL a Ne re ONS ‏ال‎\n‎py heigl WAS ‏وش‎ 5 rg 5 a,\" 98 Ba TF 5 ok wh at 52000 1 ‏ين‎ 80\n5 rs oS Masco as oi ‏بين وه امت‎ ea\n\nne: 6 ‏الى يي‎ 0 gs A a BALSA iene Oey Gg ‏بر‎\n\n-.' . = = ‏طلس ير‎ 07 a"
     },
     "header_parser": {
-      "combined_header_text_preview": "WA WA RA eee et ‘ ‏ل يق‎ rer ne\nWAR eye aD 0 ‏الح ا ا‎ te et ‏له‎ eS 7 oye\nAVA AA Een een) 8 ESE Mosk Ce eo Re\nHE rf 1 baad pe aa foal | PL a yD dh Bayh ‏ا‎ ae ‏ير 3 06 ميو‎ ee\n017 1 ‏ا‎ AVAL A eines” 2\nBOS Bd SED ‏اي‎ ٠ 7 a ‏م‎ ١ 7 / 0 Bye Dae\nPE Mey ‏و ف‎ 95 = ener, nT 2 Ne\n000 ‏ار‎ > aD 7. ye py RE diy ‏بع‎ gts ao aa en! ere\not WEEE fae oe Me eke gaa ae * oe 8\nNPE ‏حسم‎ SS ج١‎ OS SPE. ‏طول اخ رون‎ 0\n1 SESS ‏ل ا مسح ا‎ RC Re ‏ا اا و ا‎ 2 | ‘ عجر * ‎UN‏\n‏التسعيرة اليومية لبيع الذهب 20 0095\n‎re‏ 353-017\n‎a) 3 eS ; oo 2 |‏ 2 سبو 7 ‎as‏\n‏اليوم: التاريخ: الساعة:\nالعيار سعر ‎Mast | scx pl al‏\nميخ ‎c Sree‏ سر\n21 20 16350 ظ 11 138 ‎a‏\n‏18 0 13969 | 121 353152118\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق - الحريقة - مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج م2:35 :ةعاسلا 2026/3/1 :خيراتلا ءاعبرالا :مويلا مارغلارعس س.ل مارغلا رعس رايعلا ءارش عببم ءارش عبيم 2 138 141 16350 16700 8 118 121 13950 1 4300 حضاو لكشب ةهجا",
-      "parsed_date": "2026/03/01",
-      "parsed_time": "14:35",
-      "parsed_day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا مويلا مارغلارعس س"
+      "combined_header_text_preview": "0 Sa chars a . 0 cues 4 ‏دا‎\n‎ANY een 7 oy ty NE ee ‏الح‎ ١ #2 2 re\n0 SAN 0 = rls My. \\ ys 5 os ‏د 30 لان‎ 8 win Mes\nVl. rn aes 5 0 ١ 1 3 . ‏ا ل‎ Ne 5 1 at\n111 ee ow xt 1 ‏يي ار‎ a ‏ما اميه ل لم‎ etd ‏ين‎\n‎alee na ‏صم‎ Ks 0 LL CA ry ete eT 0 ‏ان‎ ge OAS ro,\n11 81 Rss ea ca a eg ag eS RS 4 1\n‏ا‎ Ome ye BS ‏ه داوس ب اا لاو ل‎ ’ we eat\ni 183 BI kaos Sa ed gp) A 000 ‏#جمعدة الصاعة‎ is\"\nFL a Ne re ONS ‏ال‎\n‎py heigl WAS ‏وش‎ 5 rg 5 a,\" 98 Ba TF 5 ok wh at 52000 1 ‏ين‎ 80\n5 rs oS Masco as oi ‏بين وه امت‎ ea\n\nne: 6 ‏الى يي‎ 0 gs A a BALSA iene Oey Gg ‏بر‎\n\n-.' . = = ‏طلس ير‎ 07 a | 3 جد 3# عد :\nالنسعيرة اليومية لبيع الذهب 20 0\nالصضادرة عن ‎ak‏ ال ‎ikon‏\n‏> جمعية الصاغة بدمشق . ‎ee ٠.‏ لج\n‎ing : 2 ae‏ > و 1-2-2 7\nاليوم: التاريخ: , الساعة:\nالعيار ‎ee‏ 0\n‎c ad ce‏ 1\n21 15950 15600 | 129 = 4126\n‎١ ial‏ أ\n18 0 13300 110.50 1107.50“\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعسنلا نع ةرداصلا قشمدب ةغاصل",
+      "parsed_date": "0000/00/00",
+      "parsed_time": "22:50",
+      "parsed_day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا"
     },
     "full_text_price_fallback": {
       "diagnostic_only": false,
       "k21": {
-        "ub": 138.0,
-        "us": 95.0,
-        "sb": 13969,
-        "ss": 16350
+        "ub": 110.5,
+        "us": 129.0,
+        "sb": 15600,
+        "ss": 15950
       },
       "k18": {
-        "ub": 138.0,
-        "us": 121.0,
-        "sb": 16700,
-        "ss": 16350
+        "ub": 107.5,
+        "us": 126.0,
+        "sb": 15600,
+        "ss": 13300
       }
     },
     "price_source": "full_text_fallback",
     "relationship_ok": false,
     "relationship_warnings": [
-      "buy_ratio_outside_expected_ratio:1.1704",
-      "sell_ratio_outside_expected_ratio:1.0214"
+      "sell_ratio_outside_expected_ratio:0.9781"
     ],
     "validation": {
       "usd_hard_min": 80,
@@ -261,7 +260,7 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "debug_overlay_path": "data/debug/20260328T213229_template_fields_hybrid_651789084_122177269742861173_8640508007092135418_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260328T221404_template_fields_hybrid_658127020_122178897326861173_7857147228522658428_n.jpg.png"
   },
   "should_notify": true,
   "change_summary": {
@@ -269,49 +268,49 @@
     "count": 8,
     "fields": {
       "k21_ss": {
-        "old": null,
-        "new": 16350
+        "old": 16350,
+        "new": 15950
       },
       "k21_sb": {
-        "old": null,
-        "new": 13969
+        "old": 13969,
+        "new": 15600
       },
       "k21_us": {
-        "old": null,
-        "new": 138.0
+        "old": 138.0,
+        "new": 129.0
       },
       "k21_ub": {
-        "old": null,
-        "new": 95.0
+        "old": 95.0,
+        "new": 110.5
       },
       "k18_ss": {
-        "old": null,
-        "new": 16700
+        "old": 16700,
+        "new": 15600
       },
       "k18_sb": {
-        "old": null,
-        "new": 16350
+        "old": 16350,
+        "new": 13300
       },
       "k18_us": {
-        "old": null,
-        "new": 138.0
+        "old": 138.0,
+        "new": 126.0
       },
       "k18_ub": {
-        "old": null,
-        "new": 121.0
+        "old": 121.0,
+        "new": 107.5
       }
     }
   },
-  "change_key": "2026/03/01|14:35|16350|13969|138.0|95.0|16700|16350|138.0|121.0",
+  "change_key": "0000/00/00|22:50|15950|15600|129.0|110.5|15600|13300|126.0|107.5",
   "previous_values": {
-    "k21_ss": null,
-    "k21_sb": null,
-    "k21_us": null,
-    "k21_ub": null,
-    "k18_ss": null,
-    "k18_sb": null,
-    "k18_us": null,
-    "k18_ub": null
+    "k21_ss": 16350,
+    "k21_sb": 13969,
+    "k21_us": 138.0,
+    "k21_ub": 95.0,
+    "k18_ss": 16700,
+    "k18_sb": 16350,
+    "k18_us": 138.0,
+    "k18_ub": 121.0
   },
-  "raw_ocr": "‘ عجر * ‎UN‏\n‏التسعيرة اليومية لبيع الذهب 20 0095\n‎re‏ 353-017\n‎a) 3 eS ; oo 2 |‏ 2 سبو 7 ‎as‏\n‏اليوم: التاريخ: الساعة:\nالعيار سعر ‎Mast | scx pl al‏\nميخ ‎c Sree‏ سر\n21 20 16350 ظ 11 138 ‎a‏\n‏18 0 13969 | 121 353152118\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق - الحريقة - مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج م2:35 :ةعاسلا 2026/3/1 :خيراتلا ءاعبرالا :مويلا مارغلارعس س.ل مارغلا رعس رايعلا ءارش عببم ءارش عبيم 2 138 141 16350 16700 8 118 121 13950 1 4300 حضاو لكشب ةهجاولا ىلع ةريعستلا عضوب مازننالا ةظحاالم 2248005 كنب 2230766 ايروس لباقم ةقيرحلا رجهملاو قشمد | جد خا عد 2\nالتسعيرة اليومية لبيع الذهب |\nالصادرة عن ااا\n‎.٠‏ جمعية الصاغة بدمشق ‎TES Se‏\nاليوم: التاريخ: الساعة: ©\nالعنا ‎vd plyall jaw‏ سعر الغرام ‎S$‏\n‎a‏ مييع شراء ‎ate‏ شراء |\n| 21 16700 16350 | 141 138 |\n| 18 0 13950 | 121 118 ا\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة ‏ مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا خيراتلا مويلأ مارغلارعس س.ل مارغلارعس رايعلا ءارش عببم ءارش عبيم 21 138 141 1 6350 16700 1 8 118 121 13950 14300 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحدام 2230766 رجهملاو ايروس كنب لباقم ةقيرحلا 2248005 قشمد"
+  "raw_ocr": "3 جد 3# عد :\nالنسعيرة اليومية لبيع الذهب 20 0\nالصضادرة عن ‎ak‏ ال ‎ikon‏\n‏> جمعية الصاغة بدمشق . ‎ee ٠.‏ لج\n‎ing : 2 ae‏ > و 1-2-2 7\nاليوم: التاريخ: , الساعة:\nالعيار ‎ee‏ 0\n‎c ad ce‏ 1\n21 15950 15600 | 129 = 4126\n‎١ ial‏ أ\n18 0 13300 110.50 1107.50“\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعسنلا نع ةرداصلا قشمدب ةغاصلا ةيعمج :ةعاسلا 2026/2 :خيراتلا ص10:55 تبسلا :مويلا ء مارغلارعس سءل مارغلأ رعس رايعلا ءارش عيبم ءارش عبيم 2 126 29 15600 15950 8 107.50 110.50 13300 13650 حضاو لكشب ةهجاولا ىلع ةريعستلا عضوب مازننالا ةظحاالم 2230766 2248005 ايروس كنب لباقم ةقيرحلا رجهملاو قشمد | UN * x 5\n\nالتسعيرة اليومية لبيع الذهب 0\nالصادرة عن | لاا\n\n.اليؤم: التاريخ: الساعة:  ‎١‏ .\nالعيار سعر الغرام ل.س سعر ‎S pil‏ |\n\n‎eu 7\" |‏ شراء ‎eu‏ شراء\n\n‎| 126 129 15600 0 21 |\n2110750 11050| 13300 13650 18\n\n‏ملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق ‏ الحريقة - مقابل بنك سور ياوالمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا خيراتلا :مويلا مارغلارعس سءل مارغلارعس رايعلا ءارش عببم ءارش عيم 2 126 2 15600 15950 18 107.50 110.50 13300 13650 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحداالم 2230766 2248005 رجهملاو ايروس كنب لباقم ةقيرحلا قشمد"
 }
