@@ -2,7 +2,7 @@ name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/59 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -41,12 +41,12 @@ jobs:
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "6"
-      FACEBOOK_SCROLL_DELAY_MS: "1200"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "8"
-      FACEBOOK_MAX_CANDIDATES_PER_POST: "6"
+      FACEBOOK_MAX_SCROLL_STEPS: "4"
+      FACEBOOK_SCROLL_DELAY_MS: "1600"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "6"
+      FACEBOOK_MAX_CANDIDATES_PER_POST: "4"
       FACEBOOK_MAX_POST_GROUPS: "2"
-      FACEBOOK_MAX_POSTS_TO_SCAN: "4"
+      FACEBOOK_MAX_POSTS_TO_SCAN: "2"
       FACEBOOK_MIN_CANDIDATE_WIDTH: "250"
       FACEBOOK_MIN_CANDIDATE_HEIGHT: "250"
       FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "400"
