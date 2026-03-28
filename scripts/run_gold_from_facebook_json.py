@@ -390,14 +390,13 @@ def build_flat_candidates(payload: dict) -> list[dict]:
 
 
 def is_rank0_rescue_candidate(approx_rank: int, poster_accepted: bool, gold_conf: float, margin: float, keyword_guard: dict, layout_conf: float) -> bool:
+    # UPDATED: Softer thresholds and includes rank 1 (pinned post protection)
     return (
-        approx_rank == 0
+        approx_rank in [0, 1]
         and poster_accepted
-        and gold_conf >= 0.95
-        and margin >= 0.90
-        and layout_conf >= 0.99
+        and gold_conf >= 0.85
+        and layout_conf >= 0.60
         and keyword_guard.get("has_21")
-        and keyword_guard.get("has_18")
     )
 
 
@@ -489,17 +488,14 @@ def main():
             print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
             layout_conf = float(layout_debug.get("confidence", 0.0))
             layout_label = str(layout_debug.get("label", "")).strip()
+            
+            # UPDATED: Removed the kill switch. It will now proceed to OCR even if layout is weak.
             if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
                 activated = maybe_switch_blueprint_for_layout(layout_label)
                 if activated:
                     print(f"Activated layout blueprint: {activated}")
             else:
-                failures.append({
-                    "index": idx, "rank": approx_rank, "url": image_url,
-                    "stage": "layout_classifier", "layout_debug": layout_debug,
-                })
-                print("Skipped candidate: layout classifier too weak")
-                continue
+                print("Layout classifier weak, proceeding to OCR without blueprint fallback.")
 
             result = run_fetch_gold_with_url(image_url)
             if result.returncode != 0:
@@ -536,9 +532,10 @@ def main():
 
             if is_rank0_rescue_candidate(approx_rank, poster_accepted, gold_conf, margin, keyword_guard, layout_conf):
                 rescued_rank0 = candidate_record
-                print("Stored rank-0 rescue candidate")
+                print("Stored rank-0/rank-1 rescue candidate")
 
-            if approx_rank == 0 and total_score >= 280:
+            # UPDATED: Accepts rank 0 or 1 with a more reasonable 200 point threshold
+            if approx_rank <= 1 and total_score >= 200:
                 save_failures(failures)
                 print(f"Accepted strong newest-post candidate: {image_url}")
                 return
@@ -553,7 +550,7 @@ def main():
     if rescued_rank0 is not None:
         if final_choice is None or rescued_rank0["total_score"] >= final_choice["total_score"] - 120:
             final_choice = rescued_rank0
-            print("Using rank-0 rescue candidate as final choice")
+            print("Using rank-0/rank-1 rescue candidate as final choice")
 
     if final_choice:
         rerun = run_fetch_gold_with_url(final_choice["url"])
