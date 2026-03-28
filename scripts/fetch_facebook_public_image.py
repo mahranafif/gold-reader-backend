@@ -49,22 +49,6 @@ class ImageCandidate:
     from_srcset: bool = False
     score: float = 0.0
 
-    @property
-    def area(self) -> int:
-        return self.width * self.height
-
-    @property
-    def aspect_ratio(self) -> float:
-        return self.width / self.height if self.height else 0.0
-
-    @property
-    def is_preferred(self) -> bool:
-        return self.width >= PREFERRED_CANDIDATE_WIDTH and self.height >= PREFERRED_CANDIDATE_HEIGHT
-
-    @property
-    def is_big_enough(self) -> bool:
-        return self.width >= HIGH_RES_WIDTH and self.height >= HIGH_RES_HEIGHT
-
 
 def is_login_wall(html: str, page_url: str = "") -> bool:
     lower = html.lower()
@@ -86,31 +70,15 @@ def build_url_candidates(url: str, mode: str) -> list[str]:
     url = url.strip()
     if not url:
         return []
-
     parsed = urlparse(url)
     if "facebook.com" not in parsed.netloc.lower():
         return [url]
-
     mobile = urlunparse(parsed._replace(netloc="m.facebook.com"))
     desktop = urlunparse(parsed._replace(netloc="www.facebook.com"))
-
-    variants: list[str] = []
-
-    def add(u: str) -> None:
-        u = u.strip()
-        if u and u not in variants:
+    variants = []
+    for u in ([mobile, desktop] if mode != "desktop" else [desktop, mobile]):
+        if u not in variants:
             variants.append(u)
-
-    if mode == "mobile":
-        add(mobile)
-        add(desktop)
-    elif mode == "desktop":
-        add(desktop)
-        add(mobile)
-    else:
-        add(mobile)
-        add(desktop)
-
     return variants
 
 
@@ -125,18 +93,9 @@ def is_bad_url(url: str) -> bool:
     if "scontent" not in lower and "fbcdn.net" not in lower:
         return True
     bad_parts = [
-        "static.xx.fbcdn.net",
-        "rsrc.php",
-        "emoji",
-        "profile_pic",
-        "safe_image.php",
-        "lookaside",
-        "icon",
-        "logo",
-        "cover_photo",
-        "/v/t1.",
-        "/v/t39.2365-6/",
-        "/v/t15.5256-10/",
+        "static.xx.fbcdn.net", "rsrc.php", "emoji", "profile_pic",
+        "safe_image.php", "lookaside", "icon", "logo", "cover_photo",
+        "/v/t1.", "/v/t39.2365-6/", "/v/t15.5256-10/",
     ]
     return any(part in lower for part in bad_parts)
 
@@ -156,63 +115,39 @@ def size_hint_bonus(url: str) -> float:
     return 0.0
 
 
-def compute_candidate_score(c: ImageCandidate) -> float:
-    # Flat candidates, but strongly favor newer posts via approx_post_rank.
-    area_score = float(c.area)
-    ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
-    size_bonus = 50000.0 if c.is_preferred else 0.0
-    srcset_bonus = 15000.0 if c.from_srcset else 0.0
-    big_bonus = 200000.0 if c.is_big_enough else 0.0
+def compute_candidate_score(width: int, height: int, top: float, rank: int, container_top: float, from_srcset: bool, src: str) -> float:
+    area_score = float(width * height)
+    aspect_ratio = width / height if height else 0.0
+    ratio_penalty = abs(aspect_ratio - 1.0) * 150000.0
+    size_bonus = 50000.0 if (width >= PREFERRED_CANDIDATE_WIDTH and height >= PREFERRED_CANDIDATE_HEIGHT) else 0.0
+    srcset_bonus = 15000.0 if from_srcset else 0.0
+    big_bonus = 200000.0 if (width >= HIGH_RES_WIDTH and height >= HIGH_RES_HEIGHT) else 0.0
 
-    # Strong newest-post preference:
-    # rank 0 = newest visible post, rank 1 = next post, others heavily discounted
-    if c.approx_post_rank == 0:
+    if rank == 0:
         post_rank_bonus = 500000.0
-    elif c.approx_post_rank == 1:
+    elif rank == 1:
         post_rank_bonus = 220000.0
     else:
-        post_rank_bonus = max(0.0, 80000.0 - (c.approx_post_rank * 40000.0))
+        post_rank_bonus = max(0.0, 80000.0 - (rank * 40000.0))
 
-    top_penalty = min(max(c.top - c.container_top, 0.0), 1200.0) * 20.0
-
-    return (
-        area_score
-        + size_bonus
-        - ratio_penalty
-        + srcset_bonus
-        + big_bonus
-        + post_rank_bonus
-        + size_hint_bonus(c.src)
-        - top_penalty
-    )
+    top_penalty = min(max(top - container_top, 0.0), 1200.0) * 20.0
+    return area_score + size_bonus - ratio_penalty + srcset_bonus + big_bonus + post_rank_bonus + size_hint_bonus(src) - top_penalty
 
 
 async def route_handler(route: Route) -> None:
     if not FAST_RESOURCE_BLOCKING:
         await route.continue_()
         return
-
     req = route.request
     url = req.url.lower()
     resource_type = req.resource_type
-
     if resource_type in {"font", "media", "websocket"}:
         await route.abort()
         return
-
-    noisy_parts = [
-        "doubleclick",
-        "analytics",
-        "googletagmanager",
-        "google-analytics",
-        "/tr?",
-        "facebook.com/tr/",
-        "connect.facebook.net",
-    ]
+    noisy_parts = ["doubleclick", "analytics", "googletagmanager", "google-analytics", "/tr?", "facebook.com/tr/", "connect.facebook.net"]
     if any(part in url for part in noisy_parts):
         await route.abort()
         return
-
     await route.continue_()
 
 
@@ -222,16 +157,11 @@ async def setup_context(context: BrowserContext) -> None:
 
 async def dismiss_login_modal(page: Page) -> bool:
     selectors = [
-        'div[aria-label="Close"]',
-        'div[role="button"][aria-label="Close"]',
-        'div[role="button"][aria-label="إغلاق"]',
-        'div[aria-label="إغلاق"]',
-        'div[aria-label="Not Now"]',
-        '[role="dialog"] [aria-label="Close"]',
-        '[role="dialog"] [aria-label="إغلاق"]',
-        '[role="dialog"] [role="button"]',
-        'div[role="button"]',
-        'button',
+        'div[aria-label="Close"]', 'div[role="button"][aria-label="Close"]',
+        'div[role="button"][aria-label="إغلاق"]', 'div[aria-label="إغلاق"]',
+        'div[aria-label="Not Now"]', '[role="dialog"] [aria-label="Close"]',
+        '[role="dialog"] [aria-label="إغلاق"]', '[role="dialog"] [role="button"]',
+        'div[role="button"]', 'button',
     ]
     for selector in selectors:
         try:
@@ -243,10 +173,7 @@ async def dismiss_login_modal(page: Page) -> bool:
                     continue
                 label = (await el.get_attribute("aria-label") or "").lower()
                 text = (await el.text_content() or "").strip().lower()
-                if (
-                    "close" in label or "اغلاق" in label or
-                    text in {"close", "إغلاق", "اغلاق", "not now", "ليس الآن"}
-                ):
+                if ("close" in label or "اغلاق" in label or text in {"close", "إغلاق", "اغلاق", "not now", "ليس الآن"}):
                     await el.click(timeout=1000)
                     await page.wait_for_timeout(500)
                     return True
@@ -323,18 +250,8 @@ async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
             const className = (el.className || '').toString().toLowerCase();
             const tag = (el.tagName || '').toLowerCase();
             const text = (el.innerText || '').trim();
-
-            if (
-              tag === 'article' ||
-              role === 'article' ||
-              dataPagelet.includes('feed') ||
-              dataPagelet.includes('timeline') ||
-              aria.includes('post') ||
-              className.includes('story')
-            ) return true;
-
-            if (text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 240) return true;
-            return false;
+            if (tag === 'article' || role === 'article' || dataPagelet.includes('feed') || dataPagelet.includes('timeline') || aria.includes('post') || className.includes('story')) return true;
+            return text.length > 20 && el.querySelectorAll('img').length > 0 && rect.height > 240;
           }}
 
           const all = Array.from(document.querySelectorAll('article, div, section'));
@@ -363,7 +280,6 @@ async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
             const alreadyCovered = deduped.some(p => Math.abs(p.top - post.top) < 60);
             if (!alreadyCovered) deduped.push(post);
           }}
-
           return deduped.slice(0, {MAX_POSTS_TO_SCAN}).map((post, idx) => ({{
             approx_post_rank: idx,
             container_top: post.top,
@@ -393,8 +309,8 @@ async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
             approx_post_rank=int(rank),
             container_top=float(container_top or 0.0),
             from_srcset=from_srcset,
+            score=compute_candidate_score(width, height, float(top or 0.0), int(rank), float(container_top or 0.0), from_srcset, src),
         )
-        c.score = compute_candidate_score(c)
         out.append(c)
 
     if isinstance(raw, list):
@@ -405,10 +321,8 @@ async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
                 width = int(item.get("width") or 0)
                 height = int(item.get("height") or 0)
                 top = float(item.get("top") or 0.0)
-
                 add_candidate(item.get("currentSrc") or "", width, height, top, rank, container_top, False)
                 add_candidate(item.get("src") or "", width, height, top, rank, container_top, False)
-
                 srcset_items = item.get("srcset") or []
                 if isinstance(srcset_items, list):
                     for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
@@ -420,7 +334,7 @@ async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
                             approx_h = max(int(height * (approx_w / max(width, 1))), height)
                         add_candidate(candidate_url, approx_w, approx_h, top, rank, container_top, True)
 
-    out.sort(key=lambda c: c.score, reverse=True)
+    out.sort(key=lambda c: (c.approx_post_rank, -c.score))
     return out[:MAX_CANDIDATES_TO_TRY]
 
 
@@ -461,7 +375,6 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             if flat_candidates:
                 best_candidates = flat_candidates
                 top = best_candidates[0]
-                # good enough if newest-rank + big enough
                 if top.approx_post_rank == 0 and top.width >= 780 and top.height >= 780:
                     break
 
@@ -489,15 +402,6 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 "candidates": [asdict(c) for c in best_candidates],
             }
 
-        html = await page.content()
-        if is_login_wall(html, page.url):
-            login_wall_path = OUTPUT_FILE.parent / "login_wall.png"
-            login_wall_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                await page.screenshot(path=str(login_wall_path), full_page=True)
-            except Exception:
-                pass
-
         return {
             "ok": False,
             "page_url": page.url,
@@ -512,45 +416,33 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "selected_image_file": "",
             "candidates": [],
         }
-
     finally:
         await context.close()
 
 
 async def scrape_public_facebook_image() -> dict:
     url_candidates = build_url_candidates(FACEBOOK_PAGE_URL, FACEBOOK_URL_MODE)
-
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=HEADLESS,
             args=["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--no-sandbox"],
         )
-
-        all_attempts: list[dict] = []
-        final_result: dict | None = None
-
+        all_attempts = []
+        final_result = None
         try:
             for attempt_url in url_candidates:
                 try:
                     result = await try_scrape_single_url(browser, attempt_url, FACEBOOK_URL_MODE)
                 except Exception as exc:
                     result = {
-                        "ok": False,
-                        "page_url": attempt_url,
+                        "ok": False, "page_url": attempt_url,
                         "context_mode": preferred_context_mode_for_url(attempt_url, FACEBOOK_URL_MODE),
-                        "modal_closed": False,
-                        "viewer_used": False,
+                        "modal_closed": False, "viewer_used": False,
                         "message": f"Navigation/extraction error: {exc}",
-                        "selected_image_url": "",
-                        "selected_width": 0,
-                        "selected_height": 0,
-                        "selected_rank": -1,
-                        "selected_image_file": "",
-                        "candidates": [],
+                        "selected_image_url": "", "selected_width": 0, "selected_height": 0,
+                        "selected_rank": -1, "selected_image_file": "", "candidates": [],
                     }
-
                 all_attempts.append(result)
-
                 if result.get("ok") and result.get("candidates"):
                     final_result = result
                     break
@@ -564,18 +456,10 @@ async def scrape_public_facebook_image() -> dict:
                         int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
                     ),
                     default={
-                        "ok": False,
-                        "page_url": "",
-                        "context_mode": FACEBOOK_URL_MODE,
-                        "modal_closed": False,
-                        "viewer_used": False,
-                        "message": "All URL attempts failed",
-                        "selected_image_url": "",
-                        "selected_width": 0,
-                        "selected_height": 0,
-                        "selected_rank": -1,
-                        "selected_image_file": "",
-                        "candidates": [],
+                        "ok": False, "page_url": "", "context_mode": FACEBOOK_URL_MODE,
+                        "modal_closed": False, "viewer_used": False, "message": "All URL attempts failed",
+                        "selected_image_url": "", "selected_width": 0, "selected_height": 0,
+                        "selected_rank": -1, "selected_image_file": "", "candidates": [],
                     },
                 )
 
@@ -592,12 +476,10 @@ async def scrape_public_facebook_image() -> dict:
                 }
                 for r in all_attempts
             ]
-
             OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
             OUTPUT_FILE.write_text(json.dumps(final_result, ensure_ascii=False, indent=2), encoding="utf-8")
             print(json.dumps(final_result, ensure_ascii=False, indent=2))
             return final_result
-
         finally:
             await browser.close()
 
