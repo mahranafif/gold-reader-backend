@@ -25,9 +25,7 @@ REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 MAX_SCROLL_STEPS = int(os.getenv("FACEBOOK_MAX_SCROLL_STEPS", "4"))
 SCROLL_DELAY_MS = int(os.getenv("FACEBOOK_SCROLL_DELAY_MS", "1600"))
 MAX_POSTS_TO_SCAN = int(os.getenv("FACEBOOK_MAX_POSTS_TO_SCAN", "2"))
-MAX_POST_GROUPS = int(os.getenv("FACEBOOK_MAX_POST_GROUPS", "2"))
-MAX_CANDIDATES_PER_POST = int(os.getenv("FACEBOOK_MAX_CANDIDATES_PER_POST", "4"))
-MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "6"))
+MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "8"))
 
 MIN_CANDIDATE_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "250"))
 MIN_CANDIDATE_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "250"))
@@ -46,9 +44,8 @@ class ImageCandidate:
     width: int
     height: int
     top: float
-    in_post: bool
-    post_index: int
-    post_top: float
+    approx_post_rank: int
+    container_top: float
     from_srcset: bool = False
     score: float = 0.0
 
@@ -160,21 +157,31 @@ def size_hint_bonus(url: str) -> float:
 
 
 def compute_candidate_score(c: ImageCandidate) -> float:
-    # Feed-only ranking. Post order is enforced outside score.
+    # Flat candidates, but strongly favor newer posts via approx_post_rank.
     area_score = float(c.area)
     ratio_penalty = abs(c.aspect_ratio - 1.0) * 150000.0
     size_bonus = 50000.0 if c.is_preferred else 0.0
     srcset_bonus = 15000.0 if c.from_srcset else 0.0
     big_bonus = 200000.0 if c.is_big_enough else 0.0
-    post_bonus = 80000.0 if c.in_post else 0.0
-    top_penalty = min(max(c.top - c.post_top, 0.0), 1200.0) * 20.0
+
+    # Strong newest-post preference:
+    # rank 0 = newest visible post, rank 1 = next post, others heavily discounted
+    if c.approx_post_rank == 0:
+        post_rank_bonus = 500000.0
+    elif c.approx_post_rank == 1:
+        post_rank_bonus = 220000.0
+    else:
+        post_rank_bonus = max(0.0, 80000.0 - (c.approx_post_rank * 40000.0))
+
+    top_penalty = min(max(c.top - c.container_top, 0.0), 1200.0) * 20.0
+
     return (
         area_score
         + size_bonus
         - ratio_penalty
         + srcset_bonus
         + big_bonus
-        + post_bonus
+        + post_rank_bonus
         + size_hint_bonus(c.src)
         - top_penalty
     )
@@ -283,7 +290,7 @@ async def maybe_scroll(page: Page, step: int) -> None:
     await page.wait_for_timeout(delay)
 
 
-async def collect_feed_posts(page: Page) -> list[dict]:
+async def collect_flat_candidates(page: Page) -> list[ImageCandidate]:
     raw = await page.evaluate(
         f"""
         () => {{
@@ -357,24 +364,19 @@ async def collect_feed_posts(page: Page) -> list[dict]:
             if (!alreadyCovered) deduped.push(post);
           }}
 
-          return deduped.slice(0, %d).map((post, idx) => ({{
-            post_index: idx,
-            post_top: post.top,
-            images: post.images,
+          return deduped.slice(0, {MAX_POSTS_TO_SCAN}).map((post, idx) => ({{
+            approx_post_rank: idx,
+            container_top: post.top,
+            images: post.images
           }}));
         }}
-        """ % MAX_POSTS_TO_SCAN
+        """
     )
-    return raw if isinstance(raw, list) else []
 
-
-def build_post_candidates(post: dict) -> list[ImageCandidate]:
-    post_index = int(post.get("post_index") or 0)
-    post_top = float(post.get("post_top") or 0.0)
-    seen: set[str] = set()
+    seen = set()
     out: list[ImageCandidate] = []
 
-    def add_candidate(src, width, height, top, from_srcset=False):
+    def add_candidate(src, width, height, top, rank, container_top, from_srcset=False):
         src = normalize_fb_image_url((src or "").strip())
         if not src or src in seen:
             return
@@ -388,45 +390,38 @@ def build_post_candidates(post: dict) -> list[ImageCandidate]:
             width=width,
             height=height,
             top=float(top or 0.0),
-            in_post=True,
-            post_index=post_index,
-            post_top=post_top,
+            approx_post_rank=int(rank),
+            container_top=float(container_top or 0.0),
             from_srcset=from_srcset,
-            score=0.0,
         )
         c.score = compute_candidate_score(c)
         out.append(c)
 
-    for item in post.get("images") or []:
-        width = int(item.get("width") or 0)
-        height = int(item.get("height") or 0)
-        top = float(item.get("top") or 0.0)
+    if isinstance(raw, list):
+        for post in raw:
+            rank = int(post.get("approx_post_rank") or 0)
+            container_top = float(post.get("container_top") or 0.0)
+            for item in post.get("images") or []:
+                width = int(item.get("width") or 0)
+                height = int(item.get("height") or 0)
+                top = float(item.get("top") or 0.0)
 
-        add_candidate(item.get("currentSrc") or "", width, height, top, False)
-        add_candidate(item.get("src") or "", width, height, top, False)
+                add_candidate(item.get("currentSrc") or "", width, height, top, rank, container_top, False)
+                add_candidate(item.get("src") or "", width, height, top, rank, container_top, False)
 
-        srcset_items = item.get("srcset") or []
-        if isinstance(srcset_items, list):
-            for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
-                candidate_url = str(entry.get("url") or "").strip()
-                declared_width = int(entry.get("width") or 0)
-                approx_w = max(width, declared_width) if declared_width > 0 else width
-                approx_h = height
-                if approx_w > 0 and height > 0 and width > 0:
-                    approx_h = max(int(height * (approx_w / max(width, 1))), height)
-                add_candidate(candidate_url, approx_w, approx_h, top, True)
+                srcset_items = item.get("srcset") or []
+                if isinstance(srcset_items, list):
+                    for entry in sorted(srcset_items, key=lambda x: int(x.get("width") or 0), reverse=True)[:12]:
+                        candidate_url = str(entry.get("url") or "").strip()
+                        declared_width = int(entry.get("width") or 0)
+                        approx_w = max(width, declared_width) if declared_width > 0 else width
+                        approx_h = height
+                        if approx_w > 0 and height > 0 and width > 0:
+                            approx_h = max(int(height * (approx_w / max(width, 1))), height)
+                        add_candidate(candidate_url, approx_w, approx_h, top, rank, container_top, True)
 
     out.sort(key=lambda c: c.score, reverse=True)
-    return out[:MAX_CANDIDATES_PER_POST]
-
-
-def build_post_locked_order(post_groups: list[dict]) -> list[ImageCandidate]:
-    ordered: list[ImageCandidate] = []
-    if len(post_groups) >= 1:
-        ordered.extend(post_groups[0]["candidates"][:4])
-    if len(post_groups) >= 2:
-        ordered.extend(post_groups[1]["candidates"][:2])
-    return ordered[:MAX_CANDIDATES_TO_TRY]
+    return out[:MAX_CANDIDATES_TO_TRY]
 
 
 async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
@@ -442,7 +437,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
         modal_closed = await dismiss_login_modal(page)
         await page.wait_for_timeout(350)
 
-        ordered_candidates: list[ImageCandidate] = []
+        best_candidates: list[ImageCandidate] = []
         saw_login_wall = False
         last_error = ""
 
@@ -456,32 +451,19 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                     await page.wait_for_timeout(700)
 
             try:
-                posts = await collect_feed_posts(page)
+                flat_candidates = await collect_flat_candidates(page)
             except Exception as exc:
-                posts = []
+                flat_candidates = []
                 last_error = f"candidate extraction failed: {exc}"
             else:
                 last_error = ""
 
-            if posts:
-                post_groups = []
-                for p in posts[:MAX_POST_GROUPS]:
-                    post_groups.append({
-                        "post_index": int(p.get("post_index") or 0),
-                        "post_top": float(p.get("post_top") or 0.0),
-                        "candidates": build_post_candidates(p),
-                    })
-
-                ordered_candidates = build_post_locked_order(post_groups)
-                ordered_candidates = [
-                    c for c in ordered_candidates
-                    if c.in_post and 0 <= c.post_index < MAX_POST_GROUPS
-                ][:MAX_CANDIDATES_TO_TRY]
-
-                if ordered_candidates:
-                    top = ordered_candidates[0]
-                    if top.width >= 780 and top.height >= 780:
-                        break
+            if flat_candidates:
+                best_candidates = flat_candidates
+                top = best_candidates[0]
+                # good enough if newest-rank + big enough
+                if top.approx_post_rank == 0 and top.width >= 780 and top.height >= 780:
+                    break
 
             if step < MAX_SCROLL_STEPS:
                 await maybe_scroll(page, step)
@@ -490,8 +472,8 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             SCREENSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(SCREENSHOT_FILE), full_page=True)
 
-        if ordered_candidates:
-            best = ordered_candidates[0]
+        if best_candidates:
+            top = best_candidates[0]
             return {
                 "ok": True,
                 "page_url": page.url,
@@ -499,15 +481,12 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
                 "modal_closed": modal_closed,
                 "viewer_used": False,
                 "message": "Success_with_login_wall_fallback" if saw_login_wall else "Success",
-                "selected_image_url": best.src,
-                "selected_width": best.width,
-                "selected_height": best.height,
-                "selected_top": best.top,
-                "selected_in_post": best.in_post,
-                "selected_post_index": best.post_index,
-                "selected_post_top": best.post_top,
+                "selected_image_url": top.src,
+                "selected_width": top.width,
+                "selected_height": top.height,
+                "selected_rank": top.approx_post_rank,
                 "selected_image_file": "",
-                "candidates": [asdict(c) for c in ordered_candidates],
+                "candidates": [asdict(c) for c in best_candidates],
             }
 
         html = await page.content()
@@ -529,10 +508,7 @@ async def try_scrape_single_url(browser, url: str, default_mode: str) -> dict:
             "selected_image_url": "",
             "selected_width": 0,
             "selected_height": 0,
-            "selected_top": 0,
-            "selected_in_post": False,
-            "selected_post_index": -1,
-            "selected_post_top": 0,
+            "selected_rank": -1,
             "selected_image_file": "",
             "candidates": [],
         }
@@ -568,17 +544,14 @@ async def scrape_public_facebook_image() -> dict:
                         "selected_image_url": "",
                         "selected_width": 0,
                         "selected_height": 0,
-                        "selected_top": 0,
-                        "selected_in_post": False,
-                        "selected_post_index": -1,
-                        "selected_post_top": 0,
+                        "selected_rank": -1,
                         "selected_image_file": "",
                         "candidates": [],
                     }
 
                 all_attempts.append(result)
 
-                if result.get("ok") and result.get("selected_in_post") and int(result.get("selected_post_index", -1)) in (0, 1):
+                if result.get("ok") and result.get("candidates"):
                     final_result = result
                     break
 
@@ -587,8 +560,7 @@ async def scrape_public_facebook_image() -> dict:
                     all_attempts,
                     key=lambda r: (
                         1 if r.get("candidates") else 0,
-                        1 if r.get("selected_in_post") else 0,
-                        -int(r.get("selected_post_index", 9999) if isinstance(r.get("selected_post_index"), int) else 9999),
+                        -int(r.get("selected_rank", 9999) if isinstance(r.get("selected_rank"), int) else 9999),
                         int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
                     ),
                     default={
@@ -601,10 +573,7 @@ async def scrape_public_facebook_image() -> dict:
                         "selected_image_url": "",
                         "selected_width": 0,
                         "selected_height": 0,
-                        "selected_top": 0,
-                        "selected_in_post": False,
-                        "selected_post_index": -1,
-                        "selected_post_top": 0,
+                        "selected_rank": -1,
                         "selected_image_file": "",
                         "candidates": [],
                     },
@@ -619,9 +588,7 @@ async def scrape_public_facebook_image() -> dict:
                     "message": r.get("message", ""),
                     "selected_width": r.get("selected_width", 0),
                     "selected_height": r.get("selected_height", 0),
-                    "selected_post_index": r.get("selected_post_index", -1),
-                    "selected_in_post": r.get("selected_in_post", False),
-                    "viewer_used": r.get("viewer_used", False),
+                    "selected_rank": r.get("selected_rank", -1),
                 }
                 for r in all_attempts
             ]
