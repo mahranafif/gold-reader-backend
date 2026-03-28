@@ -3,10 +3,8 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any
 
 import pytesseract
 import requests
@@ -34,11 +32,7 @@ MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "780"))
 MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "780"))
 
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
 }
 
@@ -50,32 +44,15 @@ def normalize_fb_image_url(url: str) -> str:
     return (url or "").strip()
 
 
-def is_low_quality_url(url: str) -> bool:
-    lower = (url or "").lower()
-    if "s1024x1024" in lower or "s960x960" in lower or "s780x780" in lower:
-        return False
-    if "p780x980" in lower or "p780x780" in lower:
-        return False
-    tiny_markers = ["s130x130", "s160x160", "s320x320", "s480x480", "p320x320", "p480x480", "p526x296"]
-    return any(marker in lower for marker in tiny_markers)
-
-
 def normalize_digits(text: str) -> str:
     text = (text or "").translate(ARABIC_NUM_MAP)
-    replacements = {
-        "O": "0", "o": "0", "I": "1", "l": "1", "|": "1",
-        "S": "5", "s": "5", "Z": "2", "G": "6",
-        "٫": ".", "،": ",", ";": ":",
-    }
-    for k, v in replacements.items():
+    for k, v in {"O":"0","o":"0","I":"1","l":"1","|":"1","S":"5","s":"5","Z":"2","G":"6","٫":".","،":",",";":":"}.items():
         text = text.replace(k, v)
     return text
 
 
 def parse_date_safely(text: str) -> str:
-    text = normalize_digits(text)
-    text = text.replace("Z", "2").replace("z", "2").replace("O", "0").replace("o", "0")
-    text = text.replace("\\", "/").replace("|", "/").replace(" ", "")
+    text = normalize_digits(text).replace("\\", "/").replace("|", "/").replace(" ", "")
     m = re.search(r"(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})", text)
     if not m:
         m = re.search(r"(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})", text)
@@ -85,33 +62,25 @@ def parse_date_safely(text: str) -> str:
     else:
         year, month, day = m.groups()
     try:
-        month_i = int(month)
-        day_i = int(day)
-        if not (1 <= month_i <= 12) or not (1 <= day_i <= 31):
-            return "0000/00/00"
-        return f"{int(year):04d}/{month_i:02d}/{day_i:02d}"
+        month_i = int(month); day_i = int(day)
+        if 1 <= month_i <= 12 and 1 <= day_i <= 31:
+            return f"{int(year):04d}/{month_i:02d}/{day_i:02d}"
     except Exception:
-        return "0000/00/00"
+        pass
+    return "0000/00/00"
 
 
 def parse_time_safely(text: str) -> str:
-    text = normalize_digits(text)
-    text = text.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
-    text = text.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
+    text = normalize_digits(text).replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
     m = re.search(r"(\d{1,2})[:](\d{2})", text)
     if not m:
         return "00:00"
-    hour = int(m.group(1))
-    minute = int(m.group(2))
+    hour = int(m.group(1)); minute = int(m.group(2))
     is_pm = "م" in text or "pm" in text.lower()
     is_am = "ص" in text or "am" in text.lower()
-    if is_pm and hour < 12:
-        hour += 12
-    if is_am and hour == 12:
-        hour = 0
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return "00:00"
-    return f"{hour:02d}:{minute:02d}"
+    if is_pm and hour < 12: hour += 12
+    if is_am and hour == 12: hour = 0
+    return f"{hour:02d}:{minute:02d}" if 0 <= hour <= 23 and 0 <= minute <= 59 else "00:00"
 
 
 def quick_ocr_text(img: Image.Image) -> str:
@@ -122,26 +91,16 @@ def quick_ocr_text(img: Image.Image) -> str:
     return re.sub(r"\s+", " ", text or "").strip()
 
 
-def parse_header_signals(img: Image.Image) -> dict:
+def parse_header_signals(img: Image.Image):
     text = quick_ocr_text(img)
-    date = parse_date_safely(text)
-    time = parse_time_safely(text)
-    return {"text": text[:1200], "date": date, "time": time}
+    return {"text": text[:1200], "date": parse_date_safely(text), "time": parse_time_safely(text)}
 
 
 def poster_keyword_guard(img):
     text = quick_ocr_text(img)
     hits = [kw for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text]
     normalized = normalize_digits(text)
-    has_21 = "21" in normalized
-    has_18 = "18" in normalized
-    return {
-        "hits": hits,
-        "hit_count": len(hits),
-        "has_21": has_21,
-        "has_18": has_18,
-        "text_preview": text[:500],
-    }
+    return {"hits": hits, "hit_count": len(hits), "has_21": "21" in normalized, "has_18": "18" in normalized, "text_preview": text[:500]}
 
 
 def download_image_bytes(image_url: str) -> bytes:
@@ -153,9 +112,6 @@ def download_image_bytes(image_url: str) -> bytes:
     headers["Origin"] = "https://www.facebook.com"
     response = requests.get(image_url, headers=headers, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
-    content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-    if content_type and not content_type.startswith("image/"):
-        raise RuntimeError(f"Unsupported content type {content_type} for {image_url}")
     return response.content
 
 
@@ -177,7 +133,6 @@ def run_fetch_gold_with_url(image_url):
 
 
 def maybe_switch_blueprint_for_layout(layout_label: str):
-    layout_label = (layout_label or "").strip()
     if not layout_label or not BLUEPRINT_FILE.exists():
         return None
     try:
@@ -186,9 +141,6 @@ def maybe_switch_blueprint_for_layout(layout_label: str):
         return None
     if not isinstance(blueprint, dict):
         return None
-    current = str(blueprint.get("active_layout") or "").strip()
-    if current == layout_label:
-        return layout_label
     blueprint["active_layout"] = layout_label
     blueprint["layout_selected_by"] = "run_gold_from_facebook_json"
     try:
@@ -204,22 +156,9 @@ def evaluate_poster_classifier(poster_debug: dict):
     gold_conf = float(all_probs.get("gold", poster_debug.get("confidence", 0.0)))
     non_gold_conf = float(all_probs.get("non_gold", 0.0))
     margin = gold_conf - non_gold_conf
-    is_gold = (
-        ("gold" in label)
-        and ("non" not in label)
-        and gold_conf >= CNN_POSTER_MIN_CONFIDENCE
-        and margin >= CNN_POSTER_MIN_MARGIN
-    )
-    decision = {
-        "label": label,
-        "gold_conf": gold_conf,
-        "non_gold_conf": non_gold_conf,
-        "margin": margin,
-        "threshold": CNN_POSTER_MIN_CONFIDENCE,
-        "min_margin": CNN_POSTER_MIN_MARGIN,
-        "accepted": is_gold,
-    }
-    return is_gold, decision, gold_conf, margin
+    accepted = ("gold" in label) and ("non" not in label) and gold_conf >= CNN_POSTER_MIN_CONFIDENCE and margin >= CNN_POSTER_MIN_MARGIN
+    decision = {"label": label, "gold_conf": gold_conf, "non_gold_conf": non_gold_conf, "margin": margin, "threshold": CNN_POSTER_MIN_CONFIDENCE, "min_margin": CNN_POSTER_MIN_MARGIN, "accepted": accepted}
+    return accepted, decision, gold_conf, margin
 
 
 def load_latest_result() -> dict:
@@ -232,153 +171,86 @@ def load_latest_result() -> dict:
         return {}
 
 
-def parsed_datetime_from_snapshot(snapshot: dict):
-    try:
-        date = str(snapshot.get("date", ""))
-        time = str(snapshot.get("time", ""))
-        if date == "0000/00/00" or time == "00:00":
-            return None
-        return datetime.strptime(f"{date} {time}", "%Y/%m/%d %H:%M")
-    except Exception:
-        return None
-
-
-def recency_points(snapshot: dict, approx_rank: int):
-    score = 0
-    reasons = []
-
-    if approx_rank == 0:
-        score += 140
-    elif approx_rank == 1:
-        score += 80
-    else:
-        score += max(0, 30 - approx_rank * 10)
-        reasons.append(f"rank_{approx_rank}")
-
-    dt = parsed_datetime_from_snapshot(snapshot)
-    now = datetime.utcnow() + timedelta(hours=4)
-    if dt is None:
-        reasons.append("unparsed_datetime")
-        return score, reasons
-
-    delta_days = abs((now.date() - dt.date()).days)
-    if delta_days == 0:
-        score += 120
-    elif delta_days == 1:
-        score += 80
-    elif delta_days == 2:
-        score -= 20
-        reasons.append("two_days_old")
-    else:
-        score -= min(delta_days * 40, 240)
-        reasons.append(f"stale_{delta_days}_days")
-    return score, reasons
+def post_time_points(candidate: dict):
+    minutes_ago = int(candidate.get("post_time_minutes_ago", 10**9))
+    conf = float(candidate.get("post_time_confidence", 0.0))
+    if minutes_ago >= 10**9:
+        return 0, ["post_time_missing"]
+    if minutes_ago <= 10:
+        return int(260 * max(conf, 0.5)), []
+    if minutes_ago <= 60:
+        return int(220 * max(conf, 0.5)), []
+    if minutes_ago <= 360:
+        return int(170 * max(conf, 0.5)), []
+    if minutes_ago <= 1440:
+        return int(120 * max(conf, 0.5)), []
+    if minutes_ago <= 2880:
+        return int(50 * max(conf, 0.5)), ["post_older_than_yesterday"]
+    return -120, ["post_stale_by_facebook_time"]
 
 
 def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_guard: dict, gold_conf: float, margin: float):
     score = 0
     reasons = []
-
-    if classifier_ok:
-        score += 60
-    else:
-        reasons.append("classifier_failed")
-
-    if gold_conf >= 0.95:
-        score += 40
-    elif gold_conf >= 0.90:
-        score += 25
-
-    if margin >= 0.90:
-        score += 25
-    elif margin >= 0.70:
-        score += 10
-
-    if header.get("date") != "0000/00/00":
-        score += 120
-    else:
-        reasons.append("header_date_missing")
-
-    if header.get("time") != "00:00":
-        score += 80
-    else:
-        reasons.append("header_time_missing")
-
+    if classifier_ok: score += 60
+    else: reasons.append("classifier_failed")
+    if gold_conf >= 0.95: score += 40
+    elif gold_conf >= 0.90: score += 25
+    if margin >= 0.90: score += 25
+    elif margin >= 0.70: score += 10
+    if header.get("date") != "0000/00/00": score += 120
+    else: reasons.append("header_date_missing")
+    if header.get("time") != "00:00": score += 80
+    else: reasons.append("header_time_missing")
     hit_count = int(keyword_guard.get("hit_count") or 0)
-    if hit_count >= 2:
-        score += 30
+    if hit_count >= 2: score += 30
     elif hit_count == 1:
         score += 10
         reasons.append("weak_keyword_guard")
     else:
         reasons.append("no_keyword_hits")
-
-    if keyword_guard.get("has_21") and keyword_guard.get("has_18"):
-        score += 35
-    elif keyword_guard.get("has_21") or keyword_guard.get("has_18"):
-        score += 10
-
+    if keyword_guard.get("has_21") and keyword_guard.get("has_18"): score += 35
+    elif keyword_guard.get("has_21") or keyword_guard.get("has_18"): score += 10
     warnings = snapshot.get("warnings") or []
-    if "used_full_text_price_fallback" not in warnings:
-        score += 20
-    else:
-        reasons.append("full_text_fallback")
-
-    if not any("ratio" in str(w) or "sell_less_than_buy" in str(w) for w in warnings):
-        score += 60
+    if "used_full_text_price_fallback" not in warnings: score += 20
+    else: reasons.append("full_text_fallback")
+    if not any("ratio" in str(w) or "sell_less_than_buy" in str(w) for w in warnings): score += 60
     else:
         score -= 60
         reasons.append("relationship_warning")
-
     conf = float(snapshot.get("confidence", 0.0))
-    if conf >= 0.75:
-        score += 30
-    elif conf >= 0.55:
-        score += 10
+    if conf >= 0.75: score += 30
+    elif conf >= 0.55: score += 10
     else:
         score -= 40
         reasons.append("low_confidence")
-
     return score, reasons
 
 
-def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, snapshot: dict, keyword_guard: dict, gold_conf: float, margin: float):
-    rec_pts, rec_reasons = recency_points(snapshot, approx_rank)
-    content_pts, content_reasons = content_points(header, snapshot, classifier_ok, keyword_guard, gold_conf, margin)
-    total = rec_pts + content_pts
-    return total, {
-        "approx_rank": approx_rank,
-        "recency_points": rec_pts,
-        "recency_reasons": rec_reasons,
-        "content_points": content_pts,
-        "content_reasons": content_reasons,
-        "keyword_guard": keyword_guard,
-        "gold_conf": gold_conf,
-        "margin": margin,
-        "total": total,
-    }
+def total_candidate_score(candidate: dict, header: dict, snapshot: dict, keyword_guard: dict, gold_conf: float, margin: float):
+    post_pts, post_reasons = post_time_points(candidate)
+    content_pts, content_reasons = content_points(header, snapshot, True, keyword_guard, gold_conf, margin)
+    total = post_pts + content_pts
+    return total, {"post_time_text": candidate.get("post_time_text", ""), "post_time_minutes_ago": candidate.get("post_time_minutes_ago", 10**9), "post_time_points": post_pts, "post_time_reasons": post_reasons, "content_points": content_pts, "content_reasons": content_reasons, "gold_conf": gold_conf, "margin": margin, "keyword_guard": keyword_guard, "total": total}
 
 
-def build_flat_candidates(payload: dict) -> list[dict]:
-    candidates = payload.get("candidates") or []
+def build_flat_candidates(payload: dict):
     out = []
-    for idx, item in enumerate(candidates):
+    for idx, item in enumerate(payload.get("candidates") or []):
         src = normalize_fb_image_url(str(item.get("src") or "").strip())
         if not src:
             continue
-        approx_rank = item.get("approx_post_rank")
-        if approx_rank is None:
-            approx_rank = item.get("selected_rank")
-        if approx_rank is None:
-            approx_rank = 0 if idx == 0 else 1 if idx == 1 else 999
         out.append({
             "src": src,
             "width": int(item.get("width") or 0),
             "height": int(item.get("height") or 0),
-            "approx_post_rank": int(approx_rank),
+            "approx_post_rank": int(item.get("approx_post_rank") or (0 if idx == 0 else 999)),
+            "post_time_text": str(item.get("post_time_text") or ""),
+            "post_time_minutes_ago": int(item.get("post_time_minutes_ago") or 10**9),
+            "post_time_confidence": float(item.get("post_time_confidence") or 0.0),
             "score": float(item.get("score") or 0.0),
         })
-    out.sort(key=lambda x: (x["approx_post_rank"], -x["score"]))
+    out.sort(key=lambda x: (x["post_time_minutes_ago"], x["approx_post_rank"], -x["score"]))
     deduped = []
     seen = set()
     for item in out:
@@ -389,72 +261,38 @@ def build_flat_candidates(payload: dict) -> list[dict]:
     return deduped[:MAX_CANDIDATES_TO_TRY]
 
 
-def is_rank0_rescue_candidate(approx_rank: int, poster_accepted: bool, gold_conf: float, margin: float, keyword_guard: dict, layout_conf: float) -> bool:
-    # UPDATED: Softer thresholds and includes rank 1 (pinned post protection)
-    return (
-        approx_rank in [0, 1]
-        and poster_accepted
-        and gold_conf >= 0.85
-        and layout_conf >= 0.60
-        and keyword_guard.get("has_21")
-    )
-
-
 def main():
     if not FACEBOOK_JSON.exists():
         raise RuntimeError(f"Missing file: {FACEBOOK_JSON}")
-
     payload = json.loads(FACEBOOK_JSON.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise RuntimeError("facebook_latest_image.json must contain a JSON object")
-
-    message = str(payload.get("message") or "").strip()
     candidates = build_flat_candidates(payload)
-
     if not candidates:
-        raise RuntimeError(
-            "No usable Facebook image candidates found. "
-            f"ok={payload.get('ok', False)} "
-            f"message={message!r} "
-            f"selected_image_file={payload.get('selected_image_file', '')!r} "
-            f"selected_image_url={payload.get('selected_image_url', '')!r} "
-            f"candidate_count={len(payload.get('candidates') or [])}"
-        )
+        raise RuntimeError("No usable Facebook image candidates found")
 
-    print(f"Scraper status ok={payload.get('ok', False)} message={message!r}")
+    print(f"Scraper status ok={payload.get('ok', False)} message={str(payload.get('message') or '')!r}")
     print(f"Flat candidates to try: {len(candidates)}")
 
     poster_classifier = GoldPosterClassifier(str(POSTER_MODEL_PATH)) if POSTER_MODEL_PATH.exists() else None
     layout_classifier = GoldLayoutClassifier(str(LAYOUT_MODEL_PATH)) if LAYOUT_MODEL_PATH.exists() else None
 
-    failures: list[dict[str, Any]] = []
-    best_candidate: dict[str, Any] | None = None
-    rescued_rank0: dict[str, Any] | None = None
+    failures = []
+    best_candidate = None
 
     for idx, cand in enumerate(candidates, start=1):
         image_url = cand["src"]
-        approx_rank = int(cand["approx_post_rank"])
-        print(f"[{idx}/{len(candidates)}] Trying candidate rank={approx_rank}: {image_url}")
-
-        if is_low_quality_url(image_url):
-            failures.append({"index": idx, "rank": approx_rank, "url": image_url, "stage": "low_quality_url_rejected"})
-            print("Skipped candidate: low quality URL")
-            continue
-
+        print(f"[{idx}/{len(candidates)}] Trying candidate post_time={cand['post_time_text']!r} minutes_ago={cand['post_time_minutes_ago']}: {image_url}")
         try:
             image_bytes = download_image_bytes(image_url)
             img = Image.open(BytesIO(image_bytes)).convert("RGB")
         except Exception as exc:
-            failures.append({"index": idx, "rank": approx_rank, "url": image_url, "stage": "download_or_open", "error": str(exc)})
+            failures.append({"index": idx, "url": image_url, "stage": "download_or_open", "error": str(exc)})
             print(f"Download/open failed: {exc}")
             continue
 
         if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
-            failures.append({
-                "index": idx, "rank": approx_rank, "url": image_url, "stage": "image_size",
-                "width": img.width, "height": img.height,
-                "minimum_width": MIN_SOURCE_WIDTH, "minimum_height": MIN_SOURCE_HEIGHT,
-            })
+            failures.append({"index": idx, "url": image_url, "stage": "image_size", "width": img.width, "height": img.height})
             print(f"Skipped candidate: image too small ({img.width}x{img.height})")
             continue
 
@@ -467,19 +305,15 @@ def main():
             poster_debug = poster_classifier.predict(img)
             poster_debug["source"] = "cnn"
             print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
-            poster_accepted, poster_decision, gold_conf, margin = evaluate_poster_classifier(poster_debug)
+            poster_ok, poster_decision, gold_conf, margin = evaluate_poster_classifier(poster_debug)
             print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
+            if not poster_ok:
+                failures.append({"index": idx, "url": image_url, "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision})
+                print("Skipped candidate: classifier too weak")
+                continue
 
             keyword_guard = poster_keyword_guard(img)
             print("Poster keyword guard:", json.dumps(keyword_guard, ensure_ascii=False))
-
-            if not poster_accepted:
-                failures.append({
-                    "index": idx, "rank": approx_rank, "url": image_url,
-                    "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision,
-                })
-                print("Skipped candidate: classifier too weak")
-                continue
 
             if layout_classifier is None:
                 raise RuntimeError("Missing layout classifier")
@@ -488,77 +322,48 @@ def main():
             print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
             layout_conf = float(layout_debug.get("confidence", 0.0))
             layout_label = str(layout_debug.get("label", "")).strip()
-            
-            # UPDATED: Removed the kill switch. It will now proceed to OCR even if layout is weak.
             if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
-                activated = maybe_switch_blueprint_for_layout(layout_label)
-                if activated:
-                    print(f"Activated layout blueprint: {activated}")
+                maybe_switch_blueprint_for_layout(layout_label)
             else:
-                print("Layout classifier weak, proceeding to OCR without blueprint fallback.")
+                failures.append({"index": idx, "url": image_url, "stage": "layout_classifier", "layout_debug": layout_debug})
+                print("Skipped candidate: layout classifier too weak")
+                continue
 
             result = run_fetch_gold_with_url(image_url)
             if result.returncode != 0:
-                failures.append({
-                    "index": idx, "rank": approx_rank, "url": image_url, "stage": "fetch_gold",
-                    "returncode": result.returncode, "stdout_tail": result.stdout[-1200:], "stderr_tail": result.stderr[-1200:],
-                })
+                failures.append({"index": idx, "url": image_url, "stage": "fetch_gold", "returncode": result.returncode, "stdout_tail": result.stdout[-1200:], "stderr_tail": result.stderr[-1200:]})
                 print(f"fetch_gold.py failed with exit code {result.returncode}")
                 continue
 
             snapshot = load_latest_result()
             if not snapshot:
-                failures.append({"index": idx, "rank": approx_rank, "url": image_url, "stage": "missing_latest_json_after_success"})
+                failures.append({"index": idx, "url": image_url, "stage": "missing_latest_json_after_success"})
                 print("fetch_gold.py succeeded but latest.json missing/empty")
                 continue
 
-            total_score, detail = total_candidate_score(
-                approx_rank, True, header, snapshot, keyword_guard, gold_conf, margin
-            )
+            total_score, detail = total_candidate_score(cand, header, snapshot, keyword_guard, gold_conf, margin)
             print("Candidate total score:", json.dumps(detail, ensure_ascii=False))
 
-            candidate_record = {
-                "index": idx,
-                "rank": approx_rank,
-                "url": image_url,
-                "header": header,
-                "snapshot": snapshot,
-                "score_detail": detail,
-                "total_score": total_score,
-            }
-
+            record = {"index": idx, "url": image_url, "snapshot": snapshot, "score_detail": detail, "total_score": total_score}
             if best_candidate is None or total_score > best_candidate["total_score"]:
-                best_candidate = candidate_record
+                best_candidate = record
 
-            if is_rank0_rescue_candidate(approx_rank, poster_accepted, gold_conf, margin, keyword_guard, layout_conf):
-                rescued_rank0 = candidate_record
-                print("Stored rank-0/rank-1 rescue candidate")
-
-            # UPDATED: Accepts rank 0 or 1 with a more reasonable 200 point threshold
-            if approx_rank <= 1 and total_score >= 200:
+            if cand["post_time_minutes_ago"] <= 180 and total_score >= 220:
                 save_failures(failures)
-                print(f"Accepted strong newest-post candidate: {image_url}")
+                print(f"Accepted freshest strong candidate: {image_url}")
                 return
 
         except Exception as exc:
-            failures.append({"index": idx, "rank": approx_rank, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
+            failures.append({"index": idx, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
             print(f"Candidate failed: {exc}")
 
     save_failures(failures)
-
-    final_choice = best_candidate
-    if rescued_rank0 is not None:
-        if final_choice is None or rescued_rank0["total_score"] >= final_choice["total_score"] - 120:
-            final_choice = rescued_rank0
-            print("Using rank-0/rank-1 rescue candidate as final choice")
-
-    if final_choice:
-        rerun = run_fetch_gold_with_url(final_choice["url"])
+    if best_candidate:
+        rerun = run_fetch_gold_with_url(best_candidate["url"])
         if rerun.returncode == 0:
-            print(f"Accepted best overall candidate after scoring: {final_choice['url']}")
+            print(f"Accepted best overall candidate after scoring: {best_candidate['url']}")
             return
-
-    raise RuntimeError(f"All candidates failed. Best scored candidate: {final_choice['url'] if final_choice else 'none'}")
+    raise RuntimeError(f"All candidates failed. Best scored candidate: {best_candidate['url'] if best_candidate else 'none'}")
 
 
 if __name__ == "__main__":
