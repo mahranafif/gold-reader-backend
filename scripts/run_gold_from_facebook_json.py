@@ -126,6 +126,7 @@ def build_candidates(payload: dict):
             "width": int(item.get("width") or 0),
             "height": int(item.get("height") or 0),
             "score": float(item.get("score") or 0.0),
+            "source_kind": str(item.get("source_kind") or ""),
         })
     seen = set()
     deduped = []
@@ -155,7 +156,7 @@ def main():
         )
 
     print(f"Scraper status ok={payload.get('ok', False)} message={str(payload.get('message') or '')!r}")
-    print(f"Flat candidates to try: {len(candidates)}")
+    print(f"OCR-first candidates to try: {len(candidates)}")
 
     poster_classifier = GoldPosterClassifier(str(POSTER_MODEL_PATH)) if POSTER_MODEL_PATH.exists() else None
     layout_classifier = GoldLayoutClassifier(str(LAYOUT_MODEL_PATH)) if LAYOUT_MODEL_PATH.exists() else None
@@ -165,7 +166,7 @@ def main():
 
     for idx, cand in enumerate(candidates, start=1):
         image_url = cand["src"]
-        print(f"[{idx}/{len(candidates)}] Trying candidate: {image_url}")
+        print(f"[{idx}/{len(candidates)}] Trying candidate ({cand['width']}x{cand['height']}, {cand.get('source_kind','')}): {image_url}")
 
         try:
             image_bytes = download_image_bytes(image_url)
