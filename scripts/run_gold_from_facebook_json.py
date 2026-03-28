@@ -43,6 +43,7 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
 }
 
+# Use keyword guard as a soft signal only.
 GOLD_POSTER_REQUIRED_KEYWORDS = ["العيار", "سعر", "غرام", "جمعية"]
 ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
@@ -171,17 +172,25 @@ def classify_layout_ocr_fallback(img):
         "method": "ocr_keyword_fallback",
         "hits": hits,
         "text_preview": text[:500],
-        "label": "layout_v1" if hits >= 2 else "unknown_layout",
+        "label": "layout_v1" if hits >= 1 else "unknown_layout",
         "confidence": min(0.95, 0.35 + (hits * 0.2)),
         "source": "ocr",
     }
-    return hits >= 2, result
+    return hits >= 1, result
 
 
 def poster_keyword_guard(img):
     text = quick_ocr_text(img)
     hits = [kw for kw in GOLD_POSTER_REQUIRED_KEYWORDS if kw in text]
-    return {"hits": hits, "hit_count": len(hits), "text_preview": text[:500]}
+    has_21 = "21" in normalize_digits(text)
+    has_18 = "18" in normalize_digits(text)
+    return {
+        "hits": hits,
+        "hit_count": len(hits),
+        "has_21": has_21,
+        "has_18": has_18,
+        "text_preview": text[:500],
+    }
 
 
 def download_image_bytes(image_url: str) -> bytes:
@@ -287,11 +296,14 @@ def recency_points(snapshot: dict, approx_rank: int):
     score = 0
     reasons = []
 
-    # newest visible post first, then previous one
+    # Keep newest-post preference first, then previous one.
     if approx_rank == 0:
         score += 140
     elif approx_rank == 1:
         score += 80
+    elif approx_rank == 999:
+        score += 60
+        reasons.append("rank_missing_from_scraper")
     else:
         score += max(0, 30 - approx_rank * 10)
         reasons.append(f"rank_{approx_rank}")
@@ -316,7 +328,7 @@ def recency_points(snapshot: dict, approx_rank: int):
     return score, reasons
 
 
-def content_points(header: dict, snapshot: dict, classifier_ok: bool):
+def content_points(header: dict, snapshot: dict, classifier_ok: bool, keyword_guard: dict):
     score = 0
     reasons = []
 
@@ -334,6 +346,19 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool):
         score += 80
     else:
         reasons.append("header_time_missing")
+
+    # Soft keyword signal only. Never reject a strong CNN positive just because OCR keywords are weak.
+    hit_count = int(keyword_guard.get("hit_count") or 0)
+    if hit_count >= 2:
+        score += 30
+    elif hit_count == 1:
+        score += 10
+        reasons.append("weak_keyword_guard")
+    else:
+        reasons.append("no_keyword_hits")
+
+    if keyword_guard.get("has_21") and keyword_guard.get("has_18"):
+        score += 20
 
     warnings = snapshot.get("warnings") or []
     if "used_full_text_price_fallback" not in warnings:
@@ -359,9 +384,9 @@ def content_points(header: dict, snapshot: dict, classifier_ok: bool):
     return score, reasons
 
 
-def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, snapshot: dict):
+def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, snapshot: dict, keyword_guard: dict):
     rec_pts, rec_reasons = recency_points(snapshot, approx_rank)
-    content_pts, content_reasons = content_points(header, snapshot, classifier_ok)
+    content_pts, content_reasons = content_points(header, snapshot, classifier_ok, keyword_guard)
     total = rec_pts + content_pts
     return total, {
         "approx_rank": approx_rank,
@@ -369,6 +394,7 @@ def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, s
         "recency_reasons": rec_reasons,
         "content_points": content_pts,
         "content_reasons": content_reasons,
+        "keyword_guard": keyword_guard,
         "total": total,
     }
 
@@ -376,15 +402,21 @@ def total_candidate_score(approx_rank: int, classifier_ok: bool, header: dict, s
 def build_flat_candidates(payload: dict) -> list[dict]:
     candidates = payload.get("candidates") or []
     out = []
-    for item in candidates:
+    for idx, item in enumerate(candidates):
         src = normalize_fb_image_url(str(item.get("src") or "").strip())
         if not src:
             continue
+        approx_rank = item.get("approx_post_rank")
+        if approx_rank is None:
+            approx_rank = item.get("selected_rank")
+        if approx_rank is None:
+            # Keep scraper order if rank is missing
+            approx_rank = 0 if idx == 0 else 1 if idx == 1 else 999
         out.append({
             "src": src,
             "width": int(item.get("width") or 0),
             "height": int(item.get("height") or 0),
-            "approx_post_rank": int(item.get("approx_post_rank") or 999),
+            "approx_post_rank": int(approx_rank),
             "score": float(item.get("score") or 0.0),
         })
     out.sort(key=lambda x: (x["approx_post_rank"], x["score"], -parse_url_quality(x["src"])[0]))
@@ -469,21 +501,15 @@ def main():
                 poster_decision = {"accepted": is_gold, "source": "ocr"}
             print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
 
-            if is_gold:
-                keyword_guard = poster_keyword_guard(img)
-                print("Poster keyword guard:", json.dumps(keyword_guard, ensure_ascii=False))
-                if keyword_guard["hit_count"] < 2:
-                    is_gold = False
-                    poster_decision["accepted"] = False
-                    poster_decision["rejected_by_keyword_guard"] = True
-                    poster_decision["keyword_guard"] = keyword_guard
+            keyword_guard = poster_keyword_guard(img)
+            print("Poster keyword guard:", json.dumps(keyword_guard, ensure_ascii=False))
 
             if not is_gold:
                 failures.append({
                     "index": idx, "rank": approx_rank, "url": image_url,
                     "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision,
                 })
-                print("Skipped candidate: classifier too weak or keyword guard failed")
+                print("Skipped candidate: classifier too weak")
                 continue
 
             if layout_classifier is not None:
@@ -529,7 +555,7 @@ def main():
                 print("fetch_gold.py succeeded but latest.json missing/empty")
                 continue
 
-            total_score, detail = total_candidate_score(approx_rank, True, header, snapshot)
+            total_score, detail = total_candidate_score(approx_rank, True, header, snapshot, keyword_guard)
             print("Candidate total score:", json.dumps(detail, ensure_ascii=False))
 
             candidate_record = {
@@ -545,7 +571,6 @@ def main():
             if best_candidate is None or total_score > best_candidate["total_score"]:
                 best_candidate = candidate_record
 
-            # Strong immediate accept for newest post candidate
             if approx_rank == 0 and total_score >= 280:
                 save_failures(failures)
                 print(f"Accepted strong newest-post candidate: {image_url}")
