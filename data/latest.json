@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "source": "https://scontent-ord5-3.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ord5-3.xx&_nc_cat=107&_nc_ohc=Gg5pCf2zjWsQ7kNvwGmQtyZ&_nc_gid=lZ3KAXRX7Mcm1fb6ACxIfA&ccb=1-7&_nc_sid=7b2446&oh=00_AfweCsmOFj0-42KjLI0VcEEkfyUyrrryNfvhevOEd2nc0g&oe=69CE3E5A",
+  "source": "https://scontent-lhr8-1.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-lhr8-1.xx&_nc_cat=107&_nc_ohc=Gg5pCf2zjWsQ7kNvwGNJoPJ&_nc_gid=z05BU9zT-zz02euq-99QyA&ccb=1-7&_nc_sid=7b2446&oh=00_Afzth1YWhW8XLnk2CvYkNk57prPkpibi_Oo18-my5PxXWA&oe=69CE3E5A",
   "date": "0000/00/00",
   "time": "23:50",
   "day": "مويلا ء مارغلارعس سءل مارغلا رعس رايعلا ءارش عيبم ءارش عبيم",
@@ -16,11 +16,11 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67458,
-  "updated_at_utc": "2026-03-28T22:27:59.052696+00:00",
+  "updated_at_utc": "2026-03-28T22:44:28.392418+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "template_fields_hybrid",
-  "confidence": 0.4997716646971125,
+  "confidence": 0.4997716665033138,
   "warnings": [
     "header_date_failed",
     "missing_or_invalid:k21_syp_sell",
@@ -33,7 +33,7 @@
     "missing_required_fields:date"
   ],
   "debug": {
-    "source_url": "https://scontent-ord5-3.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-ord5-3.xx&_nc_cat=107&_nc_ohc=Gg5pCf2zjWsQ7kNvwGmQtyZ&_nc_gid=lZ3KAXRX7Mcm1fb6ACxIfA&ccb=1-7&_nc_sid=7b2446&oh=00_AfweCsmOFj0-42KjLI0VcEEkfyUyrrryNfvhevOEd2nc0g&oe=69CE3E5A",
+    "source_url": "https://scontent-lhr8-1.xx.fbcdn.net/v/t39.30808-6/657386282_122178542204861173_563926802845908987_n.jpg?stp=dst-webp_e15_q70_s780x780_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-lhr8-1.xx&_nc_cat=107&_nc_ohc=Gg5pCf2zjWsQ7kNvwGNJoPJ&_nc_gid=z05BU9zT-zz02euq-99QyA&ccb=1-7&_nc_sid=7b2446&oh=00_Afzth1YWhW8XLnk2CvYkNk57prPkpibi_Oo18-my5PxXWA&oe=69CE3E5A",
     "image_width": 780,
     "image_height": 780,
     "display_timezone": "Asia/Dubai",
@@ -47,52 +47,52 @@
     "fields": {
       "k21_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260328T222613426071_k21_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224246878984_k21_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
           "raw_text": "ةعاسلا هارغلا رعس عببم",
           "value": 0,
-          "confidence": 95.85654884576797,
+          "confidence": 95.85653990507126,
           "valid": false,
           "expected": false,
-          "score": -0.4143451154232025,
+          "score": -0.41434600949287415,
           "warning": "syp_parse_failed"
         }
       },
       "k21_syp_buy": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260328T222621789724_k21_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224254916244_k21_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:binary",
           "raw_text": "سءل مارغلا ءارش",
           "value": 0,
-          "confidence": 97.01705773671468,
+          "confidence": 97.01710343360901,
           "valid": false,
           "expected": false,
-          "score": -0.2982942263285313,
+          "score": -0.2982896566390991,
           "warning": "syp_parse_failed"
         }
       },
       "k21_usd_sell": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T222627128140_k21_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224259883645_k21_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:binary",
           "raw_text": "خيراتلا عبيم",
           "value": 0.0,
-          "confidence": 99.12476539611816,
+          "confidence": 99.12476241588593,
           "valid": false,
           "expected": false,
-          "score": -0.0875234603881836,
+          "score": -0.08752375841140747,
           "warning": "usd_parse_failed"
         }
       },
       "k21_usd_buy": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T222631772782_k21_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224304223860_k21_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:contrast",
@@ -107,7 +107,7 @@
       },
       "k18_syp_sell": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260328T222636074093_k18_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224308227643_k18_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_h:binary",
@@ -122,22 +122,22 @@
       },
       "k18_syp_buy": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260328T222639371629_k18_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224311304785_k18_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:binary",
           "raw_text": "5550",
           "value": 5550,
-          "confidence": 96.24698162078857,
+          "confidence": 96.2469756603241,
           "valid": false,
           "expected": false,
-          "score": -0.3753018379211426,
+          "score": -0.37530243396759033,
           "warning": "outside_hard_range"
         }
       },
       "k18_usd_sell": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260328T222644272241_k18_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224315866879_k18_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:binary",
@@ -152,7 +152,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T222648612294_k18_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224319826805_k18_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:binary",
@@ -167,22 +167,22 @@
       },
       "date": {
         "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260328T222652853409_date_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224323707991_date_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_s:contrast",
           "raw_text": "عيبل ةيم بهذلا",
           "value": "0000/00/00",
-          "confidence": 99.99362230300903,
+          "confidence": 99.99361435572307,
           "valid": false,
           "expected": true,
-          "score": 9.999362230300903,
+          "score": 9.999361435572307,
           "warning": "date_parse_failed"
         }
       },
       "time": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260328T222658076058_time_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224328657050_time_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:binary",
@@ -197,7 +197,7 @@
       },
       "day": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260328T222701745550_day_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260328T224332095286_day_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:soft",
@@ -256,7 +256,7 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "debug_overlay_path": "data/debug/20260328T222758_template_fields_hybrid_657386282_122178542204861173_563926802845908987_n.jpg.png"
+    "debug_overlay_path": "data/debug/20260328T224428_template_fields_hybrid_657386282_122178542204861173_563926802845908987_n.jpg.png"
   },
   "should_notify": true,
   "change_summary": {
