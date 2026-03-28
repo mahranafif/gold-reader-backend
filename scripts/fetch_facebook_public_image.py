@@ -1,4 +1,3 @@
-
 import asyncio
 import json
 import os
@@ -63,27 +62,29 @@ def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
     return "mobile" if fallback_mode == "auto" else fallback_mode
 
 
+def url_quality_bonus(src: str) -> float:
+    lower = src.lower()
+    bonus = 0.0
+    if "s1024x1024" in lower:
+        bonus += 800000.0
+    elif "s960x960" in lower:
+        bonus += 650000.0
+    elif "s780x780" in lower:
+        bonus += 500000.0
+    elif "p780x980" in lower or "p780x780" in lower:
+        bonus += 360000.0
+    elif "p526x296" in lower or "s540x540" in lower or "p540x" in lower:
+        bonus -= 900000.0
+    return bonus
+
+
 def score_candidate(src: str, width: int, height: int, source_kind: str) -> float:
     area = width * height
     aspect_ratio = width / height if height else 0.0
-    ratio_penalty = abs(aspect_ratio - 1.0) * 150000.0
-    preferred_bonus = 120000.0 if width >= PREFERRED_WIDTH and height >= PREFERRED_HEIGHT else 0.0
-    srcset_bonus = 35000.0 if source_kind == "srcset" else 0.0
-
-    lower = src.lower()
-    url_bonus = 0.0
-    if "s1024x1024" in lower:
-        url_bonus += 700000.0
-    elif "s960x960" in lower:
-        url_bonus += 520000.0
-    elif "s780x780" in lower:
-        url_bonus += 360000.0
-    elif "p780x980" in lower or "p780x780" in lower:
-        url_bonus += 260000.0
-    elif "p526x296" in lower or "s540x540" in lower or "p540x" in lower:
-        url_bonus -= 600000.0
-
-    return float(area) - ratio_penalty + preferred_bonus + srcset_bonus + url_bonus
+    ratio_penalty = abs(aspect_ratio - 1.0) * 140000.0
+    preferred_bonus = 160000.0 if width >= PREFERRED_WIDTH and height >= PREFERRED_HEIGHT else 0.0
+    srcset_bonus = 80000.0 if source_kind == "srcset" else 0.0
+    return float(area) - ratio_penalty + preferred_bonus + srcset_bonus + url_quality_bonus(src)
 
 
 async def route_handler(route: Route) -> None:
@@ -175,42 +176,40 @@ async def detect_page_problem(page: Page):
 
 
 async def scrape_images(page: Page):
-    raw = await page.evaluate(
-        f'''
-        () => {{
-          function parseSrcset(srcset) {{
+    raw = await page.evaluate('''
+        () => {
+          function parseSrcset(srcset) {
             const out = [];
-            for (const part of (srcset || '').split(',')) {{
+            for (const part of (srcset || '').split(',')) {
               const item = part.trim();
               if (!item) continue;
               const pieces = item.split(/\s+/);
               const url = pieces[0] || '';
               let width = 0;
-              for (const p of pieces.slice(1)) {{
-                if (p.endsWith('w')) {{
+              for (const p of pieces.slice(1)) {
+                if (p.endsWith('w')) {
                   const n = parseInt(p.slice(0, -1), 10);
                   if (!isNaN(n)) width = n;
-                }}
-              }}
-              if (url) out.push({{ url, width }});
-            }}
+                }
+              }
+              if (url) out.push({ url, width });
+            }
             return out;
-          }}
+          }
 
           const out = [];
-          for (const i of Array.from(document.images)) {{
-            out.push({{
+          for (const i of Array.from(document.images)) {
+            out.push({
               currentSrc: i.currentSrc || '',
               src: i.src || '',
               w: i.naturalWidth || 0,
               h: i.naturalHeight || 0,
               srcset: parseSrcset(i.getAttribute('srcset') || ''),
-            }});
-          }}
+            });
+          }
           return out;
-        }}
-        '''
-    )
+        }
+    ''')
 
     seen = set()
     cleaned = []
