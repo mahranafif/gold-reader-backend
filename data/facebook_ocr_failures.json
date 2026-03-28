@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "index": 1,
+    "rank": 0,
+    "url": "https://scontent-atl3-3.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=c0.5000x0.5000f_dst-webp_e15_p780x264_q70_tt1_u&efg=eyJ1cmxnZW4iOiJ1cmxnZW5fZnJvbV91cmwifQ&_nc_cid=0&_nc_ad=z-m&_nc_rml=0&_nc_ht=scontent-atl3-3.xx&_nc_cat=111&_nc_ohc=nb8kFJxAqq4Q7kNvwG8J0R2&_nc_gid=7B1NtaGN-CBAADGewLgF2Q&ccb=1-7&_nc_sid=10ca02&oh=00_Afwa5zRbSG8wCzn3nLUiq_KbrzFqQzCk1TSxrl4Kb3tcAw&oe=69CE0B5F",
+    "stage": "image_size",
+    "width": 780,
+    "height": 264,
+    "minimum_width": 750,
+    "minimum_height": 750
+  }
+]
