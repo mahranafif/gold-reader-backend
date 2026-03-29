@@ -34,6 +34,8 @@ FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
 HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {"1", "true", "yes", "on"}
 FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+FB_PAGE_URL = os.getenv("FACEBOOK_PAGE_URL", "https://m.facebook.com/profile.php?id=61575835207125").strip()
+
 FB_USER_AGENT_DESKTOP = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -221,8 +223,7 @@ async def dismiss_login_modal(page: Page) -> bool:
 
 
 async def warm_facebook_session(page: Page):
-    seed_url = os.getenv("FACEBOOK_PAGE_URL", "https://m.facebook.com/profile.php?id=61575835207125").strip()
-    await page.goto(seed_url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
+    await page.goto(FB_PAGE_URL, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
     await page.wait_for_timeout(1200)
     await dismiss_login_modal(page)
     await page.wait_for_timeout(400)
@@ -238,7 +239,7 @@ async def download_with_playwright(context: BrowserContext, seed_page: Page, url
             if body:
                 return body
 
-        js = '''
+        js = """
         async (u) => {
           const r = await fetch(u, {
             method: 'GET',
@@ -253,11 +254,86 @@ async def download_with_playwright(context: BrowserContext, seed_page: Page, url
           const buf = await r.arrayBuffer();
           return Array.from(new Uint8Array(buf));
         }
-        '''
+        """
         data = await seed_page.evaluate(js, url)
         return bytes(data)
     finally:
         await test_page.close()
+
+
+async def try_recover_larger_image(context: BrowserContext, seed_page: Page, image_url: str) -> bytes | None:
+    viewer_page = await context.new_page()
+    viewer_page.set_default_timeout(REQUEST_TIMEOUT_MS)
+    try:
+        try:
+            response = await viewer_page.goto(image_url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
+            if response and response.status == 200:
+                body = await response.body()
+                if body:
+                    img = Image.open(BytesIO(body))
+                    if img.width >= MIN_SOURCE_WIDTH and img.height >= MIN_SOURCE_HEIGHT:
+                        return body
+        except Exception:
+            pass
+
+        await viewer_page.goto(FB_PAGE_URL, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
+        await viewer_page.wait_for_timeout(1200)
+        await dismiss_login_modal(viewer_page)
+        await viewer_page.wait_for_timeout(500)
+
+        js = """
+        () => {
+          function parseSrcset(srcset) {
+            const out = [];
+            for (const part of (srcset || '').split(',')) {
+              const item = part.trim();
+              if (!item) continue;
+              const pieces = item.split(/\s+/);
+              const url = pieces[0] || '';
+              let width = 0;
+              for (const p of pieces.slice(1)) {
+                if (p.endsWith('w')) {
+                  const n = parseInt(p.slice(0, -1), 10);
+                  if (!isNaN(n)) width = n;
+                }
+              }
+              if (url) out.push({url, width});
+            }
+            return out;
+          }
+          return Array.from(document.images).flatMap((i) => {
+            const base = [];
+            if (i.currentSrc) base.push({url: i.currentSrc, w: i.naturalWidth || 0, h: i.naturalHeight || 0});
+            if (i.src) base.push({url: i.src, w: i.naturalWidth || 0, h: i.naturalHeight || 0});
+            for (const s of parseSrcset(i.getAttribute('srcset') || '')) {
+              base.push({url: s.url, w: s.width || 0, h: i.naturalHeight || 0});
+            }
+            return base;
+          });
+        }
+        """
+        dom_candidates = await viewer_page.evaluate(js)
+        urls = []
+        seen = set()
+        if isinstance(dom_candidates, list):
+            for item in dom_candidates:
+                u = str(item.get("url") or "").strip()
+                if not u or u in seen:
+                    continue
+                seen.add(u)
+                urls.append(u)
+
+        for u in urls[:20]:
+            try:
+                data = await download_with_playwright(context, seed_page, u)
+                img = Image.open(BytesIO(data))
+                if img.width >= MIN_SOURCE_WIDTH and img.height >= MIN_SOURCE_HEIGHT:
+                    return data
+            except Exception:
+                continue
+        return None
+    finally:
+        await viewer_page.close()
 
 
 def write_temp_image(candidate_index: int, image_url: str, image_bytes: bytes) -> Path:
@@ -298,6 +374,7 @@ async def async_main():
 
     failures = []
     successful = []
+    low_res_gold_posters = []
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -327,19 +404,6 @@ async def async_main():
                     print(f"Download/open failed: {exc}")
                     continue
 
-                if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
-                    failures.append({
-                        "index": idx,
-                        "url": image_url,
-                        "stage": "image_size",
-                        "width": img.width,
-                        "height": img.height,
-                        "declared_width": cand.get("declared_width", 0),
-                        "declared_height": cand.get("declared_height", 0),
-                    })
-                    print(f"Skipped candidate: image too small ({img.width}x{img.height})")
-                    continue
-
                 try:
                     if poster_classifier is None:
                         raise RuntimeError("Missing poster classifier")
@@ -356,8 +420,32 @@ async def async_main():
                             "poster_debug": poster_debug,
                             "poster_decision": poster_decision,
                         })
-                        print("Skipped candidate: classifier too weak")
+                        print("Skipped candidate: classifier says non-gold")
                         continue
+
+                    if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+                        print(f"Gold poster detected but low-res ({img.width}x{img.height}); attempting larger-source recovery")
+                        recovered = await try_recover_larger_image(context, seed_page, image_url)
+                        if recovered:
+                            img = Image.open(BytesIO(recovered)).convert("RGB")
+                            image_bytes = recovered
+                            print(f"Recovered larger image size: {img.width}x{img.height}")
+                        if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+                            low_res_gold_posters.append({
+                                "index": idx,
+                                "url": image_url,
+                                "width": img.width,
+                                "height": img.height,
+                            })
+                            failures.append({
+                                "index": idx,
+                                "url": image_url,
+                                "stage": "gold_poster_detected_but_only_low_res_available",
+                                "width": img.width,
+                                "height": img.height,
+                            })
+                            print(f"Skipped candidate: gold poster but only low-res available ({img.width}x{img.height})")
+                            continue
 
                     if layout_classifier is None:
                         raise RuntimeError("Missing layout classifier")
@@ -433,6 +521,9 @@ async def async_main():
         best = successful[0]
         print(f"Best successful OCR candidate retained: {best['url']}")
         return
+
+    if low_res_gold_posters:
+        raise RuntimeError("Gold poster detected, but only low-resolution source was accessible")
 
     raise RuntimeError("All candidates failed")
 
