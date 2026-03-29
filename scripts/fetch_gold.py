@@ -1,4 +1,3 @@
-
 import hashlib
 import json
 import logging
@@ -35,7 +34,7 @@ DATA_DIR = ROOT / "data"
 DEBUG_DIR = DATA_DIR / "debug"
 CACHE_DIR = DATA_DIR / "cache"
 IMAGE_CACHE_DIR = CACHE_DIR / "images"
-OCR_CACHE_FILE = CACHE_DIR / "ocr_smart_v2.json"
+OCR_CACHE_FILE = CACHE_DIR / "ocr_smart_v3.json"
 
 LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
@@ -74,7 +73,7 @@ except Exception:
     APP_TIMEZONE_NAME = "UTC"
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("gold-smart-v2")
+logger = logging.getLogger("gold-smart-v3")
 
 SESSION = requests.Session()
 retry = Retry(
@@ -290,7 +289,7 @@ def extraction_result_from_cache_entry(entry: dict) -> ExtractionResult:
         confidence=float(data["confidence"]),
         raw_ocr=data.get("raw_ocr", ""),
         raw_ocr_preview=data.get("raw_ocr_preview", ""),
-        extraction_method=data.get("extraction_method", "smart_full_ocr_v2"),
+        extraction_method=data.get("extraction_method", "smart_full_ocr_v3"),
         ocr_engine=data.get("ocr_engine", "unknown"),
         warnings=list(data.get("warnings") or []),
         debug=debug,
@@ -393,7 +392,7 @@ def cv_gray_to_pil(gray: np.ndarray) -> Image.Image:
 def preprocess_soft(img: Image.Image, upscale: int = 2) -> Image.Image:
     gray = ImageOps.grayscale(img)
     gray = ImageOps.autocontrast(gray, cutoff=2)
-    gray = gray.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+    gray = gray.filter(ImageFilter.UnsharpMask(radius=2, percent=160, threshold=3))
     gray = gray.filter(ImageFilter.MedianFilter(size=3))
     if upscale > 1:
         gray = gray.resize((gray.width * upscale, gray.height * upscale))
@@ -579,7 +578,9 @@ def parse_time_safely(text: str) -> str:
     text = text.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
     m = re.search(r"(\d{1,2})[:](\d{2})", text)
     if not m:
-        return "00:00"
+        m = re.search(r"(\d{1,2})(\d{2})", text)
+        if not m:
+            return "00:00"
     hour = int(m.group(1))
     minute = int(m.group(2))
     is_pm = "م" in text or "pm" in text.lower()
@@ -599,6 +600,19 @@ def extract_day_safely(text: str) -> str:
     for day in day_names:
         if day in text:
             return day
+    aliases = {
+        "سبت": "السبت",
+        "خميس": "الخميس",
+        "جمعه": "الجمعة",
+        "جمعة": "الجمعة",
+        "احد": "الاحد",
+        "اثنين": "الاثنين",
+        "ثلاثاء": "الثلاثاء",
+        "اربعاء": "الاربعاء",
+    }
+    for k, v in aliases.items():
+        if k in text:
+            return v
     return ""
 
 
@@ -611,54 +625,79 @@ def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Im
     return img.crop((px1, py1, px2, py2))
 
 
-def extract_header(img: Image.Image):
-    w, h = img.size
-    header = crop_box(img, 0.0, 0.31, 1.0, 0.50)
-    variants = [preprocess_soft(header, 2), preprocess_binary(header, 145, 2), preprocess_adaptive(header, 2), preprocess_contrast(header, 2)]
+def _header_text_candidates(img: Image.Image, box: tuple[float, float, float, float], psm: int, whitelist: Optional[str] = None):
+    crop = crop_box(img, *box)
+    variants = [
+        preprocess_soft(crop, 3),
+        preprocess_binary(crop, 145, 3),
+        preprocess_adaptive(crop, 3),
+        preprocess_contrast(crop, 3),
+    ]
     texts = []
     for variant in variants:
-        t1, _ = tesseract_text(variant, psm=6)
-        if t1.strip():
-            texts.append(t1)
-        if _PADDLE_AVAILABLE:
+        txt, _ = tesseract_text(variant, psm=psm, whitelist=whitelist)
+        if txt.strip():
+            texts.append(txt)
+        if _PADDLE_AVAILABLE and whitelist is None:
             try:
-                t2, _ = paddle_text(variant)
-                if t2.strip():
-                    texts.append(t2)
+                ptxt, _ = paddle_text(variant)
+                if ptxt.strip():
+                    texts.append(ptxt)
             except Exception:
                 pass
-    combined = " | ".join(texts)
-    date = parse_date_safely(combined)
-    time = parse_time_safely(combined)
-    day = extract_day_safely(combined)
+    return texts
 
-    # extra time crop on far left, extra date/day crop on middle/right
-    if time == "00:00":
-        time_crop = crop_box(img, 0.00, 0.34, 0.28, 0.48)
-        texts2 = []
-        for variant in [preprocess_soft(time_crop, 3), preprocess_binary(time_crop, 145, 3), preprocess_adaptive(time_crop, 3)]:
-            txt, _ = tesseract_text(variant, psm=7, whitelist="0123456789:.;,مصAPMapm ")
-            if txt.strip():
-                texts2.append(txt)
-        time = parse_time_safely(" | ".join(texts2))
-    if date == "0000/00/00":
-        date_crop = crop_box(img, 0.22, 0.34, 0.71, 0.48)
-        texts2 = []
-        for variant in [preprocess_soft(date_crop, 3), preprocess_binary(date_crop, 145, 3), preprocess_adaptive(date_crop, 3)]:
-            txt, _ = tesseract_text(variant, psm=7, whitelist="0123456789/.-")
-            if txt.strip():
-                texts2.append(txt)
-        date = parse_date_safely(" | ".join(texts2))
-    if not day:
-        day_crop = crop_box(img, 0.68, 0.34, 1.00, 0.48)
-        texts2 = []
-        for variant in [preprocess_soft(day_crop, 3), preprocess_adaptive(day_crop, 3)]:
-            txt, _ = tesseract_text(variant, psm=7)
-            if txt.strip():
-                texts2.append(txt)
-        day = extract_day_safely(" | ".join(texts2))
 
-    return date, time, day, {"header_combined_text": combined}
+def extract_header(img: Image.Image):
+    general_texts = _header_text_candidates(img, (0.0, 0.32, 1.0, 0.50), psm=6)
+    date_texts = _header_text_candidates(img, (0.22, 0.34, 0.70, 0.48), psm=7, whitelist="0123456789/.-")
+    time_texts = _header_text_candidates(img, (0.00, 0.34, 0.30, 0.48), psm=7, whitelist="0123456789:.;,مصAPMapm ")
+    day_texts = _header_text_candidates(img, (0.68, 0.34, 1.00, 0.48), psm=7)
+
+    general_combined = " | ".join(general_texts)
+    date_combined = " | ".join(date_texts + general_texts)
+    time_combined = " | ".join(time_texts + general_texts)
+    day_combined = " | ".join(day_texts + general_texts)
+
+    # Prefer explicit region parsing over general header parsing.
+    date = parse_date_safely(date_combined)
+    time = parse_time_safely(time_combined)
+    day = extract_day_safely(day_combined)
+
+    # Choose most likely time candidate near header text if multiple patterns exist.
+    time_candidates = []
+    for txt in time_texts + general_texts:
+        norm = normalize_digits(txt)
+        for m in re.finditer(r"(\d{1,2})[:](\d{2})", norm):
+            hh = int(m.group(1))
+            mm = int(m.group(2))
+            if 0 <= hh <= 12 and 0 <= mm <= 59:
+                score = 2.0
+                if "ص" in norm or "am" in norm.lower():
+                    score += 1.0
+                if "م" in norm or "pm" in norm.lower():
+                    score += 0.7
+                time_candidates.append((score, f"{hh:02d}:{mm:02d}", txt))
+        for m in re.finditer(r"(\d{1,2})(\d{2})", norm):
+            hh = int(m.group(1))
+            mm = int(m.group(2))
+            if 0 <= hh <= 12 and 0 <= mm <= 59:
+                score = 0.5
+                if "ص" in norm or "am" in norm.lower():
+                    score += 0.6
+                time_candidates.append((score, f"{hh:02d}:{mm:02d}", txt))
+    if time_candidates:
+        time_candidates.sort(key=lambda x: x[0], reverse=True)
+        best_time = time_candidates[0][1]
+        if best_time != "00:00":
+            time = best_time
+
+    return date, time, day, {
+        "header_general_text": general_combined,
+        "date_region_text": " | ".join(date_texts),
+        "time_region_text": " | ".join(time_texts),
+        "day_region_text": " | ".join(day_texts),
+    }
 
 
 def parse_numeric_token(text: str) -> Optional[float]:
@@ -674,61 +713,60 @@ def parse_numeric_token(text: str) -> Optional[float]:
 
 
 def collect_number_tokens(img: Image.Image):
+    # Focus mostly on table area to reduce header/footer noise.
+    table = crop_box(img, 0.00, 0.50, 0.78, 0.84)
     variants = [
-        ("soft", preprocess_soft(img, 2)),
-        ("binary", preprocess_binary(img, 145, 2)),
-        ("adaptive", preprocess_adaptive(img, 2)),
-        ("contrast", preprocess_contrast(img, 2)),
+        ("soft", preprocess_soft(table, 2)),
+        ("binary", preprocess_binary(table, 145, 2)),
+        ("adaptive", preprocess_adaptive(table, 2)),
+        ("contrast", preprocess_contrast(table, 2)),
     ]
     out: list[NumberToken] = []
     seen = set()
 
     for mode, variant in variants:
-        # Tesseract tokens
         for tok in tesseract_tokens(variant, psm=6):
             val = parse_numeric_token(tok["text"])
             if val is None:
                 continue
-            key = (round(val, 2), round(tok["x"], 3), round(tok["y"], 3))
+            # map back into full-image normalized coordinates
+            x = 0.00 + tok["x"] * 0.78
+            y = 0.50 + tok["y"] * 0.34
+            w = tok["w"] * 0.78
+            h = tok["h"] * 0.34
+            key = (round(val, 2), round(x, 3), round(y, 3))
             if key in seen:
                 continue
             seen.add(key)
-            out.append(NumberToken(
-                value=val,
-                text=tok["text"],
-                x=tok["x"], y=tok["y"], w=tok["w"], h=tok["h"],
-                engine=f"tesseract:{mode}",
-                confidence=float(tok["conf"]),
-            ))
-        # Paddle tokens
+            out.append(NumberToken(value=val, text=tok["text"], x=x, y=y, w=w, h=h, engine=f"tesseract:{mode}", confidence=float(tok["conf"])))
         if _PADDLE_AVAILABLE:
             for tok in paddle_tokens(variant):
                 val = parse_numeric_token(tok["text"])
                 if val is None:
                     continue
-                key = (round(val, 2), round(tok["x"], 3), round(tok["y"], 3))
+                x = 0.00 + tok["x"] * 0.78
+                y = 0.50 + tok["y"] * 0.34
+                w = tok["w"] * 0.78
+                h = tok["h"] * 0.34
+                key = (round(val, 2), round(x, 3), round(y, 3))
                 if key in seen:
                     continue
                 seen.add(key)
-                out.append(NumberToken(
-                    value=val,
-                    text=tok["text"],
-                    x=tok["x"], y=tok["y"], w=tok["w"], h=tok["h"],
-                    engine=f"paddle:{mode}",
-                    confidence=float(tok["conf"]),
-                ))
+                out.append(NumberToken(value=val, text=tok["text"], x=x, y=y, w=w, h=h, engine=f"paddle:{mode}", confidence=float(tok["conf"])))
     return out
 
 
-def cluster_rows(tokens: list[NumberToken], y_gap: float = 0.05):
+def cluster_rows(tokens: list[NumberToken], y_gap: float = 0.055):
     tokens = sorted(tokens, key=lambda t: t.y)
     rows: list[list[NumberToken]] = []
     for tok in tokens:
+        if tok.y < 0.52 or tok.y > 0.82:
+            continue
         if not rows:
             rows.append([tok])
             continue
         current_y = sum(t.y for t in rows[-1]) / len(rows[-1])
-        if abs(tok.y - current_y) <= max(y_gap, tok.h * 1.2):
+        if abs(tok.y - current_y) <= max(y_gap, tok.h * 1.3):
             rows[-1].append(tok)
         else:
             rows.append([tok])
@@ -740,7 +778,7 @@ def dedupe_row_tokens(row: list[NumberToken]):
     out = []
     for tok in row:
         keep = True
-        for prev in out:
+        for prev in out[:]:
             if abs(tok.value - prev.value) < 0.011 and abs(tok.x - prev.x) < 0.04:
                 keep = False
                 if tok.confidence > prev.confidence:
@@ -761,19 +799,50 @@ def classify_row(row: list[NumberToken]) -> dict:
     return {"tokens": row, "usd": usd, "syp": syp, "karat": karat, "score": score}
 
 
-def row_to_rate(row_info: dict) -> Optional[GoldRate]:
-    usd = sorted(row_info["usd"], key=lambda t: t.x)
-    syp = sorted(row_info["syp"], key=lambda t: t.x)
-    if len(usd) < 2 or len(syp) < 2:
+def pick_best_pair(tokens: list[NumberToken], kind: str):
+    if len(tokens) < 2:
         return None
+    best_pair = None
+    best_score = -1e9
+    for i in range(len(tokens)):
+        for j in range(i + 1, len(tokens)):
+            a = tokens[i]
+            b = tokens[j]
+            low, high = (a, b) if a.value <= b.value else (b, a)
+            diff = high.value - low.value
+            # Strongly prefer realistic spread and left-to-right proximity.
+            if diff <= 0:
+                continue
+            if kind == "usd":
+                if diff > 10:
+                    continue
+                score = 30.0 - diff * 3.0
+            else:
+                if diff > 1200:
+                    continue
+                score = 25.0 - (diff / 120.0)
+            score -= abs(a.x - b.x) * 8.0
+            score += (a.confidence + b.confidence) / 100.0
+            # Prefer pairs that are in expected left-to-right order and near their expected half.
+            if kind == "usd":
+                score += 3.0 if max(a.x, b.x) < 0.36 else -2.0
+            else:
+                score += 3.0 if min(a.x, b.x) > 0.32 else -2.0
+            if score > best_score:
+                best_score = score
+                best_pair = (low, high)
+    return best_pair
 
-    # left-to-right on this poster: USD buy, USD sell, SYP buy, SYP sell
-    ub = float(usd[0].value)
-    us = float(usd[1].value)
-    sb = int(round(syp[0].value))
-    ss = int(round(syp[1].value))
 
-    # sanitize buy/sell inversion
+def row_to_rate(row_info: dict) -> Optional[GoldRate]:
+    usd_pair = pick_best_pair(sorted(row_info["usd"], key=lambda t: t.x), kind="usd")
+    syp_pair = pick_best_pair(sorted(row_info["syp"], key=lambda t: t.x), kind="syp")
+    if not usd_pair or not syp_pair:
+        return None
+    ub = float(usd_pair[0].value)
+    us = float(usd_pair[1].value)
+    sb = int(round(syp_pair[0].value))
+    ss = int(round(syp_pair[1].value))
     if us < ub:
         ub, us = us, ub
     if ss < sb:
@@ -824,8 +893,14 @@ def pick_best_two_rows(rows_info: list[dict]):
     if len(valid_rows) < 2:
         return None, None, ["not_enough_valid_rows"]
 
-    # favor rows lower in image, closer to table area, and with 18/21 or strong number density
-    valid_rows.sort(key=lambda r: (r["score"], sum(t.confidence for t in r["tokens"]) / max(len(r["tokens"]), 1), -abs(np.mean([t.y for t in r["tokens"]]) - 0.66)), reverse=True)
+    valid_rows.sort(
+        key=lambda r: (
+            r["score"],
+            sum(t.confidence for t in r["tokens"]) / max(len(r["tokens"]), 1),
+            -abs((sum(t.y for t in r["tokens"]) / max(len(r["tokens"]), 1)) - 0.66),
+        ),
+        reverse=True,
+    )
     best_pair = None
     best_score = -1e9
     best_warnings = []
@@ -872,14 +947,16 @@ def full_image_text_variants(img: Image.Image):
     return out
 
 
-def compute_confidence(date: str, time: str, rows_info: list[dict], rel_ok: bool, warnings: list[str]):
+def compute_confidence(date: str, time: str, day: str, rows_info: list[dict], rel_ok: bool, warnings: list[str]):
     score = 0.35
     if date != "0000/00/00":
-        score += 0.12
+        score += 0.14
     if time != "00:00":
-        score += 0.12
+        score += 0.14
+    if day:
+        score += 0.05
     valid_rows = sum(1 for r in rows_info if len(r["usd"]) >= 2 and len(r["syp"]) >= 2)
-    score += min(valid_rows, 2) * 0.14
+    score += min(valid_rows, 2) * 0.12
     if rel_ok:
         score += 0.18
     score -= min(len(warnings) * 0.03, 0.20)
@@ -953,7 +1030,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         )
 
     image_hash = sha256_bytes(image_bytes)
-    cache_key = f"{image_hash}:smart_v2:{int(_PADDLE_AVAILABLE)}"
+    cache_key = f"{image_hash}:smart_v3:{int(_PADDLE_AVAILABLE)}"
     if CACHE_ENABLED:
         cache = load_ocr_cache()
         entry = cache.get(cache_key)
@@ -997,7 +1074,6 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
 
     k21, k18, rel_warnings = pick_best_two_rows(rows_info)
     if k21 is None or k18 is None:
-        full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
         raise ValueError("Smart parser could not isolate two valid pricing rows")
 
     rel_ok, rel_warns_2 = relationship_ok(k21, k18)
@@ -1005,7 +1081,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
     warnings.extend(rel_warns_2)
 
     full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
-    confidence = compute_confidence(date, time, rows_info, rel_ok, warnings)
+    confidence = compute_confidence(date, time, day, rows_info, rel_ok, warnings)
 
     result = ExtractionResult(
         date=date,
@@ -1015,8 +1091,8 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         k18=k18,
         confidence=confidence,
         raw_ocr=full_text,
-        raw_ocr_preview=normalize_text(full_text[:240]),
-        extraction_method="smart_full_ocr_v2",
+        raw_ocr_preview=normalize_text(full_text[:260]),
+        extraction_method="smart_full_ocr_v3",
         ocr_engine="paddle+tesseract" if _PADDLE_AVAILABLE else "tesseract",
         warnings=warnings,
         debug=debug,
@@ -1074,15 +1150,15 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Smart Parser V2", version="2.0.0")
+app = FastAPI(title="Gold OCR Smart Parser V3", version="3.0.0")
 
 
 @app.get("/health")
 def health():
     return {
         "ok": True,
-        "service": "gold-ocr-smart-v2",
-        "version": "2.0.0",
+        "service": "gold-ocr-smart-v3",
+        "version": "3.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
@@ -1106,7 +1182,7 @@ def extract(payload: ExtractRequest):
             k18_ss=result.k18.ss,
             k18_sb=result.k18.sb,
             k18_us=round(float(result.k18.us), 2),
-            k18_ub=round(float(result.k18.ub), 2),
+            k18_ub=result.k18.ub,
             confidence=result.confidence,
             extraction_method=result.extraction_method,
             ocr_engine=result.ocr_engine,
