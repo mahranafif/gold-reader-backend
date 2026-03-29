@@ -668,6 +668,31 @@ def extract_day_safely(text: str) -> str:
     return ""
 
 
+def infer_date_from_day(day_name: str, reference_dt: Optional[datetime] = None) -> str:
+    if not day_name:
+        return "0000/00/00"
+    day_map = {
+        "الاثنين": 0,
+        "الثلاثاء": 1,
+        "الاربعاء": 2,
+        "الخميس": 3,
+        "الجمعة": 4,
+        "السبت": 5,
+        "الاحد": 6,
+    }
+    target = day_map.get(day_name)
+    if target is None:
+        return "0000/00/00"
+    ref = (reference_dt or datetime.now(APP_TIMEZONE)).astimezone(APP_TIMEZONE).date()
+    # choose the most recent occurrence of that weekday, including today
+    delta = (ref.weekday() - target) % 7
+    inferred = ref - timedelta(days=delta)
+    # do not allow inferred dates older than 30 days
+    if (ref - inferred).days > 30:
+        return "0000/00/00"
+    return inferred.strftime("%Y/%m/%d")
+
+
 def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
     w, h = img.size
     px1 = max(0, min(w - 1, int(round(w * x1))))
@@ -751,11 +776,16 @@ def extract_header(img: Image.Image):
     if not day:
         day = extract_day_safely(full_text)
 
+    # New fallback strategy: infer the most recent matching weekday when OCR date fails.
+    if date == "0000/00/00" and day:
+        date = infer_date_from_day(day)
+
     return date, time, day, {
         "header_general_text": general_combined,
         "date_region_text": " | ".join(date_texts),
         "time_region_text": " | ".join(time_texts),
         "day_region_text": " | ".join(day_texts),
+        "date_inferred_from_day": bool(day and date != "0000/00/00" and not _extract_date_candidates(date_combined)),
     }
 
 
