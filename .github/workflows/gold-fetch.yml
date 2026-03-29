@@ -2,7 +2,7 @@ name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
-    - cron: "*/59 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,199 +15,142 @@ concurrency:
 jobs:
   fetch-gold:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 12
 
     env:
+      # =============================
+      # Core App Config
+      # =============================
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
       APP_MODE: cli
       APP_TIMEZONE: Asia/Dubai
       LOG_LEVEL: INFO
       REQUEST_TIMEOUT: "35"
+
+      # =============================
+      # OCR Config
+      # =============================
       GOLD_OCR_MODE: prefer_blueprint
       GOLD_DEBUG_EXPORT: "true"
 
+      # STRICT QUALITY (important)
+      GOLD_MIN_SOURCE_WIDTH: "750"
+      GOLD_MIN_SOURCE_HEIGHT: "750"
+
+      # =============================
+      # CACHE (disabled for accuracy)
+      # =============================
       GOLD_CACHE_ENABLED: "false"
       GOLD_IMAGE_CACHE_ENABLED: "false"
       GOLD_OCR_CACHE_MAX_ENTRIES: "0"
       GOLD_IMAGE_CACHE_MAX_ENTRIES: "0"
       GOLD_IMAGE_CACHE_TTL_HOURS: "0"
-      GOLD_MIN_SOURCE_WIDTH: "750"
-      GOLD_MIN_SOURCE_HEIGHT: "750"
 
+      # =============================
+      # Facebook Scraper (FINAL)
+      # =============================
       FACEBOOK_HEADLESS: "true"
       FACEBOOK_PAGE_URL: "https://m.facebook.com/profile.php?id=61575835207125"
       FACEBOOK_URL_MODE: "mobile"
+
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
+
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "4"
-      FACEBOOK_SCROLL_DELAY_MS: "1600"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "6"
-      FACEBOOK_MAX_CANDIDATES_PER_POST: "4"
-      FACEBOOK_MAX_POST_GROUPS: "2"
-      FACEBOOK_MAX_POSTS_TO_SCAN: "2"
+
+      # 🔥 NEW SIMPLE SCRAPER CONFIG
+      FACEBOOK_MAX_IMAGE_POLLS: "8"
+      FACEBOOK_SCRAPE_POLL_DELAY_MS: "1200"
+      FACEBOOK_INITIAL_SCRAPE_DELAY_MS: "1500"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "12"
+
+      # Discovery thresholds (low)
       FACEBOOK_MIN_CANDIDATE_WIDTH: "250"
       FACEBOOK_MIN_CANDIDATE_HEIGHT: "250"
-      FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "400"
-      FACEBOOK_PREFERRED_CANDIDATE_HEIGHT: "400"
-      FACEBOOK_HIGH_RES_WIDTH: "900"
-      FACEBOOK_HIGH_RES_HEIGHT: "900"
+
+      # Preferred (used in scoring)
+      FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "780"
+      FACEBOOK_PREFERRED_CANDIDATE_HEIGHT: "780"
+
       FACEBOOK_FAST_RESOURCE_BLOCKING: "true"
       FACEBOOK_SAVE_DEBUG_SCREENSHOT: "true"
 
-      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
-      DISABLE_PADDLE: "false"
-
+      # =============================
+      # ML Config
+      # =============================
       CNN_POSTER_MIN_CONFIDENCE: "0.75"
       CNN_POSTER_MIN_MARGIN: "0.20"
       CNN_LAYOUT_MIN_CONFIDENCE: "0.50"
 
+      # =============================
+      # Python Runtime
+      # =============================
       PYTHONUNBUFFERED: "1"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_PYTHON_VERSION_WARNING: "1"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # Paddle fix
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
 
-      - name: Set up Python
+    steps:
+      # =============================
+      # Checkout
+      # =============================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # =============================
+      # Setup Python
+      # =============================
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-chromium-v1
-
-      - name: Cache PaddleOCR models
-        uses: actions/cache@v4
-        with:
-          path: ~/.paddleocr
-          key: ${{ runner.os }}-paddleocr-v1
-
-      - name: Install system dependencies
+      # =============================
+      # Install Dependencies
+      # =============================
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            tesseract-ocr \
-            tesseract-ocr-ara \
-            libglib2.0-0 \
-            libnss3 \
-            libnspr4 \
-            libdbus-1-3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libdrm2 \
-            libxcb1 \
-            libxkbcommon0 \
-            libatspi2.0-0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libasound2t64 || sudo apt-get install -y libasound2
-
-      - name: Install Python packages
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
+          pip install --upgrade pip
           pip install -r requirements.txt
-          pip install torch torchvision pillow
+          pip install playwright
+          playwright install chromium
 
-      - name: Install Playwright Chromium
-        run: python -m playwright install chromium
-
-      - name: Ensure data directories exist
-        run: |
-          mkdir -p data
-          mkdir -p data/debug
-          mkdir -p data/cache/images
-          mkdir -p models
-
-      - name: Clear stale cache and outputs
-        run: |
-          rm -rf data/cache || true
-          rm -f data/latest.json data/facebook_ocr_failures.json || true
-          mkdir -p data/cache/images
-
-      - name: Verify CNN model files
-        run: |
-          echo "Checking model files..."
-          ls -lah models || true
-          test -f models/gold_poster_classifier.pt || (echo "Missing models/gold_poster_classifier.pt" && exit 1)
-          test -f models/gold_layout_classifier.pt || (echo "Missing models/gold_layout_classifier.pt" && exit 1)
-
-      - name: Scrape public Facebook image
+      # =============================
+      # Run Scraper (HI-RES)
+      # =============================
+      - name: Fetch Facebook Image (Hi-Res Scraper)
         run: python scripts/fetch_facebook_public_image.py
 
-      - name: Show scraper output
-        if: always()
-        run: |
-          echo "facebook_latest_image.json:"
-          cat data/facebook_latest_image.json || true
-
-      - name: Show blueprint
-        if: always()
-        run: |
-          echo "blueprint.json:"
-          cat data/blueprint.json || true
-
-      - name: Run gold OCR using scraped image candidates
+      # =============================
+      # Run OCR Pipeline (OCR-FIRST)
+      # =============================
+      - name: Run OCR From Facebook JSON
         run: python scripts/run_gold_from_facebook_json.py
 
-      - name: Show OCR output
-        if: always()
+      # =============================
+      # Debug Output
+      # =============================
+      - name: Show latest.json
         run: |
           echo "latest.json:"
           cat data/latest.json || true
+
+      - name: Show failures
+        run: |
           echo "facebook_ocr_failures.json:"
           cat data/facebook_ocr_failures.json || true
 
-      - name: Verify latest.json path
-        if: always()
+      # =============================
+      # Commit Results
+      # =============================
+      - name: Commit results
         run: |
-          echo "PWD=$(pwd)"
-          find . -name "latest.json" -type f || true
-          
-      - name: Upload debug artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gold-ocr-debug
-          path: |
-            data/facebook_latest_image.json
-            data/facebook_page_debug.png
-            data/login_wall.png
-            data/facebook_ocr_failures.json
-            data/latest.json
-            data/history.json
-            data/debug
-          if-no-files-found: ignore
-          retention-days: 7
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
 
-      - name: Commit updated data files
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest.json data/history.json data/facebook_ocr_failures.json || true
 
-          git add -A data
-
-          echo "---- Git Status ----"
-          git status
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git commit -m "Update gold OCR snapshot"
-          git pull --rebase origin "${GITHUB_REF_NAME}" || true
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git diff --cached --quiet || git commit -m "Update gold OCR data [skip ci]"
+          git push
