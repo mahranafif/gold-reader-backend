@@ -1,263 +1,492 @@
-
+import asyncio
 import json
 import os
-import subprocess
-import sys
+from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from PIL import Image
-
-from cnn_classifiers import GoldLayoutClassifier, GoldPosterClassifier
+from playwright.async_api import BrowserContext, Page, Route, async_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-FACEBOOK_JSON = DATA_DIR / "facebook_latest_image.json"
-FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
-BLUEPRINT_FILE = ROOT / "data" / "blueprint.json"
-FAILURES_FILE = ROOT / "data" / "facebook_ocr_failures.json"
-LATEST_FILE = ROOT / "data" / "latest.json"
 
-POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
-LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
+FACEBOOK_PAGE_URL = os.getenv("FACEBOOK_PAGE_URL", "https://m.facebook.com/profile.php?id=61575835207125").strip()
+FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
+HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+OUTPUT_FILE = Path(os.getenv("FACEBOOK_OUTPUT_JSON", "data/facebook_latest_image.json"))
+SCREENSHOT_FILE = Path(os.getenv("FACEBOOK_SCREENSHOT_FILE", "data/facebook_page_debug.png"))
+
+REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
+MAX_IMAGE_POLLS = int(os.getenv("FACEBOOK_MAX_IMAGE_POLLS", "8"))
+SCRAPE_POLL_DELAY_MS = int(os.getenv("FACEBOOK_SCRAPE_POLL_DELAY_MS", "1200"))
+INITIAL_SCRAPE_DELAY_MS = int(os.getenv("FACEBOOK_INITIAL_SCRAPE_DELAY_MS", "1500"))
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "12"))
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
-CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
-CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
-CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
-MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "750"))
-MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "750"))
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+MIN_DISCOVERY_WIDTH = int(os.getenv("FACEBOOK_MIN_CANDIDATE_WIDTH", "250"))
+MIN_DISCOVERY_HEIGHT = int(os.getenv("FACEBOOK_MIN_CANDIDATE_HEIGHT", "250"))
+PREFERRED_WIDTH = int(os.getenv("FACEBOOK_PREFERRED_CANDIDATE_WIDTH", "780"))
+PREFERRED_HEIGHT = int(os.getenv("FACEBOOK_PREFERRED_CANDIDATE_HEIGHT", "780"))
+
+MIN_VERIFIED_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "750"))
+MIN_VERIFIED_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "750"))
+
+SAVE_DEBUG_SCREENSHOT = os.getenv("FACEBOOK_SAVE_DEBUG_SCREENSHOT", "true").strip().lower() in {"1", "true", "yes", "on"}
+FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+MAX_VERIFY_PROBES = int(os.getenv("FACEBOOK_MAX_VERIFY_PROBES", "12"))
+VERIFY_TIMEOUT_SECONDS = int(os.getenv("FACEBOOK_VERIFY_TIMEOUT_SECONDS", "20"))
+
+DOWNLOAD_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
     "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+    "Referer": "https://www.facebook.com/",
+    "Origin": "https://www.facebook.com",
 }
 
 
-def normalize_fb_image_url(url: str) -> str:
-    return (url or "").strip()
+@dataclass
+class ImageCandidate:
+    src: str
+    width: int
+    height: int
+    score: float
+    source_kind: str = "img"
+    verified: bool = False
+    declared_width: int = 0
+    declared_height: int = 0
 
 
-def save_failures(failures):
-    FAILURES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    FAILURES_FILE.write_text(json.dumps(failures, ensure_ascii=False, indent=2), encoding="utf-8")
+def build_url_candidates(url: str, mode: str) -> list[str]:
+    parsed = urlparse(url.strip())
+    if "facebook.com" not in parsed.netloc.lower():
+        return [url]
+    mobile = urlunparse(parsed._replace(netloc="m.facebook.com"))
+    desktop = urlunparse(parsed._replace(netloc="www.facebook.com"))
+    if mode == "desktop":
+        return [desktop, mobile]
+    if mode == "auto":
+        return [mobile, desktop]
+    return [mobile, desktop]
 
 
-def download_image_bytes(image_url: str) -> bytes:
-    local_path = Path(image_url)
-    if local_path.exists():
-        return local_path.read_bytes()
-    headers = dict(HEADERS)
-    headers["Referer"] = "https://www.facebook.com/"
-    headers["Origin"] = "https://www.facebook.com"
-    response = requests.get(image_url, headers=headers, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()
-    return response.content
+def preferred_context_mode_for_url(url: str, fallback_mode: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."):
+        return "desktop"
+    if host.startswith("m."):
+        return "mobile"
+    return "mobile" if fallback_mode == "auto" else fallback_mode
 
 
-def run_fetch_gold_with_url(image_url):
-    env = os.environ.copy()
-    local_path = Path(image_url)
-    if local_path.exists():
-        env["GOLD_SOURCE_FILE"] = str(local_path)
-        env.pop("GOLD_SOURCE_URL", None)
+def is_real_fb_image(src: str) -> bool:
+    lower = src.lower().strip()
+    if not lower:
+        return False
+    host = urlparse(lower).netloc
+    if "scontent" not in host and "fbcdn.net" not in host:
+        return False
+    blocked_parts = [
+        "profile", "emoji", "static", "/images/icons/", "fblogo_blueprint",
+        "safe_image.php", "lookaside", "/rsrc.php", "/v/t1.", "/v/t39.2365-6/",
+        "/v/t15.5256-10/",
+    ]
+    return not any(part in lower for part in blocked_parts)
+
+
+def url_quality_bonus(src: str) -> float:
+    lower = src.lower()
+    bonus = 0.0
+    if "s1024x1024" in lower:
+        bonus += 900000.0
+    elif "s960x960" in lower:
+        bonus += 750000.0
+    elif "s780x780" in lower:
+        bonus += 620000.0
+    elif "p780x980" in lower or "p780x780" in lower:
+        bonus += 420000.0
+    elif "p526x296" in lower or "s540x540" in lower or "p540x" in lower:
+        bonus -= 1200000.0
+    return bonus
+
+
+def score_candidate(src: str, width: int, height: int, source_kind: str) -> float:
+    area = width * height
+    aspect_ratio = width / height if height else 0.0
+    ratio_penalty = abs(aspect_ratio - 1.0) * 140000.0
+    preferred_bonus = 180000.0 if width >= PREFERRED_WIDTH and height >= PREFERRED_HEIGHT else 0.0
+    srcset_bonus = 120000.0 if source_kind == "srcset" else 0.0
+    upgrade_bonus = 180000.0 if source_kind == "url_upgrade" else 0.0
+    return float(area) - ratio_penalty + preferred_bonus + srcset_bonus + upgrade_bonus + url_quality_bonus(src)
+
+
+def upgraded_url_variants(src: str) -> list[tuple[str, int, int]]:
+    if not is_real_fb_image(src):
+        return []
+    parsed = urlparse(src)
+    qs = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    existing_stp = qs.get("stp", "")
+    desired = [
+        ("dst-jpg_s1024x1024_tt6", 1024, 1024),
+        ("dst-jpg_s960x960_tt6", 960, 960),
+        ("dst-jpg_s780x780_tt6", 780, 780),
+        ("dst-jpg_p780x980_tt6", 780, 980),
+        ("dst-webp_s780x780_tt1_u", 780, 780),
+    ]
+    variants: list[tuple[str, int, int]] = []
+    for stp, w, h in desired:
+        if existing_stp == stp:
+            continue
+        new_qs = dict(qs)
+        new_qs["stp"] = stp
+        upgraded = urlunparse(parsed._replace(query=urlencode(new_qs, doseq=True)))
+        variants.append((upgraded, w, h))
+    return variants
+
+
+def probe_real_image_size(url: str, timeout: int = VERIFY_TIMEOUT_SECONDS) -> tuple[int, int] | None:
+    try:
+        response = requests.get(url, headers=DOWNLOAD_HEADERS, timeout=timeout)
+        response.raise_for_status()
+        content_type = (response.headers.get("Content-Type") or "").lower()
+        if "image" not in content_type:
+            return None
+        img = Image.open(BytesIO(response.content))
+        return img.size
+    except Exception:
+        return None
+
+
+def promote_verified_candidates(candidates: list[ImageCandidate], max_probe: int = MAX_VERIFY_PROBES) -> list[ImageCandidate]:
+    verified: list[ImageCandidate] = []
+    for candidate in candidates[:max_probe]:
+        real_size = probe_real_image_size(candidate.src)
+        if not real_size:
+            continue
+        real_w, real_h = real_size
+        if real_w < MIN_VERIFIED_WIDTH or real_h < MIN_VERIFIED_HEIGHT:
+            continue
+        candidate.declared_width = candidate.width
+        candidate.declared_height = candidate.height
+        candidate.width = real_w
+        candidate.height = real_h
+        candidate.verified = True
+        candidate.score = score_candidate(candidate.src, real_w, real_h, candidate.source_kind)
+        verified.append(candidate)
+    verified.sort(key=lambda c: c.score, reverse=True)
+    return verified
+
+
+async def route_handler(route: Route) -> None:
+    if not FAST_RESOURCE_BLOCKING:
+        await route.continue_()
+        return
+    req = route.request
+    url = req.url.lower()
+    if req.resource_type in {"font", "media", "websocket"}:
+        await route.abort()
+        return
+    noisy = [
+        "doubleclick", "analytics", "googletagmanager", "google-analytics",
+        "/tr?", "facebook.com/tr/", "connect.facebook.net",
+    ]
+    if any(part in url for part in noisy):
+        await route.abort()
+        return
+    await route.continue_()
+
+
+async def setup_context(context: BrowserContext) -> None:
+    await context.route("**/*", route_handler)
+
+
+async def create_context(browser, mode: str) -> BrowserContext:
+    if mode == "desktop":
+        context = await browser.new_context(
+            user_agent=DOWNLOAD_HEADERS["User-Agent"],
+            viewport={"width": 1366, "height": 2200},
+            device_scale_factor=1,
+        )
     else:
-        env["GOLD_SOURCE_URL"] = image_url
-        env.pop("GOLD_SOURCE_FILE", None)
-    return subprocess.run([sys.executable, str(FETCH_GOLD_SCRIPT)], env=env, capture_output=True, text=True)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            viewport={"width": 390, "height": 844},
+            device_scale_factor=2,
+        )
+    await setup_context(context)
+    return context
 
 
-def maybe_switch_blueprint_for_layout(layout_label: str):
-    if not layout_label or not BLUEPRINT_FILE.exists():
-        return None
+async def visible_image_count(page: Page) -> int:
+    js = f"""
+    () => Array.from(document.images)
+      .filter((i) =>
+        (i.currentSrc || i.src || '') &&
+        (i.naturalWidth || 0) > {MIN_DISCOVERY_WIDTH} &&
+        (i.naturalHeight || 0) > {MIN_DISCOVERY_HEIGHT}
+      ).length
+    """
+    result = await page.evaluate(js)
     try:
-        blueprint = json.loads(BLUEPRINT_FILE.read_text(encoding="utf-8"))
+        return int(result or 0)
     except Exception:
-        return None
-    if not isinstance(blueprint, dict):
-        return None
-    blueprint["active_layout"] = layout_label
-    blueprint["layout_selected_by"] = "run_gold_from_facebook_json"
-    try:
-        BLUEPRINT_FILE.write_text(json.dumps(blueprint, ensure_ascii=False, indent=2), encoding="utf-8")
-        return layout_label
-    except Exception:
-        return None
+        return 0
 
 
-def evaluate_poster_classifier(poster_debug: dict):
-    label = str(poster_debug.get("label", "")).lower()
-    all_probs = poster_debug.get("all_probs", {}) or {}
-    gold_conf = float(all_probs.get("gold", poster_debug.get("confidence", 0.0)))
-    non_gold_conf = float(all_probs.get("non_gold", 0.0))
-    margin = gold_conf - non_gold_conf
-    accepted = ("gold" in label) and ("non" not in label) and gold_conf >= CNN_POSTER_MIN_CONFIDENCE and margin >= CNN_POSTER_MIN_MARGIN
-    return accepted, {
-        "label": label,
-        "gold_conf": gold_conf,
-        "non_gold_conf": non_gold_conf,
-        "margin": margin,
-        "threshold": CNN_POSTER_MIN_CONFIDENCE,
-        "min_margin": CNN_POSTER_MIN_MARGIN,
-        "accepted": accepted,
+async def detect_page_problem(page: Page):
+    js = f"""
+    () => {{
+      const text = (document.body && document.body.innerText ? document.body.innerText : '').toLowerCase();
+      const imageCount = Array.from(document.images).filter((i) =>
+        (i.currentSrc || i.src || '') &&
+        (i.naturalWidth || 0) > {MIN_DISCOVERY_WIDTH} &&
+        (i.naturalHeight || 0) > {MIN_DISCOVERY_HEIGHT}
+      ).length;
+
+      if (imageCount > 0) return '';
+
+      const hasEmailField = !!document.querySelector('input[name="email"]');
+      const hasPassField = !!document.querySelector('input[name="pass"]');
+      const hasLoginForm = !!document.querySelector('form[action*="login"]');
+
+      if (hasEmailField && hasPassField && hasLoginForm) return 'login_required';
+      if (text.includes('you must log in') || text.includes('please log in to continue')) return 'login_wall';
+      if (text.includes('temporarily blocked') || text.includes('try again later') || text.includes('unusual activity')) return 'blocked_or_rate_limited';
+      if (text.includes("content isn’t available") || text.includes("content isn't available") || text.includes("this page isn’t available") || text.includes("this page isn't available")) return 'content_unavailable';
+      return '';
+    }}
+    """
+    value = str(await page.evaluate(js) or "").strip()
+    return value or None
+
+
+async def scrape_images(page: Page) -> list[ImageCandidate]:
+    js = """
+    () => {
+      function parseSrcset(srcset) {
+        const out = [];
+        for (const part of (srcset || '').split(',')) {
+          const item = part.trim();
+          if (!item) continue;
+          const pieces = item.split(/\s+/);
+          const url = pieces[0] || '';
+          let width = 0;
+          for (const p of pieces.slice(1)) {
+            if (p.endsWith('w')) {
+              const n = parseInt(p.slice(0, -1), 10);
+              if (!isNaN(n)) width = n;
+            }
+          }
+          if (url) out.push({ url, width });
+        }
+        return out;
+      }
+
+      return Array.from(document.images).map((i) => ({
+        currentSrc: i.currentSrc || '',
+        src: i.src || '',
+        w: i.naturalWidth || 0,
+        h: i.naturalHeight || 0,
+        srcset: parseSrcset(i.getAttribute('srcset') || ''),
+      }));
     }
+    """
+    raw = await page.evaluate(js)
 
-
-def load_latest_result() -> dict:
-    if not LATEST_FILE.exists():
-        return {}
-    try:
-        data = json.loads(LATEST_FILE.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def build_candidates(payload: dict):
-    out = []
-    for item in payload.get("candidates") or []:
-        src = normalize_fb_image_url(str(item.get("src") or "").strip())
-        if not src:
-            continue
-        out.append({
-            "src": src,
-            "width": int(item.get("width") or 0),
-            "height": int(item.get("height") or 0),
-            "score": float(item.get("score") or 0.0),
-            "source_kind": str(item.get("source_kind") or ""),
-        })
     seen = set()
-    deduped = []
-    for item in out:
-        if item["src"] in seen:
-            continue
-        seen.add(item["src"])
-        deduped.append(item)
-    deduped.sort(key=lambda x: x["score"], reverse=True)
-    return deduped[:MAX_CANDIDATES_TO_TRY]
+    cleaned: list[ImageCandidate] = []
+
+    def add_candidate(src: str, width: int, height: int, source_kind: str):
+        src = (src or "").strip()
+        if not src or src in seen:
+            return
+        if width < MIN_DISCOVERY_WIDTH or height < MIN_DISCOVERY_HEIGHT:
+            return
+        if not is_real_fb_image(src):
+            return
+        seen.add(src)
+        cleaned.append(
+            ImageCandidate(
+                src=src,
+                width=width,
+                height=height,
+                declared_width=width,
+                declared_height=height,
+                verified=False,
+                score=score_candidate(src, width, height, source_kind),
+                source_kind=source_kind,
+            )
+        )
+
+    if isinstance(raw, list):
+        for item in raw:
+            width = int(item.get("w") or 0)
+            height = int(item.get("h") or 0)
+            current_src = str(item.get("currentSrc") or "").strip()
+            src = str(item.get("src") or "").strip()
+
+            add_candidate(current_src, width, height, "currentSrc")
+            add_candidate(src, width, height, "src")
+
+            for entry in sorted(item.get("srcset") or [], key=lambda x: int(x.get("width") or 0), reverse=True):
+                srcset_url = str(entry.get("url") or "").strip()
+                declared_width = int(entry.get("width") or 0)
+                approx_w = max(width, declared_width) if declared_width > 0 else width
+                approx_h = height
+                if approx_w > 0 and height > 0 and width > 0:
+                    approx_h = max(int(height * (approx_w / max(width, 1))), height)
+                add_candidate(srcset_url, approx_w, approx_h, "srcset")
+
+            for base_src in [current_src, src]:
+                for upgraded_url, up_w, up_h in upgraded_url_variants(base_src):
+                    add_candidate(upgraded_url, up_w, up_h, "url_upgrade")
+
+    cleaned.sort(key=lambda c: c.score, reverse=True)
+    return cleaned[:MAX_CANDIDATES_TO_TRY]
+
+
+async def wait_for_stable_images_and_scrape(page: Page):
+    previous_count = None
+    stable_hits = 0
+    for _ in range(MAX_IMAGE_POLLS):
+        problem = await detect_page_problem(page)
+        if problem is not None:
+            return [], problem
+        await page.evaluate("window.scrollBy(0, Math.max(800, window.innerHeight * 0.8));")
+        await page.wait_for_timeout(SCRAPE_POLL_DELAY_MS)
+        count = await visible_image_count(page)
+        if previous_count is not None and count == previous_count and count > 0:
+            stable_hits += 1
+        else:
+            stable_hits = 0
+        previous_count = count
+        if stable_hits >= 2:
+            break
+
+    problem = await detect_page_problem(page)
+    if problem is not None:
+        return [], problem
+
+    raw_candidates = await scrape_images(page)
+    verified_candidates = promote_verified_candidates(raw_candidates, max_probe=MAX_VERIFY_PROBES)
+    return (verified_candidates or raw_candidates), None
+
+
+async def try_scrape_single_url(browser, url: str, default_mode: str):
+    context_mode = preferred_context_mode_for_url(url, default_mode)
+    context = await create_context(browser, context_mode)
+    page = await context.new_page()
+    page.set_default_timeout(REQUEST_TIMEOUT_MS)
+
+    try:
+        await page.goto(url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(INITIAL_SCRAPE_DELAY_MS)
+
+        candidates, diag = await wait_for_stable_images_and_scrape(page)
+
+        if SAVE_DEBUG_SCREENSHOT:
+            SCREENSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+            await page.screenshot(path=str(SCREENSHOT_FILE), full_page=True)
+
+        if candidates:
+            top = candidates[0]
+            return {
+                "ok": True,
+                "page_url": page.url,
+                "context_mode": context_mode,
+                "message": "Success",
+                "selected_image_url": top.src,
+                "selected_width": top.width,
+                "selected_height": top.height,
+                "selected_image_file": "",
+                "candidates": [asdict(c) for c in candidates],
+            }
+
+        return {
+            "ok": False,
+            "page_url": page.url,
+            "context_mode": context_mode,
+            "message": diag or "no_usable_images",
+            "selected_image_url": "",
+            "selected_width": 0,
+            "selected_height": 0,
+            "selected_image_file": "",
+            "candidates": [],
+        }
+    finally:
+        await context.close()
+
+
+async def scrape_public_facebook_image():
+    url_candidates = build_url_candidates(FACEBOOK_PAGE_URL, FACEBOOK_URL_MODE)
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=HEADLESS,
+            args=["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--no-sandbox"],
+        )
+
+        all_attempts = []
+        final_result = None
+        try:
+            for attempt_url in url_candidates:
+                try:
+                    result = await try_scrape_single_url(browser, attempt_url, FACEBOOK_URL_MODE)
+                except Exception as exc:
+                    result = {
+                        "ok": False,
+                        "page_url": attempt_url,
+                        "context_mode": preferred_context_mode_for_url(attempt_url, FACEBOOK_URL_MODE),
+                        "message": f"Navigation/extraction error: {exc}",
+                        "selected_image_url": "",
+                        "selected_width": 0,
+                        "selected_height": 0,
+                        "selected_image_file": "",
+                        "candidates": [],
+                    }
+                all_attempts.append(result)
+                if result.get("ok") and result.get("candidates"):
+                    final_result = result
+                    break
+
+            if final_result is None:
+                final_result = max(
+                    all_attempts,
+                    key=lambda r: (
+                        1 if r.get("candidates") else 0,
+                        int(r.get("selected_width") or 0) * int(r.get("selected_height") or 0),
+                    ),
+                    default={"ok": False, "message": "All URL attempts failed", "candidates": []},
+                )
+
+            final_result["attempted_urls"] = url_candidates
+            final_result["attempts"] = [
+                {
+                    "page_url": r.get("page_url", ""),
+                    "context_mode": r.get("context_mode", ""),
+                    "ok": r.get("ok", False),
+                    "message": r.get("message", ""),
+                    "selected_width": r.get("selected_width", 0),
+                    "selected_height": r.get("selected_height", 0),
+                }
+                for r in all_attempts
+            ]
+
+            OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+            OUTPUT_FILE.write_text(json.dumps(final_result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(json.dumps(final_result, ensure_ascii=False, indent=2))
+            return final_result
+        finally:
+            await browser.close()
 
 
 def main():
-    if not FACEBOOK_JSON.exists():
-        raise RuntimeError(f"Missing file: {FACEBOOK_JSON}")
-
-    payload = json.loads(FACEBOOK_JSON.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise RuntimeError("facebook_latest_image.json must contain a JSON object")
-
-    candidates = build_candidates(payload)
-    if not candidates:
-        raise RuntimeError(
-            "No usable Facebook image candidates found. "
-            f"ok={payload.get('ok', False)} "
-            f"message={str(payload.get('message') or '')!r}"
-        )
-
-    print(f"Scraper status ok={payload.get('ok', False)} message={str(payload.get('message') or '')!r}")
-    print(f"OCR-first candidates to try: {len(candidates)}")
-
-    poster_classifier = GoldPosterClassifier(str(POSTER_MODEL_PATH)) if POSTER_MODEL_PATH.exists() else None
-    layout_classifier = GoldLayoutClassifier(str(LAYOUT_MODEL_PATH)) if LAYOUT_MODEL_PATH.exists() else None
-
-    failures: list[dict[str, Any]] = []
-    successful: list[dict[str, Any]] = []
-
-    for idx, cand in enumerate(candidates, start=1):
-        image_url = cand["src"]
-        print(f"[{idx}/{len(candidates)}] Trying candidate ({cand['width']}x{cand['height']}, {cand.get('source_kind','')}): {image_url}")
-
-        try:
-            image_bytes = download_image_bytes(image_url)
-            img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        except Exception as exc:
-            failures.append({"index": idx, "url": image_url, "stage": "download_or_open", "error": str(exc)})
-            print(f"Download/open failed: {exc}")
-            continue
-
-        if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
-            failures.append({"index": idx, "url": image_url, "stage": "image_size", "width": img.width, "height": img.height})
-            print(f"Skipped candidate: image too small ({img.width}x{img.height})")
-            continue
-
-        try:
-            if poster_classifier is None:
-                raise RuntimeError("Missing poster classifier")
-            poster_debug = poster_classifier.predict(img)
-            poster_debug["source"] = "cnn"
-            print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
-            poster_ok, poster_decision = evaluate_poster_classifier(poster_debug)
-            print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
-            if not poster_ok:
-                failures.append({"index": idx, "url": image_url, "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision})
-                print("Skipped candidate: classifier too weak")
-                continue
-
-            if layout_classifier is None:
-                raise RuntimeError("Missing layout classifier")
-            layout_debug = layout_classifier.predict(img)
-            layout_debug["source"] = "cnn"
-            print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
-            layout_conf = float(layout_debug.get("confidence", 0.0))
-            layout_label = str(layout_debug.get("label", "")).strip()
-            if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
-                activated = maybe_switch_blueprint_for_layout(layout_label)
-                if activated:
-                    print(f"Activated layout blueprint: {activated}")
-            else:
-                failures.append({"index": idx, "url": image_url, "stage": "layout_classifier", "layout_debug": layout_debug})
-                print("Skipped candidate: layout classifier too weak")
-                continue
-
-            result = run_fetch_gold_with_url(image_url)
-            if result.returncode != 0:
-                failures.append({
-                    "index": idx,
-                    "url": image_url,
-                    "stage": "fetch_gold",
-                    "returncode": result.returncode,
-                    "stdout_tail": result.stdout[-1200:],
-                    "stderr_tail": result.stderr[-1200:],
-                })
-                print(f"fetch_gold.py failed with exit code {result.returncode}")
-                continue
-
-            snapshot = load_latest_result()
-            if not snapshot:
-                failures.append({"index": idx, "url": image_url, "stage": "missing_latest_json_after_success"})
-                print("fetch_gold.py succeeded but latest.json missing/empty")
-                continue
-
-            successful.append({
-                "index": idx,
-                "url": image_url,
-                "snapshot": snapshot,
-                "confidence": float(snapshot.get("confidence", 0.0)),
-                "updated_at_utc": str(snapshot.get("updated_at_utc", "")),
-            })
-
-            if float(snapshot.get("confidence", 0.0)) >= 0.75:
-                save_failures(failures)
-                print(f"Accepted strong OCR candidate: {image_url}")
-                return
-
-        except Exception as exc:
-            failures.append({"index": idx, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
-            print(f"Candidate failed: {exc}")
-
-    save_failures(failures)
-
-    if successful:
-        successful.sort(key=lambda x: (x["confidence"], x["updated_at_utc"]), reverse=True)
-        best = successful[0]
-        rerun = run_fetch_gold_with_url(best["url"])
-        if rerun.returncode == 0:
-            print(f"Accepted best overall candidate after OCR: {best['url']}")
-            return
-
-    raise RuntimeError("All candidates failed")
+    asyncio.run(scrape_public_facebook_image())
 
 
 if __name__ == "__main__":
