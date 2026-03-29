@@ -585,33 +585,45 @@ def parse_date_safely(text: str) -> str:
     if not candidates:
         return "0000/00/00"
 
-    now_local = datetime.now(APP_TIMEZONE)
+    now_local = datetime.now(APP_TIMEZONE).date()
+    min_allowed = now_local - timedelta(days=30)
+    max_allowed = now_local + timedelta(days=1)
+
     best_date = "0000/00/00"
     best_score = -10**9
 
     for cand, pos in candidates:
         try:
             y, m, d = [int(x) for x in cand.split("/")]
-            score = 0
-            # Strongly prefer current/near-current years. This fixes the 2020 ghost date issue.
-            if y == now_local.year:
-                score += 120
-            elif y == now_local.year - 1 or y == now_local.year + 1:
-                score += 70
-            elif y >= 2024:
-                score += 20
-            else:
-                score -= 80
-            # Prefer later occurrences because true date often appears in cleaner repeated OCR near the end.
-            score += min(pos // 30, 20)
-            # Prefer plausible recent month/day combinations.
-            if 1 <= m <= 12 and 1 <= d <= 31:
-                score += 10
-            if score > best_score:
-                best_score = score
-                best_date = cand
+            candidate_date = datetime(y, m, d).date()
         except Exception:
             continue
+
+        score = 0
+
+        # Hard reject dates more than 1 year away by calendar year.
+        if abs(y - now_local.year) > 1:
+            continue
+
+        # Hard reject dates older than 30 days from now, or future dates beyond a small OCR tolerance.
+        if candidate_date < min_allowed or candidate_date > max_allowed:
+            continue
+
+        if y == now_local.year:
+            score += 120
+        elif y == now_local.year - 1 or y == now_local.year + 1:
+            score += 40
+
+        # Prefer the most recent plausible date.
+        age_days = abs((now_local - candidate_date).days)
+        score += max(0, 40 - age_days)
+
+        # Prefer later OCR matches because the cleaner repetition often appears later.
+        score += min(pos // 30, 20)
+
+        if score > best_score:
+            best_score = score
+            best_date = cand
 
     return best_date
 
