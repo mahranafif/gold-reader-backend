@@ -1,7 +1,7 @@
 {
   "ok": true,
   "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
-  "date": "0000/00/00",
+  "date": "2026/03/28",
   "time": "10:55",
   "day": "السبت",
   "k21_ss": 15950,
@@ -16,14 +16,12 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67758,
-  "updated_at_utc": "2026-03-29T23:29:37.891727+00:00",
+  "updated_at_utc": "2026-03-29T23:40:17.510374+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
-  "confidence": 0.9299999999999999,
-  "warnings": [
-    "header_date_failed"
-  ],
+  "confidence": 1.0,
+  "warnings": [],
   "debug": {
     "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "image_width": 780,
@@ -38,7 +36,8 @@
       "header_general_text": "9099 8 a Se ln FL Se % -\n8 pid ‏\"الي راي‎ 5 ١ ares\n‏له‎ — a ek « A ay ١ é ms 20 :\naw 000 7 . ;\n- <> 5 wi - <\n1 on ara t\n= ———\n‏الساعة‎ ms La] | ١\n١ > ‏ه‎ . 7.\n‏و‎ 55-2 : A} es OOo | :ةعاسلا :خيراتلا 2026//2 تبسلا ص10:55 مويلا | ‎Le , ١ . a‏ 7 72 00 ا الى\n‎TT eae‏ | :ةعاسلا خيراتلا مويلا | ‎ot‏ «سؤفرذة اه\n‎aa slr aa SOE oh lon RS‏\n‎met anes 5 oe ya See Ee‏\n‎ae ae 5 ae / 2 .‏ م ريه 2 ‎2a ee Bath Ape‏ اسم\n3 ا ‎ESE Sy URES TS oes Raa a SEAR Be‏ : و ‎ETT‏\n‎oF 9 ner ow ae 3 2H a SSS SS Ad 2 00 ene Mig 1‏ لسار ‎Tre BS‏\n‎Tote LOS 5 52 co we TS: 0 ra tee ١‏ 3 0 ل ‎oO‏ 0 4 2 د و5 ‎d ALp fete‏ 601\n‎a8 0‏ ا مره ‎ooo ee See‏ | عع ات الكل لم ب 5 ‎DEL fee “AT Sie or ea‏\n‎oe Shae RF wpe‏ 00 | اميم 3ن ‎FE 9 5 ag PR,‏ | | .\n‎١ 8 ; 1‏ 8 وى ات 2 أ 0 ‎so? co‏ ال لعشي آل 1 ‎iA res esas 0) me RL‏\n‎Fe. eed we :‏ لع لا ور يي أده ‎Sigur EO pe SOE 4 Se‏\n5 اسماخ . .2 ‎Ne 0 os ‘45 t a a 0 vy 1 8 Sw‏\n‎veces oat.‏ 1 101110 ل ‎ae‏ — 0 5 ا\n‎xf ~ 1 ١‏ ل 0 ‎en ١٠ ‘he‏ ا ا ا 3 .\n‎Lis . Tot 27 Res Nhe: © 2 ,‏ 5 0 1 م\n‎Pat oa‏ اللارفع. ‎LO‏ دل د رعة رم . الفناحة ' 06\n‎ot DAWIOAUST RS “7i0) ¢‏ ; زه 5 58 . | :ةعاسلا 10:55 OZ6/S/8 خيراتلا مويلا | BOSE TP: ‏و‎ TO so ® + ‏لهذ‎\n‏ايه‎ or ‏لم‎ ee “had 8 ‏ل 3 1 و‎ woe! ss os vo +\noo. a tae ‏لح إلا‎ 7 . 2 3\nae 1 0 we 5 01 Lee ot\n> - wot mo, nn 0 . 3\n‏يه‎ me A. ‏عند يع‎ ne 9 . 1 ٠. 0 1 1 8 0 1 1\n‏فى‎ CORR Retr Se 1 “pee soe ‏-ه*‎ 8 . aa 3 1\nae 1” ‏ات‎ Te, aan) as 9 ‏ب‎ 00 8 0 ّ\nwe RN Oe Oe NCES a» &s: 4 en 5 on - 1\n‏ل‎ eee ~ ‏ا‎\n‎١ 1 ‏جم‎ 4. 4 TY IU\nrar er ev ” Ww yk aaa\nPS eee ‏دمب‎ joo ‏التارية:‎ OM ESagaite\nIK ree 7 ame ١ wa : 9 ea : a _ 1\ngy, UF ne hey Fie ahem oe LVV 4 f 70) @ «7 2 *e Ay eapuet le (EL ¥ Gates AS | كأ خيراتلا ??20zo/ks/",
       "date_region_text": "---- 2 . 1 7 1 | 7 / 0 1 . | 3 1 . . 0",
       "time_region_text": ". a | 1 3 1 5",
-      "day_region_text": "tg"
+      "day_region_text": "tg",
+      "date_inferred_from_day": true
     },
     "rows": [
       {
@@ -198,7 +197,7 @@
       }
     }
   },
-  "change_key": "0000/00/00|10:55|15950|15600|129.0|126.0|13650|13300|110.5|107.5",
+  "change_key": "2026/03/28|10:55|15950|15600|129.0|126.0|13650|13300|110.5|107.5",
   "previous_values": {
     "k21_ss": null,
     "k21_sb": null,
