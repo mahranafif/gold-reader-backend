@@ -1,20 +1,25 @@
 [
   {
     "index": 1,
-    "url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=nb8kFJxAqq4Q7kNvwHQOQoq&_nc_oc=AdqseTrXHmnI4oytbyJbHBo22Yd79HS6vwjhARaPjNZIMzoKNdd_rg9m-CVkL16RFaA&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=ciF-XJd-IAb_M1SKQZ62yw&_nc_ss=7a30f&oh=00_Afwqj828Evtnin3jsCVSmD1Hj7S2rtYQZ_dYpqh3hETYRA&oe=69CF5CDF",
-    "stage": "image_size",
-    "width": 960,
-    "height": 640,
-    "declared_width": 960,
-    "declared_height": 640
-  },
-  {
-    "index": 2,
-    "url": "https://scontent-ams2-1.xx.fbcdn.net/v/t39.30808-6/658127020_122178897326861173_7857147228522658428_n.jpg?stp=dst-jpg_p526x296_tt6&_nc_cat=103&ccb=1-7&_nc_sid=7b2446&_nc_ohc=L4dQU9h_fRsQ7kNvwFUag3U&_nc_oc=AdqMklnYJ1Pj92lJuCdHWS6EGT5KhPWCUtths2F-m86rMSpPp_v6DnRN0Q3iUXDJZkU&_nc_zt=23&_nc_ht=scontent-ams2-1.xx&_nc_gid=-XDnBs1qpjwwsRFYA8G24Q&_nc_ss=7a30f&oh=00_Afx2eVRtj0ZDHMbi64wuw2bPCU8q9_aUCf9UzJpDF13i6Q&oe=69CF58B5",
-    "stage": "image_size",
-    "width": 526,
-    "height": 526,
-    "declared_width": 526,
-    "declared_height": 526
+    "url": "https://scontent-iad3-2.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=nb8kFJxAqq4Q7kNvwGQqX_9&_nc_oc=AdrZBMOFjdZOksgfY7w1kEigEXbwQYXi3tirI3odkbEool4oJ_2BSeKgBG-46F14OMk&_nc_zt=23&_nc_ht=scontent-iad3-2.xx&_nc_gid=9DjOKusL8AqSWFBHp7X06g&_nc_ss=7a30f&oh=00_AfwAliZsyDeTPRC9t28i2wH61n3jYCCxO0EbKTxcu1ccsA&oe=69CF5CDF",
+    "stage": "poster_classifier",
+    "poster_debug": {
+      "label": "gold",
+      "confidence": 0.6928796768188477,
+      "all_probs": {
+        "gold": 0.6928796768188477,
+        "non_gold": 0.30712032318115234
+      },
+      "source": "cnn"
+    },
+    "poster_decision": {
+      "label": "gold",
+      "gold_conf": 0.6928796768188477,
+      "non_gold_conf": 0.30712032318115234,
+      "margin": 0.3857593536376953,
+      "threshold": 0.75,
+      "min_margin": 0.2,
+      "accepted": false
+    }
   }
 ]
