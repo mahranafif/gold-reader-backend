@@ -1,4 +1,3 @@
-
 import asyncio
 import json
 import os
@@ -25,7 +24,6 @@ POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
 LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "12"))
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
 REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
 CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
@@ -121,12 +119,15 @@ def build_candidates(payload: dict):
         src = normalize_fb_image_url(str(item.get("src") or "").strip())
         if not src:
             continue
+        source_kind = str(item.get("source_kind") or "")
+        if source_kind == "url_upgrade":
+            continue
         out.append({
             "src": src,
             "width": int(item.get("width") or 0),
             "height": int(item.get("height") or 0),
             "score": float(item.get("score") or 0.0),
-            "source_kind": str(item.get("source_kind") or ""),
+            "source_kind": source_kind,
             "verified": bool(item.get("verified") or False),
             "declared_width": int(item.get("declared_width") or 0),
             "declared_height": int(item.get("declared_height") or 0),
@@ -141,6 +142,7 @@ def build_candidates(payload: dict):
     deduped.sort(
         key=lambda x: (
             1 if x["verified"] else 0,
+            1 if x["source_kind"] == "srcset" else 0,
             x["score"],
             x["width"] * x["height"],
         ),
@@ -227,7 +229,6 @@ async def warm_facebook_session(page: Page):
 
 
 async def download_with_playwright(context: BrowserContext, seed_page: Page, url: str) -> bytes:
-    # First try direct page navigation in same warmed session.
     test_page = await context.new_page()
     test_page.set_default_timeout(REQUEST_TIMEOUT_MS)
     try:
@@ -236,8 +237,8 @@ async def download_with_playwright(context: BrowserContext, seed_page: Page, url
             body = await response.body()
             if body:
                 return body
-        # Fallback: fetch from browser context to preserve cookies/headers.
-        js = """
+
+        js = '''
         async (u) => {
           const r = await fetch(u, {
             method: 'GET',
@@ -252,7 +253,7 @@ async def download_with_playwright(context: BrowserContext, seed_page: Page, url
           const buf = await r.arrayBuffer();
           return Array.from(new Uint8Array(buf));
         }
-        """
+        '''
         data = await seed_page.evaluate(js, url)
         return bytes(data)
     finally:
@@ -295,8 +296,8 @@ async def async_main():
     poster_classifier = GoldPosterClassifier(str(POSTER_MODEL_PATH)) if POSTER_MODEL_PATH.exists() else None
     layout_classifier = GoldLayoutClassifier(str(LAYOUT_MODEL_PATH)) if LAYOUT_MODEL_PATH.exists() else None
 
-    failures: list[dict[str, Any]] = []
-    successful: list[dict[str, Any]] = []
+    failures = []
+    successful = []
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -306,6 +307,7 @@ async def async_main():
         context = await create_context(browser)
         seed_page = await context.new_page()
         seed_page.set_default_timeout(REQUEST_TIMEOUT_MS)
+
         try:
             await warm_facebook_session(seed_page)
 
@@ -418,6 +420,7 @@ async def async_main():
                 except Exception as exc:
                     failures.append({"index": idx, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
                     print(f"Candidate failed: {exc}")
+
         finally:
             await seed_page.close()
             await context.close()
