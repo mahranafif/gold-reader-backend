@@ -4,7 +4,7 @@ import os
 from dataclasses import asdict, dataclass
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import requests
 from PIL import Image
@@ -122,35 +122,10 @@ def score_candidate(src: str, width: int, height: int, source_kind: str) -> floa
     ratio_penalty = abs(aspect_ratio - 1.0) * 140000.0
     preferred_bonus = 180000.0 if width >= PREFERRED_WIDTH and height >= PREFERRED_HEIGHT else 0.0
     srcset_bonus = 120000.0 if source_kind == "srcset" else 0.0
-    upgrade_bonus = 180000.0 if source_kind == "url_upgrade" else 0.0
-    return float(area) - ratio_penalty + preferred_bonus + srcset_bonus + upgrade_bonus + url_quality_bonus(src)
+    return float(area) - ratio_penalty + preferred_bonus + srcset_bonus + url_quality_bonus(src)
 
 
-def upgraded_url_variants(src: str) -> list[tuple[str, int, int]]:
-    if not is_real_fb_image(src):
-        return []
-    parsed = urlparse(src)
-    qs = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    existing_stp = qs.get("stp", "")
-    desired = [
-        ("dst-jpg_s1024x1024_tt6", 1024, 1024),
-        ("dst-jpg_s960x960_tt6", 960, 960),
-        ("dst-jpg_s780x780_tt6", 780, 780),
-        ("dst-jpg_p780x980_tt6", 780, 980),
-        ("dst-webp_s780x780_tt1_u", 780, 780),
-    ]
-    variants: list[tuple[str, int, int]] = []
-    for stp, w, h in desired:
-        if existing_stp == stp:
-            continue
-        new_qs = dict(qs)
-        new_qs["stp"] = stp
-        upgraded = urlunparse(parsed._replace(query=urlencode(new_qs, doseq=True)))
-        variants.append((upgraded, w, h))
-    return variants
-
-
-def probe_real_image_size(url: str, timeout: int = VERIFY_TIMEOUT_SECONDS) -> tuple[int, int] | None:
+def probe_real_image_size(url: str, timeout: int = VERIFY_TIMEOUT_SECONDS):
     try:
         response = requests.get(url, headers=DOWNLOAD_HEADERS, timeout=timeout)
         response.raise_for_status()
@@ -163,8 +138,8 @@ def probe_real_image_size(url: str, timeout: int = VERIFY_TIMEOUT_SECONDS) -> tu
         return None
 
 
-def promote_verified_candidates(candidates: list[ImageCandidate], max_probe: int = MAX_VERIFY_PROBES) -> list[ImageCandidate]:
-    verified: list[ImageCandidate] = []
+def promote_verified_candidates(candidates, max_probe: int = MAX_VERIFY_PROBES):
+    verified = []
     for candidate in candidates[:max_probe]:
         real_size = probe_real_image_size(candidate.src)
         if not real_size:
@@ -224,14 +199,14 @@ async def create_context(browser, mode: str) -> BrowserContext:
 
 
 async def visible_image_count(page: Page) -> int:
-    js = f"""
+    js = f'''
     () => Array.from(document.images)
       .filter((i) =>
         (i.currentSrc || i.src || '') &&
         (i.naturalWidth || 0) > {MIN_DISCOVERY_WIDTH} &&
         (i.naturalHeight || 0) > {MIN_DISCOVERY_HEIGHT}
       ).length
-    """
+    '''
     result = await page.evaluate(js)
     try:
         return int(result or 0)
@@ -240,7 +215,7 @@ async def visible_image_count(page: Page) -> int:
 
 
 async def detect_page_problem(page: Page):
-    js = f"""
+    js = f'''
     () => {{
       const text = (document.body && document.body.innerText ? document.body.innerText : '').toLowerCase();
       const imageCount = Array.from(document.images).filter((i) =>
@@ -261,20 +236,20 @@ async def detect_page_problem(page: Page):
       if (text.includes("content isn’t available") || text.includes("content isn't available") || text.includes("this page isn’t available") || text.includes("this page isn't available")) return 'content_unavailable';
       return '';
     }}
-    """
+    '''
     value = str(await page.evaluate(js) or "").strip()
     return value or None
 
 
-async def scrape_images(page: Page) -> list[ImageCandidate]:
-    js = """
+async def scrape_images(page: Page):
+    js = '''
     () => {
       function parseSrcset(srcset) {
         const out = [];
         for (const part of (srcset || '').split(',')) {
           const item = part.trim();
           if (!item) continue;
-          const pieces = item.split(/\s+/);
+          const pieces = item.split(/\\s+/);
           const url = pieces[0] || '';
           let width = 0;
           for (const p of pieces.slice(1)) {
@@ -296,11 +271,11 @@ async def scrape_images(page: Page) -> list[ImageCandidate]:
         srcset: parseSrcset(i.getAttribute('srcset') || ''),
       }));
     }
-    """
+    '''
     raw = await page.evaluate(js)
 
     seen = set()
-    cleaned: list[ImageCandidate] = []
+    cleaned = []
 
     def add_candidate(src: str, width: int, height: int, source_kind: str):
         src = (src or "").strip()
@@ -342,10 +317,6 @@ async def scrape_images(page: Page) -> list[ImageCandidate]:
                 if approx_w > 0 and height > 0 and width > 0:
                     approx_h = max(int(height * (approx_w / max(width, 1))), height)
                 add_candidate(srcset_url, approx_w, approx_h, "srcset")
-
-            for base_src in [current_src, src]:
-                for upgraded_url, up_w, up_h in upgraded_url_variants(base_src):
-                    add_candidate(upgraded_url, up_w, up_h, "url_upgrade")
 
     cleaned.sort(key=lambda c: c.score, reverse=True)
     return cleaned[:MAX_CANDIDATES_TO_TRY]
