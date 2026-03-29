@@ -1,4 +1,5 @@
 
+import asyncio
 import json
 import os
 import subprocess
@@ -7,8 +8,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-import requests
 from PIL import Image
+from playwright.async_api import Browser, BrowserContext, Page, Route, async_playwright
 
 from cnn_classifiers import GoldLayoutClassifier, GoldPosterClassifier
 
@@ -16,25 +17,35 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 FACEBOOK_JSON = DATA_DIR / "facebook_latest_image.json"
 FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
-BLUEPRINT_FILE = ROOT / "data" / "blueprint.json"
-FAILURES_FILE = ROOT / "data" / "facebook_ocr_failures.json"
-LATEST_FILE = ROOT / "data" / "latest.json"
+BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
+FAILURES_FILE = DATA_DIR / "facebook_ocr_failures.json"
+LATEST_FILE = DATA_DIR / "latest.json"
 
 POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
 LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
 
 MAX_CANDIDATES_TO_TRY = int(os.getenv("FACEBOOK_MAX_CANDIDATES_TO_TRY", "12"))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "35"))
+REQUEST_TIMEOUT_MS = int(os.getenv("FACEBOOK_REQUEST_TIMEOUT_MS", "30000"))
 CNN_POSTER_MIN_CONFIDENCE = float(os.getenv("CNN_POSTER_MIN_CONFIDENCE", "0.75"))
 CNN_POSTER_MIN_MARGIN = float(os.getenv("CNN_POSTER_MIN_MARGIN", "0.20"))
 CNN_LAYOUT_MIN_CONFIDENCE = float(os.getenv("CNN_LAYOUT_MIN_CONFIDENCE", "0.50"))
 MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "750"))
 MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "750"))
+FACEBOOK_URL_MODE = os.getenv("FACEBOOK_URL_MODE", "mobile").strip().lower()
+HEADLESS = os.getenv("FACEBOOK_HEADLESS", "true").strip().lower() in {"1", "true", "yes", "on"}
+FAST_RESOURCE_BLOCKING = os.getenv("FACEBOOK_FAST_RESOURCE_BLOCKING", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
-}
+FB_USER_AGENT_DESKTOP = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+FB_USER_AGENT_MOBILE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+    "Version/16.0 Mobile/15E148 Safari/604.1"
+)
 
 
 def normalize_fb_image_url(url: str) -> str:
@@ -46,27 +57,10 @@ def save_failures(failures):
     FAILURES_FILE.write_text(json.dumps(failures, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def download_image_bytes(image_url: str) -> bytes:
-    local_path = Path(image_url)
-    if local_path.exists():
-        return local_path.read_bytes()
-    headers = dict(HEADERS)
-    headers["Referer"] = "https://www.facebook.com/"
-    headers["Origin"] = "https://www.facebook.com"
-    response = requests.get(image_url, headers=headers, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()
-    return response.content
-
-
-def run_fetch_gold_with_url(image_url):
+def run_fetch_gold_with_file(image_path: Path, source_url: str):
     env = os.environ.copy()
-    local_path = Path(image_url)
-    if local_path.exists():
-        env["GOLD_SOURCE_FILE"] = str(local_path)
-        env.pop("GOLD_SOURCE_URL", None)
-    else:
-        env["GOLD_SOURCE_URL"] = image_url
-        env.pop("GOLD_SOURCE_FILE", None)
+    env["GOLD_SOURCE_FILE"] = str(image_path)
+    env["GOLD_SOURCE_URL"] = source_url
     return subprocess.run([sys.executable, str(FETCH_GOLD_SCRIPT)], env=env, capture_output=True, text=True)
 
 
@@ -94,7 +88,12 @@ def evaluate_poster_classifier(poster_debug: dict):
     gold_conf = float(all_probs.get("gold", poster_debug.get("confidence", 0.0)))
     non_gold_conf = float(all_probs.get("non_gold", 0.0))
     margin = gold_conf - non_gold_conf
-    accepted = ("gold" in label) and ("non" not in label) and gold_conf >= CNN_POSTER_MIN_CONFIDENCE and margin >= CNN_POSTER_MIN_MARGIN
+    accepted = (
+        ("gold" in label)
+        and ("non" not in label)
+        and gold_conf >= CNN_POSTER_MIN_CONFIDENCE
+        and margin >= CNN_POSTER_MIN_MARGIN
+    )
     return accepted, {
         "label": label,
         "gold_conf": gold_conf,
@@ -128,6 +127,9 @@ def build_candidates(payload: dict):
             "height": int(item.get("height") or 0),
             "score": float(item.get("score") or 0.0),
             "source_kind": str(item.get("source_kind") or ""),
+            "verified": bool(item.get("verified") or False),
+            "declared_width": int(item.get("declared_width") or 0),
+            "declared_height": int(item.get("declared_height") or 0),
         })
     seen = set()
     deduped = []
@@ -136,11 +138,142 @@ def build_candidates(payload: dict):
             continue
         seen.add(item["src"])
         deduped.append(item)
-    deduped.sort(key=lambda x: x["score"], reverse=True)
+    deduped.sort(
+        key=lambda x: (
+            1 if x["verified"] else 0,
+            x["score"],
+            x["width"] * x["height"],
+        ),
+        reverse=True,
+    )
     return deduped[:MAX_CANDIDATES_TO_TRY]
 
 
-def main():
+async def route_handler(route: Route) -> None:
+    if not FAST_RESOURCE_BLOCKING:
+        await route.continue_()
+        return
+    req = route.request
+    url = req.url.lower()
+    if req.resource_type in {"font", "media", "websocket"}:
+        await route.abort()
+        return
+    noisy = [
+        "doubleclick", "analytics", "googletagmanager", "google-analytics",
+        "/tr?", "facebook.com/tr/", "connect.facebook.net",
+    ]
+    if any(part in url for part in noisy):
+        await route.abort()
+        return
+    await route.continue_()
+
+
+async def create_context(browser: Browser) -> BrowserContext:
+    mode = FACEBOOK_URL_MODE
+    if mode == "desktop":
+        context = await browser.new_context(
+            user_agent=FB_USER_AGENT_DESKTOP,
+            viewport={"width": 1366, "height": 2200},
+            device_scale_factor=1,
+        )
+    else:
+        context = await browser.new_context(
+            user_agent=FB_USER_AGENT_MOBILE,
+            viewport={"width": 390, "height": 844},
+            device_scale_factor=2,
+        )
+    await context.route("**/*", route_handler)
+    return context
+
+
+async def dismiss_login_modal(page: Page) -> bool:
+    selectors = [
+        'div[aria-label="Close"]',
+        'div[role="button"][aria-label="Close"]',
+        'div[role="button"][aria-label="إغلاق"]',
+        'div[aria-label="إغلاق"]',
+        'div[aria-label="Not Now"]',
+        '[role="dialog"] [aria-label="Close"]',
+        '[role="dialog"] [aria-label="إغلاق"]',
+        '[role="dialog"] [role="button"]',
+        'div[role="button"]',
+        'button',
+    ]
+    for selector in selectors:
+        try:
+            locator = page.locator(selector)
+            count = await locator.count()
+            for i in range(min(count, 8)):
+                el = locator.nth(i)
+                if not await el.is_visible():
+                    continue
+                label = (await el.get_attribute("aria-label") or "").lower()
+                text = (await el.text_content() or "").strip().lower()
+                if ("close" in label or "اغلاق" in label or text in {"close", "إغلاق", "اغلاق", "not now", "ليس الآن"}):
+                    await el.click(timeout=1000)
+                    await page.wait_for_timeout(500)
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+async def warm_facebook_session(page: Page):
+    seed_url = os.getenv("FACEBOOK_PAGE_URL", "https://m.facebook.com/profile.php?id=61575835207125").strip()
+    await page.goto(seed_url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
+    await page.wait_for_timeout(1200)
+    await dismiss_login_modal(page)
+    await page.wait_for_timeout(400)
+
+
+async def download_with_playwright(context: BrowserContext, seed_page: Page, url: str) -> bytes:
+    # First try direct page navigation in same warmed session.
+    test_page = await context.new_page()
+    test_page.set_default_timeout(REQUEST_TIMEOUT_MS)
+    try:
+        response = await test_page.goto(url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT_MS)
+        if response and response.status == 200:
+            body = await response.body()
+            if body:
+                return body
+        # Fallback: fetch from browser context to preserve cookies/headers.
+        js = """
+        async (u) => {
+          const r = await fetch(u, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+            }
+          });
+          if (!r.ok) {
+            throw new Error(`fetch failed ${r.status}`);
+          }
+          const buf = await r.arrayBuffer();
+          return Array.from(new Uint8Array(buf));
+        }
+        """
+        data = await seed_page.evaluate(js, url)
+        return bytes(data)
+    finally:
+        await test_page.close()
+
+
+def write_temp_image(candidate_index: int, image_url: str, image_bytes: bytes) -> Path:
+    temp_dir = DATA_DIR / "tmp_fb_images"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    suffix = ".jpg"
+    lower = image_url.lower()
+    if ".png" in lower:
+        suffix = ".png"
+    elif ".webp" in lower:
+        suffix = ".webp"
+    path = temp_dir / f"candidate_{candidate_index}{suffix}"
+    path.write_bytes(image_bytes)
+    return path
+
+
+async def async_main():
     if not FACEBOOK_JSON.exists():
         raise RuntimeError(f"Missing file: {FACEBOOK_JSON}")
 
@@ -165,99 +298,144 @@ def main():
     failures: list[dict[str, Any]] = []
     successful: list[dict[str, Any]] = []
 
-    for idx, cand in enumerate(candidates, start=1):
-        image_url = cand["src"]
-        print(f"[{idx}/{len(candidates)}] Trying candidate ({cand['width']}x{cand['height']}, {cand.get('source_kind','')}): {image_url}")
-
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=HEADLESS,
+            args=["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage", "--no-sandbox"],
+        )
+        context = await create_context(browser)
+        seed_page = await context.new_page()
+        seed_page.set_default_timeout(REQUEST_TIMEOUT_MS)
         try:
-            image_bytes = download_image_bytes(image_url)
-            img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        except Exception as exc:
-            failures.append({"index": idx, "url": image_url, "stage": "download_or_open", "error": str(exc)})
-            print(f"Download/open failed: {exc}")
-            continue
+            await warm_facebook_session(seed_page)
 
-        if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
-            failures.append({"index": idx, "url": image_url, "stage": "image_size", "width": img.width, "height": img.height})
-            print(f"Skipped candidate: image too small ({img.width}x{img.height})")
-            continue
+            for idx, cand in enumerate(candidates, start=1):
+                image_url = cand["src"]
+                print(
+                    f"[{idx}/{len(candidates)}] Trying candidate "
+                    f"({cand['width']}x{cand['height']}, {cand.get('source_kind','')}, verified={cand.get('verified', False)}): {image_url}"
+                )
 
-        try:
-            if poster_classifier is None:
-                raise RuntimeError("Missing poster classifier")
-            poster_debug = poster_classifier.predict(img)
-            poster_debug["source"] = "cnn"
-            print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
-            poster_ok, poster_decision = evaluate_poster_classifier(poster_debug)
-            print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
-            if not poster_ok:
-                failures.append({"index": idx, "url": image_url, "stage": "poster_classifier", "poster_debug": poster_debug, "poster_decision": poster_decision})
-                print("Skipped candidate: classifier too weak")
-                continue
+                try:
+                    image_bytes = await download_with_playwright(context, seed_page, image_url)
+                    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+                    print(f"Candidate real size: {img.width}x{img.height}")
+                except Exception as exc:
+                    failures.append({"index": idx, "url": image_url, "stage": "download_or_open", "error": str(exc)})
+                    print(f"Download/open failed: {exc}")
+                    continue
 
-            if layout_classifier is None:
-                raise RuntimeError("Missing layout classifier")
-            layout_debug = layout_classifier.predict(img)
-            layout_debug["source"] = "cnn"
-            print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
-            layout_conf = float(layout_debug.get("confidence", 0.0))
-            layout_label = str(layout_debug.get("label", "")).strip()
-            if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
-                activated = maybe_switch_blueprint_for_layout(layout_label)
-                if activated:
-                    print(f"Activated layout blueprint: {activated}")
-            else:
-                failures.append({"index": idx, "url": image_url, "stage": "layout_classifier", "layout_debug": layout_debug})
-                print("Skipped candidate: layout classifier too weak")
-                continue
+                if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
+                    failures.append({
+                        "index": idx,
+                        "url": image_url,
+                        "stage": "image_size",
+                        "width": img.width,
+                        "height": img.height,
+                        "declared_width": cand.get("declared_width", 0),
+                        "declared_height": cand.get("declared_height", 0),
+                    })
+                    print(f"Skipped candidate: image too small ({img.width}x{img.height})")
+                    continue
 
-            result = run_fetch_gold_with_url(image_url)
-            if result.returncode != 0:
-                failures.append({
-                    "index": idx,
-                    "url": image_url,
-                    "stage": "fetch_gold",
-                    "returncode": result.returncode,
-                    "stdout_tail": result.stdout[-1200:],
-                    "stderr_tail": result.stderr[-1200:],
-                })
-                print(f"fetch_gold.py failed with exit code {result.returncode}")
-                continue
+                try:
+                    if poster_classifier is None:
+                        raise RuntimeError("Missing poster classifier")
+                    poster_debug = poster_classifier.predict(img)
+                    poster_debug["source"] = "cnn"
+                    print("Poster classifier:", json.dumps(poster_debug, ensure_ascii=False))
+                    poster_ok, poster_decision = evaluate_poster_classifier(poster_debug)
+                    print("Poster decision:", json.dumps(poster_decision, ensure_ascii=False))
+                    if not poster_ok:
+                        failures.append({
+                            "index": idx,
+                            "url": image_url,
+                            "stage": "poster_classifier",
+                            "poster_debug": poster_debug,
+                            "poster_decision": poster_decision,
+                        })
+                        print("Skipped candidate: classifier too weak")
+                        continue
 
-            snapshot = load_latest_result()
-            if not snapshot:
-                failures.append({"index": idx, "url": image_url, "stage": "missing_latest_json_after_success"})
-                print("fetch_gold.py succeeded but latest.json missing/empty")
-                continue
+                    if layout_classifier is None:
+                        raise RuntimeError("Missing layout classifier")
+                    layout_debug = layout_classifier.predict(img)
+                    layout_debug["source"] = "cnn"
+                    print("Layout classifier:", json.dumps(layout_debug, ensure_ascii=False))
+                    layout_conf = float(layout_debug.get("confidence", 0.0))
+                    layout_label = str(layout_debug.get("label", "")).strip()
+                    if layout_conf >= CNN_LAYOUT_MIN_CONFIDENCE and layout_label:
+                        activated = maybe_switch_blueprint_for_layout(layout_label)
+                        if activated:
+                            print(f"Activated layout blueprint: {activated}")
+                    else:
+                        failures.append({
+                            "index": idx,
+                            "url": image_url,
+                            "stage": "layout_classifier",
+                            "layout_debug": layout_debug,
+                        })
+                        print("Skipped candidate: layout classifier too weak")
+                        continue
 
-            successful.append({
-                "index": idx,
-                "url": image_url,
-                "snapshot": snapshot,
-                "confidence": float(snapshot.get("confidence", 0.0)),
-                "updated_at_utc": str(snapshot.get("updated_at_utc", "")),
-            })
+                    temp_image_path = write_temp_image(idx, image_url, image_bytes)
+                    result = run_fetch_gold_with_file(temp_image_path, image_url)
+                    if result.returncode != 0:
+                        failures.append({
+                            "index": idx,
+                            "url": image_url,
+                            "stage": "fetch_gold",
+                            "returncode": result.returncode,
+                            "stdout_tail": result.stdout[-1200:],
+                            "stderr_tail": result.stderr[-1200:],
+                        })
+                        print(f"fetch_gold.py failed with exit code {result.returncode}")
+                        continue
 
-            if float(snapshot.get("confidence", 0.0)) >= 0.75:
-                save_failures(failures)
-                print(f"Accepted strong OCR candidate: {image_url}")
-                return
+                    snapshot = load_latest_result()
+                    if not snapshot:
+                        failures.append({
+                            "index": idx,
+                            "url": image_url,
+                            "stage": "missing_latest_json_after_success",
+                        })
+                        print("fetch_gold.py succeeded but latest.json missing/empty")
+                        continue
 
-        except Exception as exc:
-            failures.append({"index": idx, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
-            print(f"Candidate failed: {exc}")
+                    successful.append({
+                        "index": idx,
+                        "url": image_url,
+                        "snapshot": snapshot,
+                        "confidence": float(snapshot.get("confidence", 0.0)),
+                        "updated_at_utc": str(snapshot.get("updated_at_utc", "")),
+                    })
+
+                    if float(snapshot.get("confidence", 0.0)) >= 0.75:
+                        save_failures(failures)
+                        print(f"Accepted strong OCR candidate: {image_url}")
+                        return
+
+                except Exception as exc:
+                    failures.append({"index": idx, "url": image_url, "stage": "pipeline_exception", "error": str(exc)})
+                    print(f"Candidate failed: {exc}")
+        finally:
+            await seed_page.close()
+            await context.close()
+            await browser.close()
 
     save_failures(failures)
 
     if successful:
         successful.sort(key=lambda x: (x["confidence"], x["updated_at_utc"]), reverse=True)
         best = successful[0]
-        rerun = run_fetch_gold_with_url(best["url"])
-        if rerun.returncode == 0:
-            print(f"Accepted best overall candidate after OCR: {best['url']}")
-            return
+        print(f"Best successful OCR candidate retained: {best['url']}")
+        return
 
     raise RuntimeError("All candidates failed")
+
+
+def main():
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":
