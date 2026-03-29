@@ -1,13 +1,14 @@
+
 import hashlib
 import json
 import logging
+import math
 import os
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
-from threading import Lock
 from typing import Any, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -32,14 +33,12 @@ except Exception:
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 DEBUG_DIR = DATA_DIR / "debug"
-DEBUG_FIELDS_DIR = DEBUG_DIR / "fields"
 CACHE_DIR = DATA_DIR / "cache"
 IMAGE_CACHE_DIR = CACHE_DIR / "images"
-OCR_CACHE_FILE = CACHE_DIR / "ocr_results.json"
+OCR_CACHE_FILE = CACHE_DIR / "ocr_smart_v2.json"
 
 LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
-BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
 
 APP_MODE = os.getenv("APP_MODE", "cli").strip().lower()
 APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "Asia/Dubai").strip() or "Asia/Dubai"
@@ -52,8 +51,8 @@ IMAGE_CACHE_ENABLED = os.getenv("GOLD_IMAGE_CACHE_ENABLED", "true").strip().lowe
 OCR_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_OCR_CACHE_MAX_ENTRIES", "300"))
 IMAGE_CACHE_MAX_ENTRIES = int(os.getenv("GOLD_IMAGE_CACHE_MAX_ENTRIES", "80"))
 IMAGE_CACHE_TTL_HOURS = int(os.getenv("GOLD_IMAGE_CACHE_TTL_HOURS", "72"))
-MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "780"))
-MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "780"))
+MIN_SOURCE_WIDTH = int(os.getenv("GOLD_MIN_SOURCE_WIDTH", "750"))
+MIN_SOURCE_HEIGHT = int(os.getenv("GOLD_MIN_SOURCE_HEIGHT", "750"))
 
 HEADERS = {
     "User-Agent": (
@@ -68,28 +67,6 @@ IMAGE_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "im
 GOLD_SOURCE_URL_ENV = "GOLD_SOURCE_URL"
 GOLD_SOURCE_FILE_ENV = "GOLD_SOURCE_FILE"
 
-DEFAULT_VALIDATION = {
-    "usd_hard_min": 80.0,
-    "usd_hard_max": 200.0,
-    "usd_expected_min": 90.0,
-    "usd_expected_max": 180.0,
-    "syp_hard_min": 10000.0,
-    "syp_hard_max": 25000.0,
-    "syp_expected_min": 12000.0,
-    "syp_expected_max": 20000.0,
-    "min_18k_to_21k_ratio": 0.80,
-    "max_18k_to_21k_ratio": 0.90,
-}
-
-DEFAULT_REQUIRED_PRICE_FIELDS = [
-    "k21_syp_sell", "k21_syp_buy", "k21_usd_sell", "k21_usd_buy",
-    "k18_syp_sell", "k18_syp_buy", "k18_usd_sell", "k18_usd_buy",
-]
-
-KNOWN_FIELD_TYPES = {"arabic_text", "date", "time", "syp_price", "usd_price"}
-KNOWN_PREPROCESS = {"soft", "binary", "adaptive", "contrast"}
-KNOWN_ENGINES = {"paddle", "tesseract"}
-
 try:
     APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
 except Exception:
@@ -97,69 +74,55 @@ except Exception:
     APP_TIMEZONE_NAME = "UTC"
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("gold-ocr")
+logger = logging.getLogger("gold-smart-v2")
 
+SESSION = requests.Session()
+retry = Retry(
+    total=3,
+    connect=3,
+    read=3,
+    backoff_factor=1.0,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET"],
+)
+adapter = HTTPAdapter(max_retries=retry)
+SESSION.mount("http://", adapter)
+SESSION.mount("https://", adapter)
+SESSION.headers.update(HEADERS)
 
-def build_session() -> requests.Session:
-    session = requests.Session()
-    retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        backoff_factor=1.0,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    session.headers.update(HEADERS)
-    return session
-
-
-SESSION = build_session()
 _PADDLE_OCR = None
-_PADDLE_LOCK = Lock()
 _PADDLE_AVAILABLE = os.getenv("DISABLE_PADDLE", "false").strip().lower() not in {"1", "true", "yes", "on"}
 _PADDLE_FAILURE_REASON: Optional[str] = None if _PADDLE_AVAILABLE else "disabled_by_env"
 
 
-def disable_paddle(reason: str) -> None:
-    global _PADDLE_AVAILABLE, _PADDLE_FAILURE_REASON, _PADDLE_OCR
-    _PADDLE_AVAILABLE = False
-    _PADDLE_FAILURE_REASON = reason
-    _PADDLE_OCR = None
-    logger.warning("PaddleOCR disabled: %s", reason)
-
-
 def get_paddle():
-    global _PADDLE_OCR
+    global _PADDLE_OCR, _PADDLE_AVAILABLE, _PADDLE_FAILURE_REASON
     if not _PADDLE_AVAILABLE:
         raise RuntimeError(_PADDLE_FAILURE_REASON or "Paddle disabled")
     if _PADDLE_OCR is None:
-        with _PADDLE_LOCK:
-            if _PADDLE_OCR is None:
-                try:
-                    from paddleocr import PaddleOCR  # type: ignore
-                except Exception as exc:
-                    disable_paddle(f"import_failed: {exc}")
-                    raise
-                attempts = [
-                    {"lang": "ar", "use_doc_orientation_classify": False, "use_doc_unwarping": False, "use_textline_orientation": False, "show_log": False},
-                    {"lang": "ar", "use_angle_cls": True, "show_log": False},
-                    {"lang": "ar"},
-                ]
+        try:
+            from paddleocr import PaddleOCR  # type: ignore
+        except Exception as exc:
+            _PADDLE_AVAILABLE = False
+            _PADDLE_FAILURE_REASON = f"import_failed: {exc}"
+            raise
+        attempts = [
+            {"lang": "ar", "use_doc_orientation_classify": False, "use_doc_unwarping": False, "use_textline_orientation": False, "show_log": False},
+            {"lang": "ar", "use_angle_cls": True, "show_log": False},
+            {"lang": "ar"},
+        ]
+        last_exc = None
+        for kwargs in attempts:
+            try:
+                _PADDLE_OCR = PaddleOCR(**kwargs)
                 last_exc = None
-                for kwargs in attempts:
-                    try:
-                        _PADDLE_OCR = PaddleOCR(**kwargs)
-                        last_exc = None
-                        break
-                    except Exception as exc:
-                        last_exc = exc
-                if _PADDLE_OCR is None:
-                    disable_paddle(f"init_failed: {last_exc}")
-                    raise last_exc
+                break
+            except Exception as exc:
+                last_exc = exc
+        if _PADDLE_OCR is None:
+            _PADDLE_AVAILABLE = False
+            _PADDLE_FAILURE_REASON = f"init_failed: {last_exc}"
+            raise last_exc
     return _PADDLE_OCR
 
 
@@ -172,24 +135,15 @@ class GoldRate:
 
 
 @dataclass
-class OcrCandidate:
+class NumberToken:
+    value: float
+    text: str
+    x: float
+    y: float
+    w: float
+    h: float
     engine: str
-    mode: str
-    raw_text: str
-    value: Any
     confidence: float
-    valid: bool
-    expected: bool
-    score: float
-    warning: Optional[str]
-
-
-@dataclass
-class OcrFieldResult:
-    crop_variant: str
-    crop_debug_path: Optional[str]
-    selected: Optional[OcrCandidate]
-    candidates: list[OcrCandidate]
 
 
 @dataclass
@@ -233,6 +187,9 @@ class ExtractResponse(BaseModel):
     debug: dict = Field(default_factory=dict)
 
 
+ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
 def sanitize_for_json(obj: Any):
     if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
@@ -248,8 +205,7 @@ def load_json(path: Path, fallback):
         return fallback
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Failed to load JSON %s: %s", path, exc)
+    except Exception:
         return fallback
 
 
@@ -275,8 +231,7 @@ def prune_image_cache() -> None:
         try:
             stat = path.stat()
             mtime = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
-            age = now - mtime
-            if age > timedelta(hours=IMAGE_CACHE_TTL_HOURS):
+            if (now - mtime) > timedelta(hours=IMAGE_CACHE_TTL_HOURS):
                 path.unlink(missing_ok=True)
                 continue
             files.append((mtime, path))
@@ -335,24 +290,11 @@ def extraction_result_from_cache_entry(entry: dict) -> ExtractionResult:
         confidence=float(data["confidence"]),
         raw_ocr=data.get("raw_ocr", ""),
         raw_ocr_preview=data.get("raw_ocr_preview", ""),
-        extraction_method=data.get("extraction_method", "template_fields_hybrid"),
+        extraction_method=data.get("extraction_method", "smart_full_ocr_v2"),
         ocr_engine=data.get("ocr_engine", "unknown"),
         warnings=list(data.get("warnings") or []),
         debug=debug,
     )
-
-
-def blueprint_signature(blueprint: dict) -> str:
-    minimal = {
-        "validation": blueprint.get("validation", {}),
-        "fields": blueprint.get("fields", {}),
-        "active_layout": blueprint.get("active_layout", ""),
-        "updated_at": blueprint.get("updated_at", ""),
-    }
-    return hashlib.sha256(json.dumps(sanitize_for_json(minimal), ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-
-
-ARABIC_NUM_MAP = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
 def normalize_digits(text: str) -> str:
@@ -375,113 +317,6 @@ def normalize_text(text: str) -> str:
     return text
 
 
-def default_blueprint() -> dict:
-    return {
-        "template_name": "damascus_gold_board_default",
-        "reference_size": {"width": 1024, "height": 1024},
-        "validation": DEFAULT_VALIDATION.copy(),
-        "fields": {
-            "day": {"id": "day", "type": "arabic_text", "box": {"x1": 0.70, "y1": 0.35, "x2": 1.00, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "soft"], "psm": 7},
-            "date": {"id": "date", "type": "date", "box": {"x1": 0.25, "y1": 0.35, "x2": 0.70, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789/.-"},
-            "time": {"id": "time", "type": "time", "box": {"x1": 0.00, "y1": 0.35, "x2": 0.30, "y2": 0.47}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "binary"], "psm": 7, "char_whitelist": "0123456789:.;,مصAPMapm "},
-            "k21_usd_buy": {"id": "k21_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.55, "x2": 0.18, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k21_usd_sell": {"id": "k21_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.55, "x2": 0.35, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k21_syp_buy": {"id": "k21_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.55, "x2": 0.55, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k21_syp_sell": {"id": "k21_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.55, "x2": 0.75, "y2": 0.68}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k18_usd_buy": {"id": "k18_usd_buy", "type": "usd_price", "box": {"x1": 0.00, "y1": 0.68, "x2": 0.18, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k18_usd_sell": {"id": "k18_usd_sell", "type": "usd_price", "box": {"x1": 0.18, "y1": 0.68, "x2": 0.35, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-            "k18_syp_buy": {"id": "k18_syp_buy", "type": "syp_price", "box": {"x1": 0.35, "y1": 0.68, "x2": 0.55, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-            "k18_syp_sell": {"id": "k18_syp_sell", "type": "syp_price", "box": {"x1": 0.55, "y1": 0.68, "x2": 0.75, "y2": 0.82}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-        },
-    }
-
-
-def normalize_blueprint_fields(fields_raw: Any) -> dict:
-    if isinstance(fields_raw, dict):
-        out = {}
-        for field_id, field in fields_raw.items():
-            if not isinstance(field, dict):
-                continue
-            field_copy = dict(field)
-            field_copy.setdefault("id", field_id)
-            if "box" not in field_copy:
-                field_copy["box"] = {
-                    "x1": field_copy.get("x1"),
-                    "y1": field_copy.get("y1"),
-                    "x2": field_copy.get("x2"),
-                    "y2": field_copy.get("y2"),
-                }
-            out[field_id] = field_copy
-        return out
-    if isinstance(fields_raw, list):
-        out = {}
-        for field in fields_raw:
-            if not isinstance(field, dict):
-                continue
-            field_id = str(field.get("id") or "").strip()
-            if not field_id:
-                continue
-            field_copy = dict(field)
-            if "box" not in field_copy:
-                field_copy["box"] = {
-                    "x1": field_copy.get("x1"),
-                    "y1": field_copy.get("y1"),
-                    "x2": field_copy.get("x2"),
-                    "y2": field_copy.get("y2"),
-                }
-            out[field_id] = field_copy
-        return out
-    return {}
-
-
-def validate_blueprint(blueprint: dict):
-    errors = []
-    warnings = []
-    if not isinstance(blueprint, dict):
-        return False, ["blueprint must be a JSON object"], []
-    normalized_fields = normalize_blueprint_fields(blueprint.get("fields"))
-    blueprint["fields"] = normalized_fields
-    for field_id, field in normalized_fields.items():
-        if field.get("type") and field.get("type") not in KNOWN_FIELD_TYPES:
-            warnings.append(f"field '{field_id}' has unknown type '{field.get('type')}'")
-        box = field.get("box") or {}
-        if not isinstance(box, dict):
-            errors.append(f"field '{field_id}' box must be an object")
-            continue
-        for k in ("x1", "y1", "x2", "y2"):
-            if k not in box:
-                errors.append(f"field '{field_id}' missing box.{k}")
-                continue
-            try:
-                val = float(box[k])
-            except Exception:
-                errors.append(f"field '{field_id}' box.{k} must be numeric")
-                continue
-            if not (0.0 <= val <= 1.0):
-                errors.append(f"field '{field_id}' box.{k} must be between 0.0 and 1.0")
-    return len(errors) == 0, errors, warnings
-
-
-def load_blueprint() -> dict:
-    raw = load_json(BLUEPRINT_FILE, {})
-    if not isinstance(raw, dict) or not raw:
-        logger.warning("Blueprint missing, using built-in default blueprint")
-        return default_blueprint()
-    ok, errors, warnings = validate_blueprint(raw)
-    for warning in warnings:
-        logger.warning("Blueprint warning: %s", warning)
-    if not ok:
-        logger.warning("Blueprint invalid, using built-in default blueprint")
-        for err in errors:
-            logger.warning("Blueprint error: %s", err)
-        return default_blueprint()
-    merged = default_blueprint()
-    merged.update({k: v for k, v in raw.items() if k != "fields"})
-    merged["validation"].update(raw.get("validation") or {})
-    merged["fields"].update(raw.get("fields") or {})
-    return merged
-
-
 def validate_image_content_type(response: requests.Response, source_url: str) -> None:
     content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
     if content_type and content_type not in IMAGE_CONTENT_TYPES:
@@ -496,10 +331,9 @@ def fetch_image_bytes_from_url(url: str):
             key = cache_key_for_url(url)
             cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
             if cache_file.exists():
-                logger.info("Image cache hit for URL")
                 return cache_file.read_bytes(), url
-        except Exception as exc:
-            logger.warning("Image cache read failed: %s", exc)
+        except Exception:
+            pass
     response = SESSION.get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     validate_image_content_type(response, url)
@@ -508,10 +342,9 @@ def fetch_image_bytes_from_url(url: str):
         try:
             IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             key = cache_key_for_url(url)
-            cache_file = IMAGE_CACHE_DIR / f"{key}.bin"
-            cache_file.write_bytes(image_bytes)
-        except Exception as exc:
-            logger.warning("Image cache write failed: %s", exc)
+            (IMAGE_CACHE_DIR / f"{key}.bin").write_bytes(image_bytes)
+        except Exception:
+            pass
     return image_bytes, response.url
 
 
@@ -541,8 +374,8 @@ def resolve_input_image():
             selected = str(payload.get("selected_image_url") or "").strip()
             if selected:
                 return fetch_image_bytes_from_url(selected)
-        except Exception as exc:
-            logger.warning("Failed to use facebook_latest_image.json fallback: %s", exc)
+        except Exception:
+            pass
     raise RuntimeError(f"Neither {GOLD_SOURCE_FILE_ENV} nor {GOLD_SOURCE_URL_ENV} is set")
 
 
@@ -602,15 +435,7 @@ def preprocess_contrast(img: Image.Image, upscale: int = 2) -> Image.Image:
     return preprocess_binary(img, threshold=150, upscale=upscale)
 
 
-PREPROCESSORS = {
-    "soft": preprocess_soft,
-    "binary": preprocess_binary,
-    "adaptive": preprocess_adaptive,
-    "contrast": preprocess_contrast,
-}
-
-
-def tesseract_ocr(img: Image.Image, psm: int = 6, whitelist: Optional[str] = None):
+def tesseract_text(img: Image.Image, psm: int = 6, whitelist: Optional[str] = None):
     config = f"--oem 3 --psm {psm}"
     if whitelist:
         config += f' -c tessedit_char_whitelist="{whitelist}"'
@@ -624,15 +449,44 @@ def tesseract_ocr(img: Image.Image, psm: int = 6, whitelist: Optional[str] = Non
     return text.strip(), avg_conf
 
 
-def paddle_ocr(img: Image.Image):
+def tesseract_tokens(img: Image.Image, psm: int = 6, whitelist: Optional[str] = None) -> list[dict]:
+    config = f"--oem 3 --psm {psm}"
+    if whitelist:
+        config += f' -c tessedit_char_whitelist="{whitelist}"'
+    try:
+        data = pytesseract.image_to_data(img, lang="ara+eng", config=config, output_type=pytesseract.Output.DICT)
+    except Exception:
+        return []
+    out = []
+    n = len(data.get("text", []))
+    w, h = img.size
+    for i in range(n):
+        txt = str(data["text"][i] or "").strip()
+        conf = str(data["conf"][i] or "").strip()
+        if not txt or conf in {"", "-1"}:
+            continue
+        try:
+            out.append({
+                "text": txt,
+                "conf": float(conf),
+                "x": float(data["left"][i]) / max(w, 1),
+                "y": float(data["top"][i]) / max(h, 1),
+                "w": float(data["width"][i]) / max(w, 1),
+                "h": float(data["height"][i]) / max(h, 1),
+            })
+        except Exception:
+            continue
+    return out
+
+
+def paddle_text(img: Image.Image):
     paddle = get_paddle()
     rgb = np.array(img.convert("RGB"))
     if hasattr(paddle, "predict"):
         result = paddle.predict(rgb)
     else:
         result = paddle.ocr(rgb, cls=False)
-    texts = []
-    confs = []
+    texts, confs = [], []
     if isinstance(result, list):
         for page in result:
             if hasattr(page, "json"):
@@ -660,43 +514,41 @@ def paddle_ocr(img: Image.Image):
     return " ".join(texts).strip(), (sum(confs) / len(confs) if confs else 0.0)
 
 
-def text_density_score(text: str) -> float:
-    text = normalize_digits(text)
-    digits = len(re.findall(r"\d", text))
-    separators = text.count("/") + text.count("-") + text.count(":") + text.count(";") + text.count(".")
-    letters = len(re.findall(r"[A-Za-z\u0600-\u06FF]", text))
-    return digits * 4 + separators * 5 + letters * 0.2 + len(text) * 0.1
-
-
-def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
+def paddle_tokens(img: Image.Image) -> list[dict]:
+    try:
+        paddle = get_paddle()
+    except Exception:
+        return []
+    rgb = np.array(img.convert("RGB"))
+    if hasattr(paddle, "predict"):
+        result = paddle.predict(rgb)
+    else:
+        result = paddle.ocr(rgb, cls=False)
     w, h = img.size
-    px1 = max(0, min(w - 1, int(round(w * x1))))
-    py1 = max(0, min(h - 1, int(round(h * y1))))
-    px2 = max(px1 + 1, min(w, int(round(w * x2))))
-    py2 = max(py1 + 1, min(h, int(round(h * y2))))
-    return img.crop((px1, py1, px2, py2))
-
-
-def find_header_box(img: Image.Image):
-    width, height = img.size
-    top_limit = int(height * 0.55)
-    best_score = -1.0
-    best_box = (0, 0, width, int(height * 0.24))
-    step = max(8, int(height * 0.03))
-    band_h = max(40, int(height * 0.16))
-    for y in range(0, max(1, top_limit - band_h), step):
-        box = (0, y, width, min(height, y + band_h))
-        crop = img.crop(box)
-        local_best = ""
-        for variant in [preprocess_soft(crop, 2), preprocess_binary(crop, 145, 2), preprocess_adaptive(crop, 2)]:
-            txt, _ = tesseract_ocr(variant, psm=6)
-            if text_density_score(txt) > text_density_score(local_best):
-                local_best = txt
-        score = text_density_score(local_best)
-        if score > best_score:
-            best_score = score
-            best_box = box
-    return best_box
+    out = []
+    if isinstance(result, list):
+        for page in result:
+            if page and isinstance(page, list):
+                for line in page:
+                    try:
+                        pts = line[0]
+                        txt = str(line[1][0]).strip()
+                        conf = float(line[1][1]) * 100.0
+                        xs = [p[0] for p in pts]
+                        ys = [p[1] for p in pts]
+                    except Exception:
+                        continue
+                    if not txt:
+                        continue
+                    out.append({
+                        "text": txt,
+                        "conf": conf,
+                        "x": min(xs) / max(w, 1),
+                        "y": min(ys) / max(h, 1),
+                        "w": (max(xs) - min(xs)) / max(w, 1),
+                        "h": (max(ys) - min(ys)) / max(h, 1),
+                    })
+    return out
 
 
 def parse_date_safely(text: str) -> str:
@@ -747,203 +599,257 @@ def extract_day_safely(text: str) -> str:
     for day in day_names:
         if day in text:
             return day
-    candidates = re.findall(r"[\u0600-\u06FF ]{3,}", text)
-    return max(candidates, key=len).strip() if candidates else ""
+    return ""
 
 
-def extract_header_from_text(raw_text: str) -> tuple[str, str, str]:
-    normalized = normalize_text(raw_text)
-    return parse_date_safely(normalized), parse_time_safely(normalized), extract_day_safely(normalized)
+def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
+    w, h = img.size
+    px1 = max(0, min(w - 1, int(round(w * x1))))
+    py1 = max(0, min(h - 1, int(round(h * y1))))
+    px2 = max(px1 + 1, min(w, int(round(w * x2))))
+    py2 = max(py1 + 1, min(h, int(round(h * y2))))
+    return img.crop((px1, py1, px2, py2))
 
 
-def extract_fallback_header(img: Image.Image):
-    header_box = find_header_box(img)
-    header = img.crop(header_box)
-    variants = [
-        preprocess_soft(header, 2),
-        preprocess_binary(header, 145, 2),
-        preprocess_adaptive(header, 2),
-        preprocess_contrast(header, 2),
-    ]
-    best_text = ""
+def extract_header(img: Image.Image):
+    w, h = img.size
+    header = crop_box(img, 0.0, 0.31, 1.0, 0.50)
+    variants = [preprocess_soft(header, 2), preprocess_binary(header, 145, 2), preprocess_adaptive(header, 2), preprocess_contrast(header, 2)]
+    texts = []
     for variant in variants:
-        txt, _ = tesseract_ocr(variant, psm=6)
-        if text_density_score(txt) > text_density_score(best_text):
-            best_text = txt
-    date, time, day = extract_header_from_text(best_text)
-    return date, time, day, {"header_box": header_box, "header_best_text": best_text}
+        t1, _ = tesseract_text(variant, psm=6)
+        if t1.strip():
+            texts.append(t1)
+        if _PADDLE_AVAILABLE:
+            try:
+                t2, _ = paddle_text(variant)
+                if t2.strip():
+                    texts.append(t2)
+            except Exception:
+                pass
+    combined = " | ".join(texts)
+    date = parse_date_safely(combined)
+    time = parse_time_safely(combined)
+    day = extract_day_safely(combined)
+
+    # extra time crop on far left, extra date/day crop on middle/right
+    if time == "00:00":
+        time_crop = crop_box(img, 0.00, 0.34, 0.28, 0.48)
+        texts2 = []
+        for variant in [preprocess_soft(time_crop, 3), preprocess_binary(time_crop, 145, 3), preprocess_adaptive(time_crop, 3)]:
+            txt, _ = tesseract_text(variant, psm=7, whitelist="0123456789:.;,مصAPMapm ")
+            if txt.strip():
+                texts2.append(txt)
+        time = parse_time_safely(" | ".join(texts2))
+    if date == "0000/00/00":
+        date_crop = crop_box(img, 0.22, 0.34, 0.71, 0.48)
+        texts2 = []
+        for variant in [preprocess_soft(date_crop, 3), preprocess_binary(date_crop, 145, 3), preprocess_adaptive(date_crop, 3)]:
+            txt, _ = tesseract_text(variant, psm=7, whitelist="0123456789/.-")
+            if txt.strip():
+                texts2.append(txt)
+        date = parse_date_safely(" | ".join(texts2))
+    if not day:
+        day_crop = crop_box(img, 0.68, 0.34, 1.00, 0.48)
+        texts2 = []
+        for variant in [preprocess_soft(day_crop, 3), preprocess_adaptive(day_crop, 3)]:
+            txt, _ = tesseract_text(variant, psm=7)
+            if txt.strip():
+                texts2.append(txt)
+        day = extract_day_safely(" | ".join(texts2))
+
+    return date, time, day, {"header_combined_text": combined}
 
 
-def parse_numeric_value(text: str, field_type: str):
+def parse_numeric_token(text: str) -> Optional[float]:
     text = normalize_digits(text)
-    if field_type == "date":
-        value = parse_date_safely(text)
-        return value, value != "0000/00/00", None if value != "0000/00/00" else "date_parse_failed"
-    if field_type == "time":
-        value = parse_time_safely(text)
-        return value, value != "00:00", None if value != "00:00" else "time_parse_failed"
-    if field_type == "arabic_text":
-        norm = normalize_text(text)
-        return norm, bool(norm), None if norm else "empty_text"
-    compact = re.sub(r"\s+", "", text)
-    if field_type == "usd_price":
-        m = re.findall(r"\d+(?:[.,]\d{1,2})?", compact)
-        if not m:
-            return 0.0, False, "usd_parse_failed"
-        return float(max(m, key=len).replace(",", ".")), True, None
-    if field_type == "syp_price":
-        digits = re.findall(r"\d{3,6}", compact) or re.findall(r"\d+", compact)
-        if not digits:
-            return 0, False, "syp_parse_failed"
-        return int(max(digits, key=len)), True, None
-    return compact, bool(compact), None if compact else "parse_failed"
+    text = text.replace(",", ".")
+    m = re.search(r"\d+(?:\.\d+)?", text)
+    if not m:
+        return None
+    try:
+        return float(m.group(0))
+    except Exception:
+        return None
 
 
-def validate_field_value(field_type: str, value: Any, validation: dict):
-    if field_type in {"date", "time"}:
-        return value not in {"0000/00/00", "00:00"}, True, None
-    if field_type == "arabic_text":
-        return bool(value), True, None if value else "empty_text"
-    if field_type == "usd_price":
-        value = float(value)
-        hard_ok = validation["usd_hard_min"] <= value <= validation["usd_hard_max"]
-        expected_ok = validation["usd_expected_min"] <= value <= validation["usd_expected_max"]
-        return hard_ok, expected_ok, None if hard_ok else "outside_hard_range"
-    if field_type == "syp_price":
-        value = int(round(float(value)))
-        hard_ok = validation["syp_hard_min"] <= value <= validation["syp_hard_max"]
-        expected_ok = validation["syp_expected_min"] <= value <= validation["syp_expected_max"]
-        return hard_ok, expected_ok, None if hard_ok else "outside_hard_range"
-    return False, False, "unknown_field_type"
+def collect_number_tokens(img: Image.Image):
+    variants = [
+        ("soft", preprocess_soft(img, 2)),
+        ("binary", preprocess_binary(img, 145, 2)),
+        ("adaptive", preprocess_adaptive(img, 2)),
+        ("contrast", preprocess_contrast(img, 2)),
+    ]
+    out: list[NumberToken] = []
+    seen = set()
 
-
-def candidate_score(valid: bool, expected: bool, confidence: float, warning: Optional[str], field_type: str) -> float:
-    score = 100.0 if valid else 0.0
-    if expected:
-        score += 10.0
-    score += min(confidence, 100.0) * 0.1
-    if warning:
-        score -= 10.0
-    score += 5.0 if field_type in {"date", "time"} and valid else 3.0 if valid else 0.0
-    return score
-
-
-def make_crop_variants(img: Image.Image, box: dict):
-    x1 = float(box["x1"]); y1 = float(box["y1"]); x2 = float(box["x2"]); y2 = float(box["y2"])
-    shifts = {
-        "base": (0.0, 0.0, 0.0, 0.0),
-        "up": (0.0, -0.015, 0.0, -0.015),
-        "down": (0.0, 0.015, 0.0, 0.015),
-        "pad_h": (-0.015, 0.0, 0.015, 0.0),
-        "pad_s": (-0.01, -0.01, 0.01, 0.01),
-    }
-    out = []
-    for name, (dx1, dy1, dx2, dy2) in shifts.items():
-        xx1 = max(0.0, min(1.0, x1 + dx1))
-        yy1 = max(0.0, min(1.0, y1 + dy1))
-        xx2 = max(0.0, min(1.0, x2 + dx2))
-        yy2 = max(0.0, min(1.0, y2 + dy2))
-        if xx2 > xx1 and yy2 > yy1:
-            out.append((name, crop_box(img, xx1, yy1, xx2, yy2)))
+    for mode, variant in variants:
+        # Tesseract tokens
+        for tok in tesseract_tokens(variant, psm=6):
+            val = parse_numeric_token(tok["text"])
+            if val is None:
+                continue
+            key = (round(val, 2), round(tok["x"], 3), round(tok["y"], 3))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(NumberToken(
+                value=val,
+                text=tok["text"],
+                x=tok["x"], y=tok["y"], w=tok["w"], h=tok["h"],
+                engine=f"tesseract:{mode}",
+                confidence=float(tok["conf"]),
+            ))
+        # Paddle tokens
+        if _PADDLE_AVAILABLE:
+            for tok in paddle_tokens(variant):
+                val = parse_numeric_token(tok["text"])
+                if val is None:
+                    continue
+                key = (round(val, 2), round(tok["x"], 3), round(tok["y"], 3))
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(NumberToken(
+                    value=val,
+                    text=tok["text"],
+                    x=tok["x"], y=tok["y"], w=tok["w"], h=tok["h"],
+                    engine=f"paddle:{mode}",
+                    confidence=float(tok["conf"]),
+                ))
     return out
 
 
-def run_field_ocr(field_id: str, field_cfg: dict, img: Image.Image, validation: dict) -> OcrFieldResult:
-    field_type = field_cfg.get("type", "text")
-    preprocess_modes = [m for m in (field_cfg.get("preprocess_modes") or ["adaptive", "binary", "contrast"]) if m in KNOWN_PREPROCESS]
-    ocr_engines = [e for e in (field_cfg.get("ocr_engines") or ["paddle", "tesseract"]) if e in KNOWN_ENGINES]
-    if _PADDLE_AVAILABLE and "tesseract" in ocr_engines and "paddle" in ocr_engines:
-        ocr_engines = ["tesseract", "paddle"]
-    psm = int(field_cfg.get("psm", 7))
-    whitelist = field_cfg.get("char_whitelist")
-    box = field_cfg.get("box") or field_cfg
-    variants = make_crop_variants(img, box)
-    all_candidates = []
-    best_crop_debug_path = None
-    best_crop_variant = "base"
-    for crop_variant_name, crop in variants:
-        for mode_name in preprocess_modes:
-            pre = PREPROCESSORS.get(mode_name, preprocess_adaptive)(crop)
-            if DEBUG_EXPORT:
-                DEBUG_FIELDS_DIR.mkdir(parents=True, exist_ok=True)
-                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
-                field_path = DEBUG_FIELDS_DIR / f"{stamp}_{field_id}_{crop_variant_name}_{mode_name}.png"
-                try:
-                    pre.save(field_path)
-                    if best_crop_debug_path is None:
-                        best_crop_debug_path = str(field_path.relative_to(ROOT))
-                except Exception:
-                    pass
-            for engine in ocr_engines:
-                try:
-                    raw_text, conf = paddle_ocr(pre) if engine == "paddle" else tesseract_ocr(pre, psm=psm, whitelist=whitelist)
-                except Exception:
-                    continue
-                value, parsed_ok, parse_warning = parse_numeric_value(raw_text, field_type)
-                valid, expected, validate_warning = validate_field_value(field_type, value, validation)
-                warning = parse_warning or validate_warning
-                score = candidate_score(valid and parsed_ok, expected, conf, warning, field_type)
-                all_candidates.append(OcrCandidate(
-                    engine=engine,
-                    mode=f"{crop_variant_name}:{mode_name}",
-                    raw_text=raw_text,
-                    value=value,
-                    confidence=conf,
-                    valid=bool(valid and parsed_ok),
-                    expected=bool(expected),
-                    score=score,
-                    warning=warning,
-                ))
-    all_candidates.sort(key=lambda item: item.score, reverse=True)
-    valid_expected = [c for c in all_candidates if c.valid and c.expected]
-    selected = valid_expected[0] if valid_expected else (all_candidates[0] if all_candidates else None)
-    if selected:
-        best_crop_variant = selected.mode.split(":", 1)[0]
-    return OcrFieldResult(best_crop_variant, best_crop_debug_path, selected, all_candidates)
-
-
-def adaptive_field_shift(fields_cfg: dict, field_results: dict) -> dict:
-    shifted = json.loads(json.dumps(fields_cfg))
-    for field_id in ("day", "date", "time"):
-        result = field_results.get(field_id)
-        field_cfg = shifted.get(field_id)
-        if not result or not field_cfg or (result.selected and result.selected.valid):
+def cluster_rows(tokens: list[NumberToken], y_gap: float = 0.05):
+    tokens = sorted(tokens, key=lambda t: t.y)
+    rows: list[list[NumberToken]] = []
+    for tok in tokens:
+        if not rows:
+            rows.append([tok])
             continue
-        box = field_cfg.get("box") or {}
-        if all(k in box for k in ("x1", "y1", "x2", "y2")):
-            field_cfg["box"] = {
-                "x1": max(0.0, float(box["x1"]) - 0.02),
-                "y1": max(0.0, float(box["y1"]) - 0.02),
-                "x2": min(1.0, float(box["x2"]) + 0.02),
-                "y2": min(1.0, float(box["y2"]) + 0.02),
-            }
-    return shifted
+        current_y = sum(t.y for t in rows[-1]) / len(rows[-1])
+        if abs(tok.y - current_y) <= max(y_gap, tok.h * 1.2):
+            rows[-1].append(tok)
+        else:
+            rows.append([tok])
+    return rows
 
 
-def build_rates_from_fields(field_results: dict):
+def dedupe_row_tokens(row: list[NumberToken]):
+    row = sorted(row, key=lambda t: (t.x, -t.confidence))
+    out = []
+    for tok in row:
+        keep = True
+        for prev in out:
+            if abs(tok.value - prev.value) < 0.011 and abs(tok.x - prev.x) < 0.04:
+                keep = False
+                if tok.confidence > prev.confidence:
+                    out.remove(prev)
+                    keep = True
+                break
+        if keep:
+            out.append(tok)
+    return sorted(out, key=lambda t: t.x)
+
+
+def classify_row(row: list[NumberToken]) -> dict:
+    row = dedupe_row_tokens(row)
+    usd = [t for t in row if 80 <= t.value <= 200]
+    syp = [t for t in row if 10000 <= t.value <= 25000]
+    karat = [t for t in row if t.value in {18, 21}]
+    score = len(usd) * 4 + len(syp) * 4 + len(karat) * 2
+    return {"tokens": row, "usd": usd, "syp": syp, "karat": karat, "score": score}
+
+
+def row_to_rate(row_info: dict) -> Optional[GoldRate]:
+    usd = sorted(row_info["usd"], key=lambda t: t.x)
+    syp = sorted(row_info["syp"], key=lambda t: t.x)
+    if len(usd) < 2 or len(syp) < 2:
+        return None
+
+    # left-to-right on this poster: USD buy, USD sell, SYP buy, SYP sell
+    ub = float(usd[0].value)
+    us = float(usd[1].value)
+    sb = int(round(syp[0].value))
+    ss = int(round(syp[1].value))
+
+    # sanitize buy/sell inversion
+    if us < ub:
+        ub, us = us, ub
+    if ss < sb:
+        sb, ss = ss, sb
+    return GoldRate(ub=ub, us=us, sb=sb, ss=ss)
+
+
+def relationship_ok(k21: GoldRate, k18: GoldRate) -> tuple[bool, list[str]]:
     warnings = []
-    required = {}
-    for key in DEFAULT_REQUIRED_PRICE_FIELDS:
-        item = field_results.get(key)
-        if not item or not item.selected or not item.selected.valid:
-            warnings.append(f"missing_or_invalid:{key}")
-            continue
-        required[key] = item.selected.value
-    if len(required) != len(DEFAULT_REQUIRED_PRICE_FIELDS):
-        return None, None, warnings
-    k21 = GoldRate(
-        ub=float(required["k21_usd_buy"]),
-        us=float(required["k21_usd_sell"]),
-        sb=int(required["k21_syp_buy"]),
-        ss=int(required["k21_syp_sell"]),
-    )
-    k18 = GoldRate(
-        ub=float(required["k18_usd_buy"]),
-        us=float(required["k18_usd_sell"]),
-        sb=int(required["k18_syp_buy"]),
-        ss=int(required["k18_syp_sell"]),
-    )
-    return k21, k18, warnings
+    ok = True
+    if k21.us <= k18.us:
+        ok = False
+        warnings.append("k21_usd_not_greater_than_k18_usd")
+    if k21.ub <= k18.ub:
+        ok = False
+        warnings.append("k21_usd_buy_not_greater_than_k18_usd_buy")
+    if k21.ss <= k18.ss:
+        ok = False
+        warnings.append("k21_syp_not_greater_than_k18_syp")
+    if k21.sb <= k18.sb:
+        ok = False
+        warnings.append("k21_syp_buy_not_greater_than_k18_syp_buy")
+    if k21.us < k21.ub:
+        ok = False
+        warnings.append("k21_usd_sell_less_than_buy")
+    if k18.us < k18.ub:
+        ok = False
+        warnings.append("k18_usd_sell_less_than_buy")
+    if k21.ss < k21.sb:
+        ok = False
+        warnings.append("k21_syp_sell_less_than_buy")
+    if k18.ss < k18.sb:
+        ok = False
+        warnings.append("k18_syp_sell_less_than_buy")
+    r1 = k18.sb / k21.sb if k21.sb else 0
+    r2 = k18.ss / k21.ss if k21.ss else 0
+    if not (0.80 <= r1 <= 0.90):
+        ok = False
+        warnings.append(f"buy_ratio_outside_expected:{r1:.4f}")
+    if not (0.80 <= r2 <= 0.90):
+        ok = False
+        warnings.append(f"sell_ratio_outside_expected:{r2:.4f}")
+    return ok, warnings
+
+
+def pick_best_two_rows(rows_info: list[dict]):
+    valid_rows = [r for r in rows_info if len(r["usd"]) >= 2 and len(r["syp"]) >= 2]
+    if len(valid_rows) < 2:
+        return None, None, ["not_enough_valid_rows"]
+
+    # favor rows lower in image, closer to table area, and with 18/21 or strong number density
+    valid_rows.sort(key=lambda r: (r["score"], sum(t.confidence for t in r["tokens"]) / max(len(r["tokens"]), 1), -abs(np.mean([t.y for t in r["tokens"]]) - 0.66)), reverse=True)
+    best_pair = None
+    best_score = -1e9
+    best_warnings = []
+
+    for i in range(len(valid_rows)):
+        for j in range(i + 1, len(valid_rows)):
+            r1 = valid_rows[i]
+            r2 = valid_rows[j]
+            upper, lower = (r1, r2) if np.mean([t.y for t in r1["tokens"]]) < np.mean([t.y for t in r2["tokens"]]) else (r2, r1)
+            k21 = row_to_rate(upper)
+            k18 = row_to_rate(lower)
+            if not k21 or not k18:
+                continue
+            ok, warns = relationship_ok(k21, k18)
+            score = upper["score"] + lower["score"]
+            score += sum(t.confidence for t in upper["tokens"] + lower["tokens"]) / 100.0
+            score += 20 if ok else -20
+            if score > best_score:
+                best_score = score
+                best_pair = (k21, k18)
+                best_warnings = warns
+    if best_pair is None:
+        return None, None, ["pair_selection_failed"]
+    return best_pair[0], best_pair[1], best_warnings
 
 
 def full_image_text_variants(img: Image.Image):
@@ -951,14 +857,14 @@ def full_image_text_variants(img: Image.Image):
     out = []
     for variant in variants:
         try:
-            txt, _ = tesseract_ocr(variant, psm=6)
+            txt, _ = tesseract_text(variant, psm=6)
             if txt.strip():
                 out.append(txt)
         except Exception:
             pass
         if _PADDLE_AVAILABLE:
             try:
-                txt, _ = paddle_ocr(variant)
+                txt, _ = paddle_text(variant)
                 if txt.strip():
                     out.append(txt)
             except Exception:
@@ -966,148 +872,16 @@ def full_image_text_variants(img: Image.Image):
     return out
 
 
-def build_rates_from_full_text(full_text: str):
-    text = normalize_digits(full_text)
-    lines = [ln.strip() for ln in re.split(r"\n|\|", text) if ln.strip()]
-    rows = []
-    for line in lines:
-        nums = re.findall(r"\d+(?:[.,]\d+)?", line)
-        values = []
-        for n in nums:
-            try:
-                values.append(float(n.replace(",", ".")))
-            except Exception:
-                pass
-        usd = [x for x in values if 80 <= x <= 200]
-        syp = [int(round(x)) for x in values if 10000 <= x <= 25000]
-        if len(usd) >= 2 and len(syp) >= 2:
-            rows.append((usd, syp))
-    if len(rows) >= 2:
-        row1, row2 = rows[:2]
-        return (
-            GoldRate(ub=float(row1[0][1]), us=float(row1[0][0]), sb=int(row1[1][1]), ss=int(row1[1][0])),
-            GoldRate(ub=float(row2[0][1]), us=float(row2[0][0]), sb=int(row2[1][1]), ss=int(row2[1][0])),
-        )
-    return None, None
-
-
-def sanitize_price_relationships(k21: GoldRate, k18: GoldRate):
-    warnings = []
-    if k21.us < k21.ub:
-        k21 = GoldRate(ub=k21.us, us=k21.ub, sb=k21.sb, ss=k21.ss)
-        warnings.append("auto_swapped_k21_usd_buy_sell")
-    if k18.us < k18.ub:
-        k18 = GoldRate(ub=k18.us, us=k18.ub, sb=k18.sb, ss=k18.ss)
-        warnings.append("auto_swapped_k18_usd_buy_sell")
-    if k21.ss < k21.sb:
-        k21 = GoldRate(ub=k21.ub, us=k21.us, sb=k21.ss, ss=k21.sb)
-        warnings.append("auto_swapped_k21_syp_buy_sell")
-    if k18.ss < k18.sb:
-        k18 = GoldRate(ub=k18.ub, us=k18.us, sb=k18.ss, ss=k18.sb)
-        warnings.append("auto_swapped_k18_syp_buy_sell")
-    return k21, k18, warnings
-
-
-def validate_relationships(k21: GoldRate, k18: GoldRate, validation: dict):
-    warnings = []
-    relationship_ok = True
-    if k21.us <= 0 or k21.ub <= 0 or k18.us <= 0 or k18.ub <= 0:
-        relationship_ok = False
-        warnings.append("non_positive_usd_values")
-    for sell, buy, prefix in [
-        (k21.ss, k21.sb, "k21_syp"),
-        (k18.ss, k18.sb, "k18_syp"),
-        (k21.us, k21.ub, "k21_usd"),
-        (k18.us, k18.ub, "k18_usd"),
-    ]:
-        if sell < buy:
-            relationship_ok = False
-            warnings.append(f"{prefix}_sell_less_than_buy")
-    for pair_name, a, b in [("buy_ratio", k18.sb, k21.sb), ("sell_ratio", k18.ss, k21.ss)]:
-        if b > 0:
-            ratio = a / b
-            if not (validation["min_18k_to_21k_ratio"] <= ratio <= validation["max_18k_to_21k_ratio"]):
-                relationship_ok = False
-                warnings.append(f"{pair_name}_outside_expected_ratio:{ratio:.4f}")
-    if k21.us <= k18.us:
-        relationship_ok = False
-        warnings.append("k21_usd_not_greater_than_k18_usd")
-    if k21.ss <= k18.ss:
-        relationship_ok = False
-        warnings.append("k21_syp_not_greater_than_k18_syp")
-    return relationship_ok, warnings
-
-
-def cross_validate_fields(field_results: dict, k21: GoldRate, k18: GoldRate) -> float:
-    boost = 0.0
-    if k21.us > k18.us:
-        boost += 0.05
-    if k21.ss > k18.ss:
-        boost += 0.05
-    if field_results.get("k21_syp_sell") and field_results.get("k18_syp_sell"):
-        boost += 0.02
-    return boost
-
-
-def learn_blueprint_from_success(blueprint: dict, field_results: dict, confidence: float) -> None:
-    if confidence < 0.85:
-        return
-    shifts = {
-        "up": (0.0, -0.015, 0.0, -0.015),
-        "down": (0.0, 0.015, 0.0, 0.015),
-        "pad_h": (-0.015, 0.0, 0.015, 0.0),
-        "pad_s": (-0.01, -0.01, 0.01, 0.01),
-    }
-    changed = False
-    for field_id in ("day", "date", "time"):
-        result = field_results.get(field_id)
-        field_cfg = blueprint.get("fields", {}).get(field_id)
-        if not result or not result.selected or not field_cfg:
-            continue
-        crop_variant = result.selected.mode.split(":", 1)[0]
-        if crop_variant == "base" or crop_variant not in shifts:
-            continue
-        box = field_cfg.get("box") or {}
-        if not all(k in box for k in ("x1", "y1", "x2", "y2")):
-            continue
-        dx1, dy1, dx2, dy2 = shifts[crop_variant]
-        field_cfg["box"] = {
-            "x1": max(0.0, min(1.0, float(box["x1"]) + dx1)),
-            "y1": max(0.0, min(1.0, float(box["y1"]) + dy1)),
-            "x2": max(0.0, min(1.0, float(box["x2"]) + dx2)),
-            "y2": max(0.0, min(1.0, float(box["y2"]) + dy2)),
-        }
-        changed = True
-    if changed:
-        blueprint["updated_at"] = datetime.now(timezone.utc).isoformat()
-        blueprint["updated_by"] = "auto_learn"
-        save_json(BLUEPRINT_FILE, blueprint)
-        logger.info("Blueprint auto-learned from successful run")
-
-
-def compute_confidence(fields, relationship_ok: bool, warnings: list[str], k21: Optional[GoldRate] = None, k18: Optional[GoldRate] = None) -> float:
-    valid_count = 0
-    expected_count = 0
-    conf_total = 0.0
-    for result in fields.values():
-        if not result.selected:
-            continue
-        if result.selected.valid:
-            valid_count += 1
-        if result.selected.expected:
-            expected_count += 1
-        conf_total += min(result.selected.confidence, 100.0)
-    total_fields = max(len(fields), 1)
-    score = (
-        0.35
-        + (valid_count / total_fields) * 0.35
-        + (expected_count / total_fields) * 0.15
-        + min((conf_total / total_fields) / 100.0, 1.0) * 0.10
-    )
-    if relationship_ok:
-        score += 0.10
-    if k21 is not None and k18 is not None:
-        score += cross_validate_fields(fields, k21, k18)
+def compute_confidence(date: str, time: str, rows_info: list[dict], rel_ok: bool, warnings: list[str]):
+    score = 0.35
+    if date != "0000/00/00":
+        score += 0.12
+    if time != "00:00":
+        score += 0.12
+    valid_rows = sum(1 for r in rows_info if len(r["usd"]) >= 2 and len(r["syp"]) >= 2)
+    score += min(valid_rows, 2) * 0.14
+    if rel_ok:
+        score += 0.18
     score -= min(len(warnings) * 0.03, 0.20)
     return max(0.0, min(score, 1.0))
 
@@ -1159,121 +933,11 @@ def save_snapshot_into_history(snapshot: dict) -> None:
         return
     history.append(snapshot)
     history.sort(
-        key=lambda item: parse_to_datetime(
-            item.get("date", "0000/00/00"),
-            item.get("time", "00:00"),
-            item.get("updated_at_utc", ""),
-        ),
+        key=lambda item: parse_to_datetime(item.get("date", "0000/00/00"), item.get("time", "00:00"), item.get("updated_at_utc", "")),
         reverse=True,
     )
     save_json(HISTORY_FILE, history[:500])
     save_json(LATEST_FILE, snapshot)
-
-
-def export_overlay(image_bytes: bytes, extraction_method: str, source_url: str):
-    if not DEBUG_EXPORT:
-        return None
-    try:
-        img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        source_name = Path(urlparse(source_url).path).name or "source"
-        out = DEBUG_DIR / f"{stamp}_{extraction_method}_{source_name}.png"
-        img.save(out)
-        return str(out.relative_to(ROOT))
-    except Exception:
-        return None
-
-
-def _find_text_rows(gray: np.ndarray) -> list[tuple[int, int]]:
-    inv = 255 - gray
-    projection = inv.mean(axis=1)
-    threshold = max(float(projection.mean() * 1.15), 18.0)
-    rows = []
-    start = None
-    for idx, val in enumerate(projection):
-        if val >= threshold and start is None:
-            start = idx
-        elif val < threshold and start is not None:
-            if idx - start >= max(12, int(gray.shape[0] * 0.035)):
-                rows.append((start, idx))
-            start = None
-    if start is not None and gray.shape[0] - start >= max(12, int(gray.shape[0] * 0.035)):
-        rows.append((start, gray.shape[0]))
-    return rows
-
-
-def _merge_close_segments(segments: list[tuple[int, int]], max_gap: int) -> list[tuple[int, int]]:
-    if not segments:
-        return []
-    merged = [segments[0]]
-    for s, e in segments[1:]:
-        ps, pe = merged[-1]
-        if s - pe <= max_gap:
-            merged[-1] = (ps, e)
-        else:
-            merged.append((s, e))
-    return merged
-
-
-def detect_auto_layout_fields(img: Image.Image) -> dict:
-    if not CV2_AVAILABLE:
-        return {}
-    w, h = img.size
-    gray = pil_to_cv_gray(img)
-    blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    thr = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 9)
-    rows = _merge_close_segments(_find_text_rows(thr), max_gap=max(6, h // 120))
-    top_rows = [r for r in rows if r[0] < int(h * 0.55)]
-    if len(top_rows) < 3:
-        return {}
-    header_rows = top_rows[:2]
-    data_rows = sorted(top_rows[2:6], key=lambda r: (r[1] - r[0]), reverse=True)[:3]
-    data_rows = sorted(data_rows, key=lambda r: r[0])[:2]
-    if len(data_rows) < 2:
-        return {}
-    header_y1 = header_rows[0][0] / h
-    header_y2 = header_rows[-1][1] / h
-    k21_y1, k21_y2 = data_rows[0][0] / h, data_rows[0][1] / h
-    k18_y1, k18_y2 = data_rows[1][0] / h, data_rows[1][1] / h
-    cols = {
-        "usd_buy": (0.00, 0.18),
-        "usd_sell": (0.18, 0.35),
-        "syp_buy": (0.35, 0.55),
-        "syp_sell": (0.55, 0.75),
-    }
-    fields = {
-        "day": {"id": "day", "type": "arabic_text", "box": {"x1": 0.70, "y1": max(0.0, header_y1 - 0.01), "x2": 1.00, "y2": min(1.0, header_y2 + 0.01)}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "soft"], "psm": 7},
-        "date": {"id": "date", "type": "date", "box": {"x1": 0.25, "y1": max(0.0, header_y1 - 0.01), "x2": 0.70, "y2": min(1.0, header_y2 + 0.01)}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789/.-"},
-        "time": {"id": "time", "type": "time", "box": {"x1": 0.00, "y1": max(0.0, header_y1 - 0.01), "x2": 0.30, "y2": min(1.0, header_y2 + 0.01)}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["adaptive", "binary"], "psm": 7, "char_whitelist": "0123456789:.;,مصAPMapm "},
-        "k21_usd_buy": {"id": "k21_usd_buy", "type": "usd_price", "box": {"x1": cols["usd_buy"][0], "y1": k21_y1, "x2": cols["usd_buy"][1], "y2": k21_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-        "k21_usd_sell": {"id": "k21_usd_sell", "type": "usd_price", "box": {"x1": cols["usd_sell"][0], "y1": k21_y1, "x2": cols["usd_sell"][1], "y2": k21_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-        "k21_syp_buy": {"id": "k21_syp_buy", "type": "syp_price", "box": {"x1": cols["syp_buy"][0], "y1": k21_y1, "x2": cols["syp_buy"][1], "y2": k21_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-        "k21_syp_sell": {"id": "k21_syp_sell", "type": "syp_price", "box": {"x1": cols["syp_sell"][0], "y1": k21_y1, "x2": cols["syp_sell"][1], "y2": k21_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-        "k18_usd_buy": {"id": "k18_usd_buy", "type": "usd_price", "box": {"x1": cols["usd_buy"][0], "y1": k18_y1, "x2": cols["usd_buy"][1], "y2": k18_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-        "k18_usd_sell": {"id": "k18_usd_sell", "type": "usd_price", "box": {"x1": cols["usd_sell"][0], "y1": k18_y1, "x2": cols["usd_sell"][1], "y2": k18_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789.,"},
-        "k18_syp_buy": {"id": "k18_syp_buy", "type": "syp_price", "box": {"x1": cols["syp_buy"][0], "y1": k18_y1, "x2": cols["syp_buy"][1], "y2": k18_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-        "k18_syp_sell": {"id": "k18_syp_sell", "type": "syp_price", "box": {"x1": cols["syp_sell"][0], "y1": k18_y1, "x2": cols["syp_sell"][1], "y2": k18_y2}, "ocr_engines": ["paddle", "tesseract"], "preprocess_modes": ["binary", "adaptive", "contrast"], "psm": 7, "char_whitelist": "0123456789"},
-    }
-    return {"reference_size": {"width": w, "height": h}, "fields": fields, "rows_px": {"header": header_rows, "data_rows": data_rows}}
-
-
-def run_ocr_pipeline_with_fields(img: Image.Image, fields_cfg: dict, validation: dict):
-    ordered_field_ids = DEFAULT_REQUIRED_PRICE_FIELDS + ["date", "time", "day"]
-    field_results = {}
-    for field_id in ordered_field_ids:
-        field_cfg = fields_cfg.get(field_id)
-        if field_cfg:
-            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
-    for field_id, field_cfg in fields_cfg.items():
-        if field_id not in field_results:
-            field_results[field_id] = run_field_ocr(field_id, field_cfg, img, validation)
-    adapted_fields_cfg = adaptive_field_shift(fields_cfg, field_results)
-    if adapted_fields_cfg != fields_cfg:
-        for field_id in ["day", "date", "time"]:
-            if field_id in adapted_fields_cfg:
-                field_results[field_id] = run_field_ocr(field_id, adapted_fields_cfg[field_id], img, validation)
-    return field_results, adapted_fields_cfg
 
 
 def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> ExtractionResult:
@@ -1281,26 +945,24 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         img = Image.open(BytesIO(image_bytes)).convert("RGB")
     except UnidentifiedImageError as exc:
         raise ValueError(f"Invalid image input: {exc}")
+
     if img.width < MIN_SOURCE_WIDTH or img.height < MIN_SOURCE_HEIGHT:
         raise ValueError(
             f"Source image too small for reliable OCR: {img.width}x{img.height} "
             f"(minimum {MIN_SOURCE_WIDTH}x{MIN_SOURCE_HEIGHT})"
         )
-    blueprint = load_blueprint()
-    bp_sig = blueprint_signature(blueprint)
+
     image_hash = sha256_bytes(image_bytes)
+    cache_key = f"{image_hash}:smart_v2:{int(_PADDLE_AVAILABLE)}"
     if CACHE_ENABLED:
         cache = load_ocr_cache()
-        cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
         entry = cache.get(cache_key)
         if isinstance(entry, dict):
             logger.info("OCR cache hit")
             return extraction_result_from_cache_entry(entry)
 
-    validation = DEFAULT_VALIDATION.copy()
-    validation.update(blueprint.get("validation") or {})
     warnings = []
-    debug = {
+    debug: dict[str, Any] = {
         "source_url": source_url,
         "image_width": img.width,
         "image_height": img.height,
@@ -1309,121 +971,41 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         "paddle_enabled": _PADDLE_AVAILABLE,
         "paddle_failure_reason": _PADDLE_FAILURE_REASON,
         "image_sha256": image_hash,
-        "blueprint_signature": bp_sig,
         "cache_hit": False,
     }
 
-    fields_cfg = blueprint.get("fields") or {}
-    field_results, _ = run_ocr_pipeline_with_fields(img, fields_cfg, validation)
-    debug["fields_blueprint"] = {
-        field_id: {
-            "crop_variant": result.crop_variant,
-            "crop_debug_path": result.crop_debug_path,
-            "selected": sanitize_for_json(result.selected.__dict__) if result.selected else None,
-        }
-        for field_id, result in field_results.items()
-    }
-
-    fallback_date, fallback_time, fallback_day, fallback_debug = extract_fallback_header(img)
-    debug["header_fallback"] = fallback_debug
-    full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
-    combined_header_text = " | ".join([x for x in [str(fallback_debug.get("header_best_text") or ""), full_text] if x])
-    parsed_header_date, parsed_header_time, parsed_header_day = extract_header_from_text(combined_header_text)
-
-    date = parsed_header_date
-    if date == "0000/00/00":
-        item = field_results.get("date")
-        if item and item.selected and item.selected.valid:
-            date = str(item.selected.value)
-        elif fallback_date != "0000/00/00":
-            date = fallback_date
-    time = parsed_header_time
-    if time == "00:00":
-        item = field_results.get("time")
-        if item and item.selected and item.selected.valid:
-            time = str(item.selected.value)
-        elif fallback_time != "00:00":
-            time = fallback_time
-    day = parsed_header_day
-    if not day:
-        item = field_results.get("day")
-        if item and item.selected and item.selected.valid:
-            day = str(item.selected.value)
-        elif fallback_day:
-            day = fallback_day
-
-    k21, k18, price_warnings = build_rates_from_fields(field_results)
-    warnings.extend(price_warnings)
-    extraction_method = "template_fields_hybrid"
-
-    blueprint_missing_count = sum(1 for key in DEFAULT_REQUIRED_PRICE_FIELDS if not (field_results.get(key) and field_results[key].selected and field_results[key].selected.valid))
-    if (k21 is None or k18 is None) or blueprint_missing_count >= 3:
-        auto_layout = detect_auto_layout_fields(img)
-        debug["auto_layout"] = auto_layout
-        if auto_layout and auto_layout.get("fields"):
-            auto_results, _ = run_ocr_pipeline_with_fields(img, auto_layout["fields"], validation)
-            debug["fields_auto_layout"] = {
-                field_id: {
-                    "crop_variant": result.crop_variant,
-                    "crop_debug_path": result.crop_debug_path,
-                    "selected": sanitize_for_json(result.selected.__dict__) if result.selected else None,
-                }
-                for field_id, result in auto_results.items()
-            }
-            ak21, ak18, auto_price_warnings = build_rates_from_fields(auto_results)
-            if ak21 is not None and ak18 is not None:
-                k21, k18 = ak21, ak18
-                warnings.append("used_auto_layout_detection")
-                warnings.extend(auto_price_warnings)
-                for fld, current in [("date", date), ("time", time), ("day", day)]:
-                    res = auto_results.get(fld)
-                    if res and res.selected and res.selected.valid:
-                        if fld == "date" and current == "0000/00/00":
-                            date = str(res.selected.value)
-                        elif fld == "time" and current == "00:00":
-                            time = str(res.selected.value)
-                        elif fld == "day" and not current:
-                            day = str(res.selected.value)
-                field_results = auto_results
-                extraction_method = "auto_layout_hybrid"
-
+    date, time, day, header_debug = extract_header(img)
+    debug["header"] = header_debug
     if date == "0000/00/00":
         warnings.append("header_date_failed")
     if time == "00:00":
         warnings.append("header_time_failed")
+    if not day:
+        warnings.append("header_day_failed")
 
+    tokens = collect_number_tokens(img)
+    rows = cluster_rows(tokens)
+    rows_info = [classify_row(r) for r in rows]
+    debug["rows"] = [{
+        "y_avg": float(sum(t.y for t in r["tokens"]) / max(len(r["tokens"]), 1)),
+        "values": [t.value for t in r["tokens"]],
+        "texts": [t.text for t in r["tokens"]],
+        "usd": [t.value for t in r["usd"]],
+        "syp": [t.value for t in r["syp"]],
+        "score": r["score"],
+    } for r in rows_info]
+
+    k21, k18, rel_warnings = pick_best_two_rows(rows_info)
     if k21 is None or k18 is None:
-        dk21, dk18 = build_rates_from_full_text(full_text)
-        debug["full_text_price_fallback"] = {
-            "diagnostic_only": False,
-            "k21": sanitize_for_json(dk21.__dict__) if dk21 else None,
-            "k18": sanitize_for_json(dk18.__dict__) if dk18 else None,
-        }
-        if dk21 is not None and dk18 is not None:
-            k21, k18 = dk21, dk18
-            warnings.append("used_full_text_row_fallback")
-            debug["price_source"] = "full_text_row_fallback"
-            extraction_method = "auto_layout_hybrid" if extraction_method == "auto_layout_hybrid" else "template_plus_row_fallback"
-        else:
-            warnings.append("ocr_partial_failure")
-            raise ValueError("OCR failed completely")
+        full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+        raise ValueError("Smart parser could not isolate two valid pricing rows")
 
-    k21, k18, auto_fix_warnings = sanitize_price_relationships(k21, k18)
-    warnings.extend(auto_fix_warnings)
-    relationship_ok, relationship_warnings = validate_relationships(k21, k18, validation)
-    warnings.extend(relationship_warnings)
-    debug["relationship_ok"] = relationship_ok
-    debug["relationship_warnings"] = relationship_warnings
-    debug["validation"] = validation
+    rel_ok, rel_warns_2 = relationship_ok(k21, k18)
+    warnings.extend(rel_warnings)
+    warnings.extend(rel_warns_2)
 
-    confidence = compute_confidence(field_results, relationship_ok, warnings, k21, k18)
-    learn_blueprint_from_success(blueprint, field_results, confidence)
-    overlay = export_overlay(image_bytes, extraction_method, source_url)
-    if overlay:
-        debug["debug_overlay_path"] = overlay
-
-    raw_date_preview = normalize_text(field_results["date"].selected.raw_text) if field_results.get("date") and field_results["date"].selected else ""
-    raw_time_preview = normalize_text(field_results["time"].selected.raw_text) if field_results.get("time") and field_results["time"].selected else ""
+    full_text = " | ".join(t.strip() for t in full_image_text_variants(img) if t.strip())
+    confidence = compute_confidence(date, time, rows_info, rel_ok, warnings)
 
     result = ExtractionResult(
         date=date,
@@ -1433,21 +1015,17 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         k18=k18,
         confidence=confidence,
         raw_ocr=full_text,
-        raw_ocr_preview=f"{raw_date_preview} | {raw_time_preview}".strip(" |"),
-        extraction_method=extraction_method,
+        raw_ocr_preview=normalize_text(full_text[:240]),
+        extraction_method="smart_full_ocr_v2",
         ocr_engine="paddle+tesseract" if _PADDLE_AVAILABLE else "tesseract",
         warnings=warnings,
         debug=debug,
     )
 
     if CACHE_ENABLED:
-        try:
-            cache = load_ocr_cache()
-            cache_key = f"{image_hash}:{bp_sig}:{int(_PADDLE_AVAILABLE)}"
-            cache[cache_key] = extraction_result_to_cache_entry(result)
-            save_ocr_cache(cache)
-        except Exception as exc:
-            logger.warning("Failed to save OCR cache: %s", exc)
+        cache = load_ocr_cache()
+        cache[cache_key] = extraction_result_to_cache_entry(result)
+        save_ocr_cache(cache)
 
     return result
 
@@ -1496,21 +1074,17 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Optimized", version="12.0.0")
+app = FastAPI(title="Gold OCR Smart Parser V2", version="2.0.0")
 
 
 @app.get("/health")
 def health():
     return {
         "ok": True,
-        "service": "gold-ocr-optimized",
-        "version": "12.0.0",
+        "service": "gold-ocr-smart-v2",
+        "version": "2.0.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
-        "cache_enabled": CACHE_ENABLED,
-        "image_cache_enabled": IMAGE_CACHE_ENABLED,
-        "min_source_width": MIN_SOURCE_WIDTH,
-        "min_source_height": MIN_SOURCE_HEIGHT,
     }
 
 
