@@ -71,7 +71,7 @@ except Exception:
     APP_TIMEZONE_NAME = "UTC"
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("gold-smart-v3-final")
+logger = logging.getLogger("gold-smart-v3-datefix")
 
 SESSION = requests.Session()
 retry = Retry(
@@ -548,7 +548,7 @@ def paddle_tokens(img: Image.Image) -> list[dict]:
     return out
 
 
-def parse_date_safely(text: str) -> str:
+def _extract_date_candidates(text: str) -> list[tuple[str, int]]:
     text = normalize_digits(text)
     text = text.replace("Z", "2").replace("z", "2").replace("O", "0").replace("o", "0")
     text = text.replace("\\", "/").replace("|", "/")
@@ -556,22 +556,64 @@ def parse_date_safely(text: str) -> str:
     text = re.sub(r"/{2,}", "/", text)
     text = re.sub(r"\.{2,}", ".", text)
     text = re.sub(r"-{2,}", "-", text)
-    m = re.search(r"(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})", text)
-    if not m:
-        m = re.search(r"(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})", text)
-        if not m:
-            return "0000/00/00"
-        day, month, year = m.groups()
-    else:
-        year, month, day = m.groups()
-    try:
-        month_i = int(month)
-        day_i = int(day)
-        if not (1 <= month_i <= 12) or not (1 <= day_i <= 31):
-            return "0000/00/00"
-        return f"{int(year):04d}/{month_i:02d}/{day_i:02d}"
-    except Exception:
+
+    candidates: list[tuple[str, int]] = []
+
+    for m in re.finditer(r"(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})", text):
+        y, mo, d = m.groups()
+        try:
+            y_i, mo_i, d_i = int(y), int(mo), int(d)
+            if 1 <= mo_i <= 12 and 1 <= d_i <= 31:
+                candidates.append((f"{y_i:04d}/{mo_i:02d}/{d_i:02d}", m.start()))
+        except Exception:
+            pass
+
+    for m in re.finditer(r"(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})", text):
+        d, mo, y = m.groups()
+        try:
+            y_i, mo_i, d_i = int(y), int(mo), int(d)
+            if 1 <= mo_i <= 12 and 1 <= d_i <= 31:
+                candidates.append((f"{y_i:04d}/{mo_i:02d}/{d_i:02d}", m.start()))
+        except Exception:
+            pass
+
+    return candidates
+
+
+def parse_date_safely(text: str) -> str:
+    candidates = _extract_date_candidates(text)
+    if not candidates:
         return "0000/00/00"
+
+    now_local = datetime.now(APP_TIMEZONE)
+    best_date = "0000/00/00"
+    best_score = -10**9
+
+    for cand, pos in candidates:
+        try:
+            y, m, d = [int(x) for x in cand.split("/")]
+            score = 0
+            # Strongly prefer current/near-current years. This fixes the 2020 ghost date issue.
+            if y == now_local.year:
+                score += 120
+            elif y == now_local.year - 1 or y == now_local.year + 1:
+                score += 70
+            elif y >= 2024:
+                score += 20
+            else:
+                score -= 80
+            # Prefer later occurrences because true date often appears in cleaner repeated OCR near the end.
+            score += min(pos // 30, 20)
+            # Prefer plausible recent month/day combinations.
+            if 1 <= m <= 12 and 1 <= d <= 31:
+                score += 10
+            if score > best_score:
+                best_score = score
+                best_date = cand
+        except Exception:
+            continue
+
+    return best_date
 
 
 def parse_time_safely(text: str) -> str:
@@ -1031,7 +1073,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         )
 
     image_hash = sha256_bytes(image_bytes)
-    cache_key = f"{image_hash}:smart_v3_final:{int(_PADDLE_AVAILABLE)}"
+    cache_key = f"{image_hash}:smart_v3_final_datefix:{int(_PADDLE_AVAILABLE)}"
     if CACHE_ENABLED:
         cache = load_ocr_cache()
         entry = cache.get(cache_key)
@@ -1093,7 +1135,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         confidence=confidence,
         raw_ocr=full_text,
         raw_ocr_preview=normalize_text(full_text[:260]),
-        extraction_method="smart_full_ocr_v3_final",
+        extraction_method="smart_full_ocr_v3_final_datefix",
         ocr_engine="paddle+tesseract" if _PADDLE_AVAILABLE else "tesseract",
         warnings=warnings,
         debug=debug,
@@ -1151,15 +1193,15 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Smart Parser V3 Final", version="3.1.0")
+app = FastAPI(title="Gold OCR Smart Parser V3 Final Date Fix", version="3.1.1")
 
 
 @app.get("/health")
 def health():
     return {
         "ok": True,
-        "service": "gold-ocr-smart-v3-final",
-        "version": "3.1.0",
+        "service": "gold-ocr-smart-v3-final-datefix",
+        "version": "3.1.1",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
