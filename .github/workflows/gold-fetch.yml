@@ -2,7 +2,7 @@ name: Fetch Gold OCR From Facebook Public Page
 
 on:
   schedule:
-    - cron: "*/59 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
