@@ -1,9 +1,9 @@
 {
   "ok": true,
   "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
-  "date": "0000/00/00",
+  "date": "2020/05/19",
   "time": "10:55",
-  "day": "",
+  "day": "السبت",
   "k21_ss": 15950,
   "k21_sb": 15600,
   "k21_us": 129.0,
@@ -16,15 +16,12 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67758,
-  "updated_at_utc": "2026-03-29T22:22:14.253901+00:00",
+  "updated_at_utc": "2026-03-29T22:45:28.026458+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
-  "extraction_method": "smart_full_ocr_v3",
-  "confidence": 0.8499999999999999,
-  "warnings": [
-    "header_date_failed",
-    "header_day_failed"
-  ],
+  "extraction_method": "smart_full_ocr_v3_final",
+  "confidence": 1.0,
+  "warnings": [],
   "debug": {
     "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "image_width": 780,
@@ -199,7 +196,7 @@
       }
     }
   },
-  "change_key": "0000/00/00|10:55|15950|15600|129.0|126.0|13650|13300|110.5|107.5",
+  "change_key": "2020/05/19|10:55|15950|15600|129.0|126.0|13650|13300|110.5|107.5",
   "previous_values": {
     "k21_ss": null,
     "k21_sb": null,
