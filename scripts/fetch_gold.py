@@ -1,7 +1,6 @@
 import hashlib
 import json
 import logging
-import math
 import os
 import re
 from dataclasses import dataclass, asdict
@@ -31,7 +30,6 @@ except Exception:
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-DEBUG_DIR = DATA_DIR / "debug"
 CACHE_DIR = DATA_DIR / "cache"
 IMAGE_CACHE_DIR = CACHE_DIR / "images"
 OCR_CACHE_FILE = CACHE_DIR / "ocr_smart_v3.json"
@@ -73,7 +71,7 @@ except Exception:
     APP_TIMEZONE_NAME = "UTC"
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("gold-smart-v3")
+logger = logging.getLogger("gold-smart-v3-final")
 
 SESSION = requests.Session()
 retry = Retry(
@@ -289,7 +287,7 @@ def extraction_result_from_cache_entry(entry: dict) -> ExtractionResult:
         confidence=float(data["confidence"]),
         raw_ocr=data.get("raw_ocr", ""),
         raw_ocr_preview=data.get("raw_ocr_preview", ""),
-        extraction_method=data.get("extraction_method", "smart_full_ocr_v3"),
+        extraction_method=data.get("extraction_method", "smart_full_ocr_v3_final"),
         ocr_engine=data.get("ocr_engine", "unknown"),
         warnings=list(data.get("warnings") or []),
         debug=debug,
@@ -553,7 +551,11 @@ def paddle_tokens(img: Image.Image) -> list[dict]:
 def parse_date_safely(text: str) -> str:
     text = normalize_digits(text)
     text = text.replace("Z", "2").replace("z", "2").replace("O", "0").replace("o", "0")
-    text = text.replace("\\", "/").replace("|", "/").replace(" ", "")
+    text = text.replace("\\", "/").replace("|", "/")
+    text = re.sub(r"[^\d/.\-]", "", text)
+    text = re.sub(r"/{2,}", "/", text)
+    text = re.sub(r"\.{2,}", ".", text)
+    text = re.sub(r"-{2,}", "-", text)
     m = re.search(r"(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})", text)
     if not m:
         m = re.search(r"(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2})", text)
@@ -596,23 +598,19 @@ def parse_time_safely(text: str) -> str:
 
 def extract_day_safely(text: str) -> str:
     text = normalize_text(text)
-    day_names = ["الاثنين", "الثلاثاء", "الاربعاء", "الخميس", "الجمعة", "السبت", "الاحد"]
-    for day in day_names:
-        if day in text:
-            return day
-    aliases = {
-        "سبت": "السبت",
-        "خميس": "الخميس",
-        "جمعه": "الجمعة",
-        "جمعة": "الجمعة",
-        "احد": "الاحد",
-        "اثنين": "الاثنين",
-        "ثلاثاء": "الثلاثاء",
-        "اربعاء": "الاربعاء",
+    days = {
+        "السبت": ["السبت", "سبت", "تسبلا", "تبسلا"],
+        "الاحد": ["الاحد", "احد"],
+        "الاثنين": ["الاثنين", "اثنين"],
+        "الثلاثاء": ["الثلاثاء", "ثلاثاء"],
+        "الاربعاء": ["الاربعاء", "اربعاء"],
+        "الخميس": ["الخميس", "خميس"],
+        "الجمعة": ["الجمعة", "جمعه", "جمعة"],
     }
-    for k, v in aliases.items():
-        if k in text:
-            return v
+    for full, variants in days.items():
+        for v in variants:
+            if v in text:
+                return full
     return ""
 
 
@@ -659,12 +657,10 @@ def extract_header(img: Image.Image):
     time_combined = " | ".join(time_texts + general_texts)
     day_combined = " | ".join(day_texts + general_texts)
 
-    # Prefer explicit region parsing over general header parsing.
     date = parse_date_safely(date_combined)
     time = parse_time_safely(time_combined)
     day = extract_day_safely(day_combined)
 
-    # Choose most likely time candidate near header text if multiple patterns exist.
     time_candidates = []
     for txt in time_texts + general_texts:
         norm = normalize_digits(txt)
@@ -692,6 +688,15 @@ def extract_header(img: Image.Image):
         if best_time != "00:00":
             time = best_time
 
+    full_text = " ".join([general_combined, date_combined, time_combined, day_combined])
+
+    if date == "0000/00/00":
+        date = parse_date_safely(full_text)
+    if time == "00:00":
+        time = parse_time_safely(full_text)
+    if not day:
+        day = extract_day_safely(full_text)
+
     return date, time, day, {
         "header_general_text": general_combined,
         "date_region_text": " | ".join(date_texts),
@@ -713,7 +718,6 @@ def parse_numeric_token(text: str) -> Optional[float]:
 
 
 def collect_number_tokens(img: Image.Image):
-    # Focus mostly on table area to reduce header/footer noise.
     table = crop_box(img, 0.00, 0.50, 0.78, 0.84)
     variants = [
         ("soft", preprocess_soft(table, 2)),
@@ -729,8 +733,7 @@ def collect_number_tokens(img: Image.Image):
             val = parse_numeric_token(tok["text"])
             if val is None:
                 continue
-            # map back into full-image normalized coordinates
-            x = 0.00 + tok["x"] * 0.78
+            x = tok["x"] * 0.78
             y = 0.50 + tok["y"] * 0.34
             w = tok["w"] * 0.78
             h = tok["h"] * 0.34
@@ -744,7 +747,7 @@ def collect_number_tokens(img: Image.Image):
                 val = parse_numeric_token(tok["text"])
                 if val is None:
                     continue
-                x = 0.00 + tok["x"] * 0.78
+                x = tok["x"] * 0.78
                 y = 0.50 + tok["y"] * 0.34
                 w = tok["w"] * 0.78
                 h = tok["h"] * 0.34
@@ -810,7 +813,6 @@ def pick_best_pair(tokens: list[NumberToken], kind: str):
             b = tokens[j]
             low, high = (a, b) if a.value <= b.value else (b, a)
             diff = high.value - low.value
-            # Strongly prefer realistic spread and left-to-right proximity.
             if diff <= 0:
                 continue
             if kind == "usd":
@@ -823,7 +825,6 @@ def pick_best_pair(tokens: list[NumberToken], kind: str):
                 score = 25.0 - (diff / 120.0)
             score -= abs(a.x - b.x) * 8.0
             score += (a.confidence + b.confidence) / 100.0
-            # Prefer pairs that are in expected left-to-right order and near their expected half.
             if kind == "usd":
                 score += 3.0 if max(a.x, b.x) < 0.36 else -2.0
             else:
@@ -1030,7 +1031,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         )
 
     image_hash = sha256_bytes(image_bytes)
-    cache_key = f"{image_hash}:smart_v3:{int(_PADDLE_AVAILABLE)}"
+    cache_key = f"{image_hash}:smart_v3_final:{int(_PADDLE_AVAILABLE)}"
     if CACHE_ENABLED:
         cache = load_ocr_cache()
         entry = cache.get(cache_key)
@@ -1092,7 +1093,7 @@ def extract_gold_from_image_bytes(image_bytes: bytes, source_url: str = "") -> E
         confidence=confidence,
         raw_ocr=full_text,
         raw_ocr_preview=normalize_text(full_text[:260]),
-        extraction_method="smart_full_ocr_v3",
+        extraction_method="smart_full_ocr_v3_final",
         ocr_engine="paddle+tesseract" if _PADDLE_AVAILABLE else "tesseract",
         warnings=warnings,
         debug=debug,
@@ -1150,15 +1151,15 @@ def build_snapshot_from_image(image_bytes: bytes, source_url: str) -> dict:
     return snapshot
 
 
-app = FastAPI(title="Gold OCR Smart Parser V3", version="3.0.0")
+app = FastAPI(title="Gold OCR Smart Parser V3 Final", version="3.1.0")
 
 
 @app.get("/health")
 def health():
     return {
         "ok": True,
-        "service": "gold-ocr-smart-v3",
-        "version": "3.0.0",
+        "service": "gold-ocr-smart-v3-final",
+        "version": "3.1.0",
         "time_utc": datetime.now(timezone.utc).isoformat(),
         "display_timezone": APP_TIMEZONE_NAME,
     }
@@ -1182,7 +1183,7 @@ def extract(payload: ExtractRequest):
             k18_ss=result.k18.ss,
             k18_sb=result.k18.sb,
             k18_us=round(float(result.k18.us), 2),
-            k18_ub=result.k18.ub,
+            k18_ub=round(float(result.k18.ub), 2),
             confidence=result.confidence,
             extraction_method=result.extraction_method,
             ocr_engine=result.ocr_engine,
