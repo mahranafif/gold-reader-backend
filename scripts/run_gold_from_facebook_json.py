@@ -1,3 +1,4 @@
+
 import json
 import os
 import subprocess
@@ -15,9 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 FACEBOOK_JSON = DATA_DIR / "facebook_latest_image.json"
 FETCH_GOLD_SCRIPT = ROOT / "scripts" / "fetch_gold.py"
-BLUEPRINT_FILE = DATA_DIR / "blueprint.json"
-FAILURES_FILE = DATA_DIR / "facebook_ocr_failures.json"
-LATEST_FILE = DATA_DIR / "latest.json"
+BLUEPRINT_FILE = ROOT / "data" / "blueprint.json"
+FAILURES_FILE = ROOT / "data" / "facebook_ocr_failures.json"
+LATEST_FILE = ROOT / "data" / "latest.json"
 
 POSTER_MODEL_PATH = ROOT / "models" / "gold_poster_classifier.pt"
 LAYOUT_MODEL_PATH = ROOT / "models" / "gold_layout_classifier.pt"
