@@ -6,33 +6,36 @@
   "day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا",
   "k21_ss": 15950,
   "k21_sb": 15600,
-  "k21_us": 129.0,
-  "k21_ub": 110.5,
-  "k18_ss": 15600,
-  "k18_sb": 13300,
+  "k21_us": 126.0,
+  "k21_ub": 107.5,
+  "k18_ss": 15950,
+  "k18_sb": 15600,
   "k18_us": 126.0,
   "k18_ub": 107.5,
-  "raw_ocr_preview": "بهذلا عيبل هيم | 0",
+  "raw_ocr_preview": "هيمو بهذلا عيبل هرد نع | ‎1‏ يك",
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67758,
-  "updated_at_utc": "2026-03-29T20:24:07.636244+00:00",
+  "updated_at_utc": "2026-03-29T21:27:07.878267+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
-  "extraction_method": "template_fields_hybrid",
-  "confidence": 0.3998513849052516,
+  "extraction_method": "template_plus_row_fallback",
+  "confidence": 0.41831428096227324,
   "warnings": [
-    "header_date_failed",
     "missing_or_invalid:k21_syp_sell",
     "missing_or_invalid:k21_syp_buy",
     "missing_or_invalid:k21_usd_sell",
     "missing_or_invalid:k21_usd_buy",
     "missing_or_invalid:k18_syp_buy",
     "missing_or_invalid:k18_usd_buy",
-    "used_full_text_price_fallback",
+    "header_date_failed",
+    "used_full_text_row_fallback",
+    "auto_swapped_k21_syp_buy_sell",
     "auto_swapped_k18_syp_buy_sell",
-    "sell_ratio_outside_expected_ratio:0.9781",
-    "missing_required_fields:date"
+    "buy_ratio_outside_expected_ratio:1.0000",
+    "sell_ratio_outside_expected_ratio:1.0000",
+    "k21_usd_not_greater_than_k18_usd",
+    "k21_syp_not_greater_than_k18_syp"
   ],
   "debug": {
     "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
@@ -42,14 +45,13 @@
     "opencv_available": true,
     "paddle_enabled": true,
     "paddle_failure_reason": null,
-    "has_blueprint": true,
     "image_sha256": "363161cafc3cfb38bf9c842a728d043f5e8f3aad3cb8ae5e64d9323ab083e4dc",
     "blueprint_signature": "b3253a06d49ec2e41d7f33211b4cb6e6ffea0c3228a7f1ce697b321bb3631ff1",
     "cache_hit": false,
-    "fields": {
+    "fields_blueprint": {
       "k21_syp_sell": {
         "crop_variant": "pad_h",
-        "crop_debug_path": "data/debug/fields/20260329T202215688495_k21_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212456414127_k21_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "pad_h:binary",
@@ -64,7 +66,7 @@
       },
       "k21_syp_buy": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260329T202224925267_k21_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212505426856_k21_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -79,7 +81,7 @@
       },
       "k21_usd_sell": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260329T202230204447_k21_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212510671429_k21_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:contrast",
@@ -94,7 +96,7 @@
       },
       "k21_usd_buy": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260329T202234670959_k21_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212514994540_k21_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:contrast",
@@ -109,7 +111,7 @@
       },
       "k18_syp_sell": {
         "crop_variant": "base",
-        "crop_debug_path": "data/debug/fields/20260329T202239211523_k18_syp_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212519440863_k18_syp_sell_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "base:binary",
@@ -124,7 +126,7 @@
       },
       "k18_syp_buy": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260329T202239829103_k18_syp_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212524276177_k18_syp_buy_base_adaptive.png",
         "selected": {
           "engine": "paddle",
           "mode": "up:binary",
@@ -139,7 +141,7 @@
       },
       "k18_usd_sell": {
         "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260329T202244781239_k18_usd_sell_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212529137321_k18_usd_sell_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "up:binary",
@@ -154,7 +156,7 @@
       },
       "k18_usd_buy": {
         "crop_variant": "down",
-        "crop_debug_path": "data/debug/fields/20260329T202249184945_k18_usd_buy_base_adaptive.png",
+        "crop_debug_path": "data/debug/fields/20260329T212533466505_k18_usd_buy_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
           "mode": "down:binary",
@@ -168,47 +170,47 @@
         }
       },
       "date": {
-        "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260329T202253553787_date_base_adaptive.png",
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260329T212551519511_date_base_adaptive.png",
         "selected": {
           "engine": "paddle",
-          "mode": "pad_s:binary",
-          "raw_text": "بهذلا عيبل ةيم",
+          "mode": "down:binary",
+          "raw_text": "ةيمو بهذلا عيبل ةرد نع",
           "value": "0000/00/00",
-          "confidence": 99.99307195345561,
+          "confidence": 99.9420714378357,
           "valid": false,
           "expected": true,
-          "score": 9.999307195345562,
+          "score": 9.99420714378357,
           "warning": "date_parse_failed"
         }
       },
       "time": {
-        "crop_variant": "up",
-        "crop_debug_path": "data/debug/fields/20260329T202258683504_time_base_adaptive.png",
+        "crop_variant": "base",
+        "crop_debug_path": "data/debug/fields/20260329T212557498868_time_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "up:binary",
-          "raw_text": "0",
+          "mode": "base:adaptive",
+          "raw_text": "‎١‏ يك",
           "value": "00:00",
-          "confidence": 62.0,
+          "confidence": 45.0,
           "valid": false,
           "expected": true,
-          "score": 6.199999999999999,
+          "score": 4.5,
           "warning": "time_parse_failed"
         }
       },
       "day": {
-        "crop_variant": "pad_s",
-        "crop_debug_path": "data/debug/fields/20260329T202302351729_day_base_adaptive.png",
+        "crop_variant": "down",
+        "crop_debug_path": "data/debug/fields/20260329T212548987888_day_base_adaptive.png",
         "selected": {
           "engine": "tesseract",
-          "mode": "pad_s:soft",
-          "raw_text": "ee |",
-          "value": "ee 1",
-          "confidence": 49.0,
+          "mode": "down:soft",
+          "raw_text": "ٍ 5 : < . 5 |",
+          "value": "ٍ 5 : < . 5 1",
+          "confidence": 49.142857142857146,
           "valid": true,
           "expected": true,
-          "score": 117.9,
+          "score": 117.91428571428571,
           "warning": null
         }
       }
@@ -222,31 +224,29 @@
       ],
       "header_best_text": "0 Sa chars a . 0 cues 4 ‏دا‎\n‎ANY een 7 oy ty NE ee ‏الح‎ ١ #2 2 re\n0 SAN 0 = rls My. \\ ys 5 os ‏د 30 لان‎ 8 win Mes\nVl. rn aes 5 0 ١ 1 3 . ‏ا ل‎ Ne 5 1 at\n111 ee ow xt 1 ‏يي ار‎ a ‏ما اميه ل لم‎ etd ‏ين‎\n‎alee na ‏صم‎ Ks 0 LL CA ry ete eT 0 ‏ان‎ ge OAS ro,\n11 81 Rss ea ca a eg ag eS RS 4 1\n‏ا‎ Ome ye BS ‏ه داوس ب اا لاو ل‎ ’ we eat\ni 183 BI kaos Sa ed gp) A 000 ‏#جمعدة الصاعة‎ is\"\nFL a Ne re ONS ‏ال‎\n‎py heigl WAS ‏وش‎ 5 rg 5 a,\" 98 Ba TF 5 ok wh at 52000 1 ‏ين‎ 80\n5 rs oS Masco as oi ‏بين وه امت‎ ea\n\nne: 6 ‏الى يي‎ 0 gs A a BALSA iene Oey Gg ‏بر‎\n\n-.' . = = ‏طلس ير‎ 07 a"
     },
-    "header_parser": {
-      "combined_header_text_preview": "0 Sa chars a . 0 cues 4 ‏دا‎\n‎ANY een 7 oy ty NE ee ‏الح‎ ١ #2 2 re\n0 SAN 0 = rls My. \\ ys 5 os ‏د 30 لان‎ 8 win Mes\nVl. rn aes 5 0 ١ 1 3 . ‏ا ل‎ Ne 5 1 at\n111 ee ow xt 1 ‏يي ار‎ a ‏ما اميه ل لم‎ etd ‏ين‎\n‎alee na ‏صم‎ Ks 0 LL CA ry ete eT 0 ‏ان‎ ge OAS ro,\n11 81 Rss ea ca a eg ag eS RS 4 1\n‏ا‎ Ome ye BS ‏ه داوس ب اا لاو ل‎ ’ we eat\ni 183 BI kaos Sa ed gp) A 000 ‏#جمعدة الصاعة‎ is\"\nFL a Ne re ONS ‏ال‎\n‎py heigl WAS ‏وش‎ 5 rg 5 a,\" 98 Ba TF 5 ok wh at 52000 1 ‏ين‎ 80\n5 rs oS Masco as oi ‏بين وه امت‎ ea\n\nne: 6 ‏الى يي‎ 0 gs A a BALSA iene Oey Gg ‏بر‎\n\n-.' . = = ‏طلس ير‎ 07 a | 3 جد 3# عد :\nالنسعيرة اليومية لبيع الذهب 20 0\nالصضادرة عن ‎ak‏ ال ‎ikon‏\n‏> جمعية الصاغة بدمشق . ‎ee ٠.‏ لج\n‎ing : 2 ae‏ > و 1-2-2 7\nاليوم: التاريخ: , الساعة:\nالعيار ‎ee‏ 0\n‎c ad ce‏ 1\n21 15950 15600 | 129 = 4126\n‎١ ial‏ أ\n18 0 13300 110.50 1107.50“\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعسنلا نع ةرداصلا قشمدب ةغاصل",
-      "parsed_date": "0000/00/00",
-      "parsed_time": "22:50",
-      "parsed_day": "عيبل هيمويلا بهذلا هريعستلا نع هرداصلا قشمدب هغاصلا هيعمج هعاسلا خيراتلا"
-    },
+    "auto_layout": {},
     "full_text_price_fallback": {
       "diagnostic_only": false,
       "k21": {
-        "ub": 110.5,
-        "us": 129.0,
-        "sb": 15600,
-        "ss": 15950
+        "ub": 107.5,
+        "us": 126.0,
+        "sb": 15950,
+        "ss": 15600
       },
       "k18": {
         "ub": 107.5,
         "us": 126.0,
-        "sb": 15600,
-        "ss": 13300
+        "sb": 15950,
+        "ss": 15600
       }
     },
-    "price_source": "full_text_fallback",
+    "price_source": "full_text_row_fallback",
     "relationship_ok": false,
     "relationship_warnings": [
-      "sell_ratio_outside_expected_ratio:0.9781"
+      "buy_ratio_outside_expected_ratio:1.0000",
+      "sell_ratio_outside_expected_ratio:1.0000",
+      "k21_usd_not_greater_than_k18_usd",
+      "k21_syp_not_greater_than_k18_syp"
     ],
     "validation": {
       "usd_hard_min": 80,
@@ -260,7 +260,7 @@
       "min_18k_to_21k_ratio": 0.8,
       "max_18k_to_21k_ratio": 0.9
     },
-    "debug_overlay_path": "data/debug/20260329T202407_template_fields_hybrid_candidate_2.jpg.png"
+    "debug_overlay_path": "data/debug/20260329T212707_template_plus_row_fallback_candidate_2.jpg.png"
   },
   "should_notify": true,
   "change_summary": {
@@ -277,19 +277,19 @@
       },
       "k21_us": {
         "old": null,
-        "new": 129.0
+        "new": 126.0
       },
       "k21_ub": {
         "old": null,
-        "new": 110.5
+        "new": 107.5
       },
       "k18_ss": {
         "old": null,
-        "new": 15600
+        "new": 15950
       },
       "k18_sb": {
         "old": null,
-        "new": 13300
+        "new": 15600
       },
       "k18_us": {
         "old": null,
@@ -301,7 +301,7 @@
       }
     }
   },
-  "change_key": "0000/00/00|22:50|15950|15600|129.0|110.5|15600|13300|126.0|107.5",
+  "change_key": "0000/00/00|22:50|15950|15600|126.0|107.5|15950|15600|126.0|107.5",
   "previous_values": {
     "k21_ss": null,
     "k21_sb": null,
@@ -312,5 +312,5 @@
     "k18_us": null,
     "k18_ub": null
   },
-  "raw_ocr": "3 جد 3# عد :\nالنسعيرة اليومية لبيع الذهب 20 0\nالصضادرة عن ‎ak‏ ال ‎ikon‏\n‏> جمعية الصاغة بدمشق . ‎ee ٠.‏ لج\n‎ing : 2 ae‏ > و 1-2-2 7\nاليوم: التاريخ: , الساعة:\nالعيار ‎ee‏ 0\n‎c ad ce‏ 1\n21 15950 15600 | 129 = 4126\n‎١ ial‏ أ\n18 0 13300 110.50 1107.50“\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعسنلا نع ةرداصلا قشمدب ةغاصلا ةيعمج :ةعاسلا 2026/2 :خيراتلا ص10:55 تبسلا :مويلا ء مارغلارعس سءل مارغلأ رعس رايعلا ءارش عيبم ءارش عبيم 2 126 29 15600 15950 8 107.50 110.50 13300 13650 حضاو لكشب ةهجاولا ىلع ةريعستلا عضوب مازننالا ةظحاالم 2230766 2248005 ايروس كنب لباقم ةقيرحلا رجهملاو قشمد | UN * x 5\n\nالتسعيرة اليومية لبيع الذهب 0\nالصادرة عن | لاا\n\n.اليؤم: التاريخ: الساعة:  ‎١‏ .\nالعيار سعر الغرام ل.س سعر ‎S pil‏ |\n\n‎eu 7\" |‏ شراء ‎eu‏ شراء\n\n‎| 126 129 15600 0 21 |\n2110750 11050| 13300 13650 18\n\n‏ملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق ‏ الحريقة - مقابل بنك سور ياوالمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا خيراتلا :مويلا مارغلارعس سءل مارغلارعس رايعلا ءارش عببم ءارش عيم 2 126 2 15600 15950 18 107.50 110.50 13300 13650 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحداالم 2230766 2248005 رجهملاو ايروس كنب لباقم ةقيرحلا قشمد"
+  "raw_ocr": "5 جد 3# عبد 2\nالتسعيرة اليومية لبيع الذهب 20 27\nالصادرة عن ‎6١ yy 00000030١‏\nا : ; 3 ‎Kae of es . 12 NES 1 ee‏ 5 : 27\nاليؤم: | التاريخ: الساعة: 7\nالعيار سعر الغرام ‎ved‏ | سعرالقرام 8 |\n: مييع شراء ‎ee‏ شاه |\n‎‘ol‏\n‏21 15950 15600 | 129 4126\n18 0 13300 110.50 1107.50“\nملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق . الحريقة . مقابل بنك سوريا والمهجر (2230766(_)2248005) | بهذلا عيبل ةيمويلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج :ةعاسلا :خيراتلا ص10:55 2026z تبسلا مويلا ء مارغلارعس سل مارغلارس رايعلا ءارش عيبم ءارش عبيم 2 126 2 15600 15950 18 107.50 13300 13650 110.50 حضاو لكشب ةهجاولا ىلع ةريعستلا عضوب مازننالا ةظحاالم 2248005 كنب 2230766 ايروس لباقم ةقيرحلا رجهملاو قشمد | UN * x 5\n\nالتسعيرة اليومية لبيع الذهب 0\nالصادرة عن | لاا\n\n.اليؤم: التاريخ: الساعة:  ‎١‏ .\nالعيار سعر الغرام ل.س سعر ‎S pil‏ |\n\n‎eu 7\" |‏ شراء ‎eu‏ شراء\n\n‎| 126 129 15600 0 21 |\n2110750 11050| 13300 13650 18\n\n‏ملاحظة : الالنزام بوضع التسعيرة على الواجهة بشكل واضح.\nدمشق ‏ الحريقة - مقابل بنك سور ياوالمهجر (2230766(_)2248005) | عيبل ةيمويلا بهذلا ةريعستلا نع ةرداصلا قشمدب ةغاصلا ةيعمج ةعاسلا خيراتلا :مويلا مارغلارعس سءل مارغلارعس رايعلا ءارش عببم ءارش عيم 2 126 2 15600 15950 18 107.50 110.50 13300 13650 حضاو لكشب ةمجاولا ىلع ةريعستلا عضوب مازننالا ةظحداالم 2230766 2248005 رجهملاو ايروس كنب لباقم ةقيرحلا قشمد | ع م\n‎ae eRe y ee‏\n‎٠7 :‏ ل عي ‎Hoy Be‏ 0\n‎WN ١ ~~ ay) \\ Sy 34 os aces : G2 Bef) Bee baths‏\n‎CMEC IS‏ الصاعة ‎i aN is yy 0 01 es egg‏\n‎“eg etc‏ ع كما الوم جلا ‎ELS ree SS? 3 Tog oe‏\n‎ee EE‏ ا اق ‎Ss Re OR ais‏ = : 0\n‎ae wn RR 8 = J me :‏ اا 0 3 0 : الس وق ‎as‏ 7 لحب\n‎wre‏ لصو ‎٠. Tes‏ 8 م 8 ”\n‎seal spo),‏ التاريخ: ‎yons/s/a3‏ السشاعة: ‎SAVORS‏\n‏ْ ا ‎poe‏\n‎am , 9 20‏ || 929 2 926 ال\n‎a‏ = ام ——— = 9\n‎HE‏ -\n‎eco GH |!‏ و ‎ne wom‏\n‎ne ane an ve‏ ا ا 0 . 0 8\n(مادحظة!: ‎AED‏ يوضع التسعيرة الواجية. بشكزة واضح!\nمغابل بنك سوريا والمهجرر (2230760(5)2248005) | عيبل ةيمومويلا ةريعستلا بهذلا نع ةرداصلا قشمدب ةغاصلا ةيعمج :ةعاسلا :خيراتلا تسلا ص1055 //S/8ق مويلا Sمارلا رعسS سل مازغلا رعس رايعلا ءارش عييم ءارش عبيم 126 129 15600 15950 18 150 110.50 13300 13650 .حضاو لكشب ةمجاولا ىلع ةريسب ضوست عضومازنالا :ةظحام رجهملاو ايروس كنب لباقم- ة ةقيرحلا - قشمد 2248005_2230766"
 }
