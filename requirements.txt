@@ -9,6 +9,11 @@ numpy>=1.26,<3
 paddleocr>=2.8,<3
 paddlepaddle>=3.0,<4
 opencv-python-headless>=4.10,<5
+
+# ML / classifier
+torch>=2.3,<3
+torchvision>=0.18,<1
+
 # Scraping
 playwright>=1.50,<2
 
