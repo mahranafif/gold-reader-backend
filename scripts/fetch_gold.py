@@ -618,6 +618,10 @@ def parse_date_safely(text: str) -> str:
         age_days = abs((now_local - candidate_date).days)
         score += max(0, 40 - age_days)
 
+        # Strongly prefer clean full dates like 2026/3/30 over broken OCR fragments.
+        if re.fullmatch(r"20\d{2}/\d{1,2}/\d{1,2}", cand):
+            score += 80
+
         # Prefer later OCR matches because the cleaner repetition often appears later.
         score += min(pos // 30, 20)
 
@@ -652,18 +656,19 @@ def parse_time_safely(text: str) -> str:
 
 def extract_day_safely(text: str) -> str:
     text = normalize_text(text)
+    reversed_text = text[::-1]
     days = {
         "السبت": ["السبت", "سبت", "تسبلا", "تبسلا"],
-        "الاحد": ["الاحد", "احد"],
-        "الاثنين": ["الاثنين", "اثنين"],
-        "الثلاثاء": ["الثلاثاء", "ثلاثاء"],
-        "الاربعاء": ["الاربعاء", "اربعاء"],
-        "الخميس": ["الخميس", "خميس"],
-        "الجمعة": ["الجمعة", "جمعه", "جمعة"],
+        "الاحد": ["الاحد", "احد", "دحالا"],
+        "الاثنين": ["الاثنين", "اثنين", "نينثالا"],
+        "الثلاثاء": ["الثلاثاء", "ثلاثاء", "ءاثالثلا"],
+        "الاربعاء": ["الاربعاء", "اربعاء", "ءاعبرالا"],
+        "الخميس": ["الخميس", "خميس", "سيمخلا"],
+        "الجمعة": ["الجمعة", "جمعه", "جمعة", "ةعمجلا"],
     }
     for full, variants in days.items():
         for v in variants:
-            if v in text:
+            if v in text or v in reversed_text:
                 return full
     return ""
 
@@ -776,9 +781,13 @@ def extract_header(img: Image.Image):
     if not day:
         day = extract_day_safely(full_text)
 
-    # New fallback strategy: infer the most recent matching weekday when OCR date fails.
+    # Fallback strategy: infer the most recent matching weekday when OCR date fails.
     if date == "0000/00/00" and day:
         date = infer_date_from_day(day)
+
+    # Final production fallback: keep a usable date even if OCR header is messy.
+    if date == "0000/00/00" and not day:
+        date = datetime.now(APP_TIMEZONE).strftime("%Y/%m/%d")
 
     return date, time, day, {
         "header_general_text": general_combined,
@@ -887,6 +896,10 @@ def classify_row(row: list[NumberToken]) -> dict:
 
 
 def pick_best_pair(tokens: list[NumberToken], kind: str):
+    if kind == "syp":
+        cleaned = [t for t in tokens if abs(t.value - round(t.value, -2)) <= 5]
+        if len(cleaned) >= 2:
+            tokens = cleaned
     if len(tokens) < 2:
         return None
     best_pair = None
