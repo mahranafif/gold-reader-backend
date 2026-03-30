@@ -15,7 +15,7 @@ concurrency:
 jobs:
   fetch-gold:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -26,13 +26,13 @@ jobs:
       REQUEST_TIMEOUT: "35"
 
       GOLD_OCR_MODE: prefer_blueprint
-      GOLD_DEBUG_EXPORT: "true"
+      GOLD_DEBUG_EXPORT: "false"
 
-      GOLD_CACHE_ENABLED: "false"
-      GOLD_IMAGE_CACHE_ENABLED: "false"
-      GOLD_OCR_CACHE_MAX_ENTRIES: "0"
-      GOLD_IMAGE_CACHE_MAX_ENTRIES: "0"
-      GOLD_IMAGE_CACHE_TTL_HOURS: "0"
+      GOLD_CACHE_ENABLED: "true"
+      GOLD_IMAGE_CACHE_ENABLED: "true"
+      GOLD_OCR_CACHE_MAX_ENTRIES: "300"
+      GOLD_IMAGE_CACHE_MAX_ENTRIES: "80"
+      GOLD_IMAGE_CACHE_TTL_HOURS: "72"
 
       GOLD_MIN_SOURCE_WIDTH: "750"
       GOLD_MIN_SOURCE_HEIGHT: "750"
@@ -43,12 +43,12 @@ jobs:
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-      FACEBOOK_MAX_SCROLL_STEPS: "4"
-      FACEBOOK_SCROLL_DELAY_MS: "1600"
-      FACEBOOK_MAX_CANDIDATES_TO_TRY: "6"
+      FACEBOOK_MAX_SCROLL_STEPS: "2"
+      FACEBOOK_SCROLL_DELAY_MS: "1000"
+      FACEBOOK_MAX_CANDIDATES_TO_TRY: "4"
       FACEBOOK_MAX_CANDIDATES_PER_POST: "4"
       FACEBOOK_MAX_POST_GROUPS: "2"
-      FACEBOOK_MAX_POSTS_TO_SCAN: "2"
+      FACEBOOK_MAX_POSTS_TO_SCAN: "3"
       FACEBOOK_MIN_CANDIDATE_WIDTH: "250"
       FACEBOOK_MIN_CANDIDATE_HEIGHT: "250"
       FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "400"
@@ -56,7 +56,7 @@ jobs:
       FACEBOOK_HIGH_RES_WIDTH: "900"
       FACEBOOK_HIGH_RES_HEIGHT: "900"
       FACEBOOK_FAST_RESOURCE_BLOCKING: "true"
-      FACEBOOK_SAVE_DEBUG_SCREENSHOT: "true"
+      FACEBOOK_SAVE_DEBUG_SCREENSHOT: "false"
 
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
       DISABLE_PADDLE: "false"
@@ -103,8 +103,6 @@ jobs:
       - name: Ensure data directories exist
         run: |
           mkdir -p data
-          mkdir -p data/debug
-          mkdir -p data/debug/fields
           mkdir -p data/cache
           mkdir -p data/cache/images
           mkdir -p data/tmp_fb_images
@@ -127,18 +125,16 @@ jobs:
           echo "facebook_ocr_failures.json:"
           cat data/facebook_ocr_failures.json || true
 
-      - name: Upload debug artifacts
-        if: always()
+      - name: Upload minimal artifacts on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: gold-ocr-debug
+          name: gold-ocr-failure-debug
           path: |
             data/facebook_latest_image.json
             data/latest.json
-            data/history.json
             data/facebook_ocr_failures.json
             data/facebook_page_debug.png
-            data/debug
           if-no-files-found: ignore
 
       - name: Commit updated JSON files
