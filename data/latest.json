@@ -8,7 +8,7 @@
   "k21_sb": 15900,
   "k21_us": 131.0,
   "k21_ub": 128.0,
-  "k18_ss": 13559,
+  "k18_ss": 13900,
   "k18_sb": 13550,
   "k18_us": 112.0,
   "k18_ub": 109.0,
@@ -16,7 +16,7 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67086,
-  "updated_at_utc": "2026-03-30T12:35:21.452457+00:00",
+  "updated_at_utc": "2026-03-30T13:19:54.588660+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
@@ -161,13 +161,18 @@
       }
     ]
   },
-  "should_notify": false,
+  "should_notify": true,
   "change_summary": {
-    "changed": false,
-    "count": 0,
-    "fields": {}
+    "changed": true,
+    "count": 1,
+    "fields": {
+      "k18_ss": {
+        "old": 13559,
+        "new": 13900
+      }
+    }
   },
-  "change_key": "2026/03/30|10:56|16250|15900|131.0|128.0|13559|13550|112.0|109.0",
+  "change_key": "2026/03/30|10:56|16250|15900|131.0|128.0|13900|13550|112.0|109.0",
   "previous_values": {
     "k21_ss": 16250,
     "k21_sb": 15900,
