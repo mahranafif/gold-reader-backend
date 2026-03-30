@@ -68,14 +68,13 @@ jobs:
       PIP_NO_PYTHON_VERSION_WARNING: "1"
 
     steps:
-      # ⏱️ Time guard (Syria time)
       - name: Stop if outside working hours (Syria time)
         run: |
           CURRENT_HOUR=$(TZ="Asia/Damascus" date +%H)
           echo "Current hour in Syria: $CURRENT_HOUR"
 
           if [ "$CURRENT_HOUR" -lt 9 ] || [ "$CURRENT_HOUR" -ge 21 ]; then
-            echo "Outside allowed time window (9:00 AM → 9:00 PM). Exiting."
+            echo "Outside allowed time window (9:00 AM to 9:00 PM Syria time). Exiting."
             exit 0
           fi
 
@@ -84,11 +83,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: Set up Python with pip cache
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -100,7 +109,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.paddleocr
-          key: ${{ runner.os }}-paddleocr-v1
+          key: ${{ runner.os }}-paddleocr-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-paddleocr-
 
       - name: Install system dependencies
         run: |
@@ -130,7 +141,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
-          pip install torch torchvision pillow
 
       - name: Install Playwright Chromium
         run: python -m playwright install chromium
@@ -142,10 +152,9 @@ jobs:
           mkdir -p data/cache/images
           mkdir -p models
 
-      # 🧹 CLEAN EVERYTHING IMPORTANT
       - name: Clear stale cache, debug, and screenshots
         run: |
-          echo "Cleaning cache..."
+          echo "Cleaning app cache..."
           rm -rf data/cache || true
 
           echo "Cleaning debug folder..."
