@@ -895,15 +895,83 @@ def classify_row(row: list[NumberToken]) -> dict:
     return {"tokens": row, "usd": usd, "syp": syp, "karat": karat, "score": score}
 
 
-def pick_best_pair(tokens: list[NumberToken], kind: str):
-    if kind == "syp":
-        cleaned = [t for t in tokens if abs(t.value - round(t.value, -2)) <= 5]
-        if len(cleaned) >= 2:
-            tokens = cleaned
+def is_round_market_value(v: float) -> bool:
+    iv = int(round(v))
+    return iv % 25 == 0 or iv % 50 == 0 or iv % 100 == 0
+
+
+def score_syp_pair(a: NumberToken, b: NumberToken, k21_pair: Optional[tuple[int, int]] = None) -> float:
+    low, high = (a, b) if a.value <= b.value else (b, a)
+    buy = int(round(low.value))
+    sell = int(round(high.value))
+
+    score = 0.0
+
+    if 10000 <= buy <= 20000:
+        score += 20
+    else:
+        score -= 100
+
+    if 10000 <= sell <= 20000:
+        score += 20
+    else:
+        score -= 100
+
+    if sell > buy:
+        score += 25
+    else:
+        score -= 100
+
+    if is_round_market_value(buy):
+        score += 10
+    else:
+        score -= 12
+
+    if is_round_market_value(sell):
+        score += 10
+    else:
+        score -= 12
+
+    diff = sell - buy
+    if 150 <= diff <= 600:
+        score += 20
+    elif 50 <= diff <= 900:
+        score += 8
+    else:
+        score -= 25
+
+    if low.x < high.x:
+        score += 8
+    else:
+        score -= 8
+
+    score += (a.confidence + b.confidence) / 25.0
+
+    if k21_pair is not None:
+        k21_buy, k21_sell = k21_pair
+        buy_ratio = buy / max(k21_buy, 1)
+        sell_ratio = sell / max(k21_sell, 1)
+
+        if 0.80 <= buy_ratio <= 0.90:
+            score += 14
+        else:
+            score -= 18
+
+        if 0.80 <= sell_ratio <= 0.90:
+            score += 14
+        else:
+            score -= 18
+
+    return score
+
+
+def pick_best_pair(tokens: list[NumberToken], kind: str, k21_pair: Optional[tuple[int, int]] = None):
     if len(tokens) < 2:
         return None
+
     best_pair = None
     best_score = -1e9
+
     for i in range(len(tokens)):
         for j in range(i + 1, len(tokens)):
             a = tokens[i]
@@ -912,29 +980,27 @@ def pick_best_pair(tokens: list[NumberToken], kind: str):
             diff = high.value - low.value
             if diff <= 0:
                 continue
+
             if kind == "usd":
                 if diff > 10:
                     continue
                 score = 30.0 - diff * 3.0
-            else:
-                if diff > 1200:
-                    continue
-                score = 25.0 - (diff / 120.0)
-            score -= abs(a.x - b.x) * 8.0
-            score += (a.confidence + b.confidence) / 100.0
-            if kind == "usd":
+                score -= abs(a.x - b.x) * 8.0
+                score += (a.confidence + b.confidence) / 100.0
                 score += 3.0 if max(a.x, b.x) < 0.36 else -2.0
             else:
-                score += 3.0 if min(a.x, b.x) > 0.32 else -2.0
+                score = score_syp_pair(a, b, k21_pair=k21_pair)
+
             if score > best_score:
                 best_score = score
                 best_pair = (low, high)
+
     return best_pair
 
 
-def row_to_rate(row_info: dict) -> Optional[GoldRate]:
+def row_to_rate(row_info: dict, k21_pair: Optional[tuple[int, int]] = None) -> Optional[GoldRate]:
     usd_pair = pick_best_pair(sorted(row_info["usd"], key=lambda t: t.x), kind="usd")
-    syp_pair = pick_best_pair(sorted(row_info["syp"], key=lambda t: t.x), kind="syp")
+    syp_pair = pick_best_pair(sorted(row_info["syp"], key=lambda t: t.x), kind="syp", k21_pair=k21_pair)
     if not usd_pair or not syp_pair:
         return None
     ub = float(usd_pair[0].value)
@@ -1009,7 +1075,8 @@ def pick_best_two_rows(rows_info: list[dict]):
             r2 = valid_rows[j]
             upper, lower = (r1, r2) if np.mean([t.y for t in r1["tokens"]]) < np.mean([t.y for t in r2["tokens"]]) else (r2, r1)
             k21 = row_to_rate(upper)
-            k18 = row_to_rate(lower)
+            k21_syp_pair = (k21.sb, k21.ss) if k21 else None
+            k18 = row_to_rate(lower, k21_pair=k21_syp_pair)
             if not k21 or not k18:
                 continue
             ok, warns = relationship_ok(k21, k18)
