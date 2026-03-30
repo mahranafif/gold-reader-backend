@@ -43,16 +43,31 @@ jobs:
       FACEBOOK_OUTPUT_JSON: "data/facebook_latest_image.json"
       FACEBOOK_SCREENSHOT_FILE: "data/facebook_page_debug.png"
       FACEBOOK_REQUEST_TIMEOUT_MS: "30000"
-
       FACEBOOK_MAX_SCROLL_STEPS: "2"
       FACEBOOK_SCROLL_DELAY_MS: "1000"
       FACEBOOK_MAX_CANDIDATES_TO_TRY: "4"
+      FACEBOOK_MAX_CANDIDATES_PER_POST: "4"
+      FACEBOOK_MAX_POST_GROUPS: "2"
       FACEBOOK_MAX_POSTS_TO_SCAN: "3"
-
+      FACEBOOK_MIN_CANDIDATE_WIDTH: "250"
+      FACEBOOK_MIN_CANDIDATE_HEIGHT: "250"
+      FACEBOOK_PREFERRED_CANDIDATE_WIDTH: "400"
+      FACEBOOK_PREFERRED_CANDIDATE_HEIGHT: "400"
+      FACEBOOK_HIGH_RES_WIDTH: "900"
+      FACEBOOK_HIGH_RES_HEIGHT: "900"
       FACEBOOK_FAST_RESOURCE_BLOCKING: "true"
       FACEBOOK_SAVE_DEBUG_SCREENSHOT: "false"
 
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+      DISABLE_PADDLE: "false"
+
+      CNN_POSTER_MIN_CONFIDENCE: "0.75"
+      CNN_POSTER_MIN_MARGIN: "0.20"
+      CNN_LAYOUT_MIN_CONFIDENCE: "0.50"
+
       PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
 
     steps:
       - name: Checkout repository
@@ -65,61 +80,88 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-*.txt
 
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-ara libgl1 libglib2.0-0
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-ara libgl1 libglib2.0-0 jq
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip wheel setuptools
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -f requirements-ocr.txt ]; then
+            pip install -r requirements-ocr.txt
+          fi
 
       - name: Install Playwright browsers
         run: python -m playwright install chromium
 
-      - name: Ensure directories
+      - name: Ensure data directories exist
         run: |
+          mkdir -p data
+          mkdir -p data/cache
+          mkdir -p data/cache/images
           mkdir -p data/tmp_fb_images
 
-      - name: Fetch Facebook candidates
+      - name: Fetch latest Facebook image candidates
         run: python scripts/fetch_facebook_public_image.py
 
-      - name: Run OCR pipeline
+      - name: Run Facebook image -> OCR pipeline
         run: python scripts/run_gold_from_facebook_json.py
 
-      # ✅ KEEP ONLY SUCCESS IMAGE
       - name: Keep only successful candidate image
+        if: success()
         run: |
           echo "Cleaning tmp images..."
-          SUCCESS_IMG=$(jq -r '.source' data/latest.json || echo "")
+
+          if [ ! -f data/latest.json ]; then
+            echo "latest.json not found"
+            exit 0
+          fi
+
+          SUCCESS_IMG=$(jq -r '.source // ""' data/latest.json)
+          echo "SUCCESS_IMG=$SUCCESS_IMG"
 
           if [[ "$SUCCESS_IMG" == file://* ]]; then
-            SUCCESS_PATH=${SUCCESS_IMG#file://}
-            echo "Success image: $SUCCESS_PATH"
+            SUCCESS_PATH="${SUCCESS_IMG#file://}"
+            SUCCESS_BASENAME="$(basename "$SUCCESS_PATH")"
+            echo "Keeping image file: $SUCCESS_BASENAME"
 
+            shopt -s nullglob
             for f in data/tmp_fb_images/*; do
-              if [ "$f" != "$SUCCESS_PATH" ]; then
+              if [ "$(basename "$f")" != "$SUCCESS_BASENAME" ]; then
                 rm -f "$f"
               fi
             done
           else
-            echo "No valid success image found"
+            echo "No file:// source found in latest.json"
           fi
+
+          echo "Remaining files:"
+          ls -la data/tmp_fb_images || true
 
       - name: Show outputs
         if: always()
         run: |
+          echo "facebook_latest_image.json:"
+          cat data/facebook_latest_image.json || true
+          echo
           echo "latest.json:"
           cat data/latest.json || true
           echo
-          echo "saved images:"
+          echo "tmp_fb_images:"
           ls -la data/tmp_fb_images || true
+          echo
+          echo "facebook_ocr_failures.json:"
+          cat data/facebook_ocr_failures.json || true
 
-      # ✅ Upload only final image (optional)
-      - name: Upload final image
+      - name: Upload final image on success
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -127,23 +169,40 @@ jobs:
           path: data/tmp_fb_images/*
           if-no-files-found: ignore
 
-      - name: Commit results
+      - name: Upload minimal artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-ocr-failure-debug
+          path: |
+            data/facebook_latest_image.json
+            data/latest.json
+            data/facebook_ocr_failures.json
+            data/facebook_page_debug.png
+          if-no-files-found: ignore
+
+      - name: Commit updated files
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/latest.json data/history.json data/tmp_fb_images || true
+          git add \
+            data/latest.json \
+            data/history.json \
+            data/facebook_latest_image.json \
+            data/facebook_ocr_failures.json \
+            data/tmp_fb_images || true
 
           if git diff --cached --quiet; then
-            echo "No changes"
+            echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "Update gold OCR + latest image"
+          git commit -m "Update gold OCR data"
 
           for i in 1 2 3; do
             git pull --rebase origin main && git push origin main && break
-            echo "Retry push $i"
+            echo "Push failed, retrying ($i)..."
             sleep 2
           done
