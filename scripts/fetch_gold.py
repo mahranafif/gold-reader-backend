@@ -758,34 +758,28 @@ def extract_header(img: Image.Image):
 
     time_candidates = []
     for txt in time_texts + general_texts:
-        norm = normalize_digits(txt)
-        for m in re.finditer(r"(\d{1,2})[:](\d{2})", norm):
-            hh = int(m.group(1))
-            mm = int(m.group(2))
-            if 0 <= hh <= 12 and 0 <= mm <= 59:
-                score = 2.0
-                if "ص" in norm or "am" in norm.lower():
-                    score += 1.0
-                if "م" in norm or "pm" in norm.lower():
-                    score += 0.7
-                time_candidates.append((score, f"{hh:02d}:{mm:02d}", txt))
-        for m in re.finditer(r"(\d{1,2})(\d{2})", norm):
-            hh = int(m.group(1))
-            mm = int(m.group(2))
-            if 0 <= hh <= 12 and 0 <= mm <= 59:
-                score = 0.5
-                if "ص" in norm or "am" in norm.lower():
-                    score += 0.6
-                time_candidates.append((score, f"{hh:02d}:{mm:02d}", txt))
+        parsed_time = parse_time_safely(txt)
+        if parsed_time == "00:00":
+            continue
+
+        norm = normalize_text(txt)
+        score = 1.0
+
+        if "ص" in norm or "am" in norm.lower():
+            score += 1.0
+        if "م" in norm or "pm" in norm.lower():
+            score += 1.0
+        if ":" in normalize_digits(txt):
+            score += 0.5
+
+        time_candidates.append((score, parsed_time, txt))
+
     if time_candidates:
         time_candidates.sort(key=lambda x: x[0], reverse=True)
         best_time = time_candidates[0][1]
-        if best_time != "00:00":
-            time = best_time
+        time = best_time
 
-    full_text = " ".join([general_combined, date_combined, time_combined, day_combined])
-
-    if date == "0000/00/00":
+if date == "0000/00/00":
         date = parse_date_safely(full_text)
     if time == "00:00":
         time = parse_time_safely(full_text)
