@@ -636,32 +636,54 @@ def parse_time_safely(text: str) -> str:
     if not text:
         return "00:00"
 
-    # Detect Arabic/English AM-PM markers before numeric cleanup.
     normalized = normalize_text(text)
-    lower_norm = normalized.lower()
-    is_pm = "م" in normalized or "pm" in lower_norm
-    is_am = "ص" in normalized or "am" in lower_norm
+    lowered = normalized.lower()
 
-    text = normalize_digits(text)
-    text = text.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
-    text = text.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
+    # Strong patterns only: AM/PM marker adjacent to HH:MM.
+    patterns = [
+        r"[مص]\s*(\d{1,2})[:](\d{2})",
+        r"(\d{1,2})[:](\d{2})\s*[مص]",
+        r"(am|pm)\s*(\d{1,2})[:](\d{2})",
+        r"(\d{1,2})[:](\d{2})\s*(am|pm)",
+    ]
 
-    m = re.search(r"(\d{1,2})[:](\d{2})", text)
-    if not m:
-        m = re.search(r"(\d{1,2})(\d{2})", text)
-        if not m:
-            return "00:00"
+    for pattern in patterns:
+        mm = re.search(pattern, lowered)
+        if not mm:
+            continue
+        nums = [g for g in mm.groups() if g and g.isdigit()]
+        if len(nums) < 2:
+            continue
 
-    hour = int(m.group(1))
-    minute = int(m.group(2))
+        hour = int(nums[0])
+        minute = int(nums[1])
 
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        if not (0 <= hour <= 12 and 0 <= minute <= 59):
+            continue
+
+        is_pm = ("م" in normalized) or ("pm" in lowered)
+        is_am = ("ص" in normalized) or ("am" in lowered)
+
+        if is_pm and hour < 12:
+            hour += 12
+        elif is_am and hour == 12:
+            hour = 0
+
+        return f"{hour:02d}:{minute:02d}"
+
+    # Plain HH:MM fallback only when no marker is present.
+    clean = normalize_digits(text)
+    clean = clean.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
+    clean = clean.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
+
+    mm = re.search(r"(\d{1,2})[:](\d{2})", clean)
+    if not mm:
         return "00:00"
 
-    if is_pm and hour < 12:
-        hour += 12
-    elif is_am and hour == 12:
-        hour = 0
+    hour = int(mm.group(1))
+    minute = int(mm.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return "00:00"
 
     return f"{hour:02d}:{minute:02d}"
 
@@ -753,45 +775,70 @@ def extract_header(img: Image.Image):
     day_combined = " | ".join(day_texts + general_texts)
 
     date = parse_date_safely(date_combined)
-    time = parse_time_safely(time_combined)
     day = extract_day_safely(day_combined)
 
-    time_candidates = []
-    for txt in time_texts + general_texts:
-        parsed_time = parse_time_safely(txt)
-        if parsed_time == "00:00":
-            continue
+    def score_time_text(txt: str) -> tuple[float, str]:
+        parsed = parse_time_safely(txt)
+        if parsed == "00:00":
+            return (-1e9, parsed)
 
         norm = normalize_text(txt)
-        score = 1.0
-        if "ص" in norm or "am" in norm.lower():
-            score += 1.0
-        if "م" in norm or "pm" in norm.lower():
-            score += 1.0
+        score = 0.0
+
+        # Very strong preference for real AM/PM + HH:MM matches.
+        if re.search(r"[مص]\s*\d{1,2}:\d{2}", norm) or re.search(r"\d{1,2}:\d{2}\s*[مص]", norm):
+            score += 20.0
+        if re.search(r"(am|pm)\s*\d{1,2}:\d{2}", norm.lower()) or re.search(r"\d{1,2}:\d{2}\s*(am|pm)", norm.lower()):
+            score += 20.0
+
         if ":" in normalize_digits(txt):
-            score += 0.5
+            score += 3.0
+        if "ص" in norm or "م" in norm or "am" in norm.lower() or "pm" in norm.lower():
+            score += 5.0
 
-        time_candidates.append((score, parsed_time, txt))
+        # Penalize noisy strings with many unrelated digits.
+        digit_count = len(re.findall(r"\d", normalize_digits(txt)))
+        if digit_count > 6:
+            score -= 5.0
 
+        return (score, parsed)
+
+    time_candidates = []
+
+    # Use the dedicated time region first, and only trust strong matches there.
+    for txt in time_texts:
+        score, parsed = score_time_text(txt)
+        if parsed != "00:00" and score >= 20.0:
+            time_candidates.append((score + 100.0, parsed, txt))
+
+    # If nothing strong found in time crop, try general header text.
+    if not time_candidates:
+        for txt in general_texts:
+            score, parsed = score_time_text(txt)
+            if parsed != "00:00" and score >= 20.0:
+                time_candidates.append((score, parsed, txt))
+
+    # Last resort: parse from combined time text only, not full general text.
     if time_candidates:
         time_candidates.sort(key=lambda x: x[0], reverse=True)
-        best_time = time_candidates[0][1]
-        time = best_time
+        time = time_candidates[0][1]
+    else:
+        time = parse_time_safely(" ".join(time_texts))
+        if time == "00:00":
+            time = parse_time_safely(time_combined)
 
     full_text = " ".join([general_combined, date_combined, time_combined, day_combined])
 
     if date == "0000/00/00":
         date = parse_date_safely(full_text)
     if time == "00:00":
-        time = parse_time_safely(full_text)
+        time = parse_time_safely(time_combined)
     if not day:
         day = extract_day_safely(full_text)
 
-    # Fallback strategy: infer the most recent matching weekday when OCR date fails.
     if date == "0000/00/00" and day:
         date = infer_date_from_day(day)
 
-    # Final production fallback: keep a usable date even if OCR header is messy.
     if date == "0000/00/00" and not day:
         date = datetime.now(APP_TIMEZONE).strftime("%Y/%m/%d")
 
