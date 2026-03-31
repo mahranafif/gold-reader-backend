@@ -1,22 +1,22 @@
 [
   {
     "index": 1,
-    "url": "https://scontent-atl3-3.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=bBjeL6Uvuy8Q7kNvwFgb7OW&_nc_oc=AdqISpKUkeSij7dncChbbPNtSu9X9z0F96yjJnkR7wfXwLDYKWfTQBmjIjDjCWa2LlI&_nc_zt=23&_nc_ht=scontent-atl3-3.xx&_nc_gid=qqXi4BjXGooM5XWoIFOxkw&_nc_ss=7a30f&oh=00_Afwn35Z6AuripnIgA1-b9Z-CKXajG1cDrMQYu8Fbi6pw7A&oe=69D1FFDF",
+    "url": "https://scontent-iad6-1.xx.fbcdn.net/v/t39.30808-6/649126928_122176022540861173_3784262784883933187_n.jpg?stp=dst-jpg_s960x960_tt6&_nc_cat=111&ccb=1-7&_nc_sid=2a1932&_nc_ohc=bBjeL6Uvuy8Q7kNvwHozuPJ&_nc_oc=AdoduEJ1zsGfoo0FPIbuWxKF_vme8JX9zOhZ0skPRxQgil1SlzVUktyI42gr56ezdh8&_nc_zt=23&_nc_ht=scontent-iad6-1.xx&_nc_gid=F78eUDmO5NgwzpshxhYk8A&_nc_ss=7a30f&oh=00_Af3-AmbHn9SAFlwx1-MAtJ4a4auZkcahSgRzvBhQYZvckA&oe=69D1FFDF",
     "stage": "poster_classifier",
     "poster_debug": {
       "label": "gold",
-      "confidence": 0.6928794980049133,
+      "confidence": 0.6928796768188477,
       "all_probs": {
-        "gold": 0.6928794980049133,
-        "non_gold": 0.30712053179740906
+        "gold": 0.6928796768188477,
+        "non_gold": 0.30712032318115234
       },
       "source": "cnn"
     },
     "poster_decision": {
       "label": "gold",
-      "gold_conf": 0.6928794980049133,
-      "non_gold_conf": 0.30712053179740906,
-      "margin": 0.3857589662075043,
+      "gold_conf": 0.6928796768188477,
+      "non_gold_conf": 0.30712032318115234,
+      "margin": 0.3857593536376953,
       "threshold": 0.75,
       "min_margin": 0.2,
       "accepted": false
