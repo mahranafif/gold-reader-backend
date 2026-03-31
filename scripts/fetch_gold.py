@@ -764,7 +764,6 @@ def extract_header(img: Image.Image):
 
         norm = normalize_text(txt)
         score = 1.0
-
         if "ص" in norm or "am" in norm.lower():
             score += 1.0
         if "م" in norm or "pm" in norm.lower():
@@ -779,7 +778,9 @@ def extract_header(img: Image.Image):
         best_time = time_candidates[0][1]
         time = best_time
 
-if date == "0000/00/00":
+    full_text = " ".join([general_combined, date_combined, time_combined, day_combined])
+
+    if date == "0000/00/00":
         date = parse_date_safely(full_text)
     if time == "00:00":
         time = parse_time_safely(full_text)
@@ -801,7 +802,6 @@ if date == "0000/00/00":
         "day_region_text": " | ".join(day_texts),
         "date_inferred_from_day": bool(day and date != "0000/00/00" and not _extract_date_candidates(date_combined)),
     }
-
 
 def parse_numeric_token(text: str) -> Optional[float]:
     text = normalize_digits(text)
