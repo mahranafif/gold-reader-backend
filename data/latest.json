@@ -16,7 +16,7 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67456,
-  "updated_at_utc": "2026-03-31T10:15:58.116653+00:00",
+  "updated_at_utc": "2026-03-31T11:31:27.417447+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
@@ -157,37 +157,20 @@
       }
     ]
   },
-  "should_notify": true,
+  "should_notify": false,
   "change_summary": {
-    "changed": true,
-    "count": 4,
-    "fields": {
-      "k21_ss": {
-        "old": 16250,
-        "new": 16150
-      },
-      "k21_sb": {
-        "old": 15900,
-        "new": 15800
-      },
-      "k18_ss": {
-        "old": 13900,
-        "new": 13850
-      },
-      "k18_sb": {
-        "old": 13550,
-        "new": 13500
-      }
-    }
+    "changed": false,
+    "count": 0,
+    "fields": {}
   },
   "change_key": "2026/03/31|11:50|16150|15800|131.0|128.0|13850|13500|112.0|109.0",
   "previous_values": {
-    "k21_ss": 16250,
-    "k21_sb": 15900,
+    "k21_ss": 16150,
+    "k21_sb": 15800,
     "k21_us": 131.0,
     "k21_ub": 128.0,
-    "k18_ss": 13900,
-    "k18_sb": 13550,
+    "k18_ss": 13850,
+    "k18_sb": 13500,
     "k18_us": 112.0,
     "k18_ub": 109.0
   }
