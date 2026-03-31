@@ -2,21 +2,21 @@
   "ok": true,
   "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
   "date": "2026/03/31",
-  "time": "11:50",
+  "time": "02:30",
   "day": "الثلاثاء",
-  "k21_ss": 16150,
-  "k21_sb": 15800,
-  "k21_us": 131.0,
-  "k21_ub": 128.0,
-  "k18_ss": 13850,
-  "k18_sb": 13500,
-  "k18_us": 112.0,
-  "k18_ub": 109.0,
-  "raw_ocr_preview": "جد 3# عبد التسعيره اليوميه لبيع الذهب 220 207 6 الصادره عن ‎A) 9003207 1‏ 36 ‎3p ga11‏ التاريخ: 0 الساعه: . العيار سعر الغرام ل.س 1 سعرالقرام 8 1 ‎00 -‏ شراء مييع شراء 31 21 0 15800 1 131 01128 18 0 13500 1 112 1-109“ ملاخظه : الالنزام بوضع التسعيره علي الواجه",
+  "k21_ss": 16050,
+  "k21_sb": 15700,
+  "k21_us": 130.0,
+  "k21_ub": 127.0,
+  "k18_ss": 13750,
+  "k18_sb": 13400,
+  "k18_us": 111.5,
+  "k18_ub": 108.5,
+  "raw_ocr_preview": "5 جد 3# عبد ل التسعيره اليوميه لبيع الذهب 20 ‎ai,‏ * ‎c5‏ الصادره عنا ‎yy Bee‏ 6 < 1 9 م الصاغه : . ¢ : ‎1‏ 7 ! / رداك ‎L 1‏ ‎“ega1‏ التاريخ: الساعه: ‎Vii)‏ ‏العنا سعر الفرام ل.س 1 سعرالفرام 8ش 0 ‎e5‏ مييع شراء ‎eee‏ شراء ‏ 10 21 0 15700 1 130 127 1 18 90 1340",
   "source_w": 780,
   "source_h": 780,
-  "byte_length": 67456,
-  "updated_at_utc": "2026-03-31T11:31:27.417447+00:00",
+  "byte_length": 67496,
+  "updated_at_utc": "2026-03-31T12:12:33.801850+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
@@ -30,140 +30,154 @@
     "opencv_available": true,
     "paddle_enabled": true,
     "paddle_failure_reason": null,
-    "image_sha256": "b3741ed0e7a430a8b566fba49892aa480f2fc8c6d307aaf538fd4ed060e4e211",
+    "image_sha256": "bb58f18c33b5be3f8c3734cbb6acfa3b427302c7a4316c0cb2bf09fbfdae241d",
     "cache_hit": false,
     "header": {
-      "header_general_text": "Ey 7 tf er ee eee : = t 24\n‏أ‎ ‘ . ¢\n‏ب —_ له‎ eke A ty a . 5 .\n: . a 1 , > RM og\n‏د 0 = يد لم‎ : ‘\note, ie le Bd : 5 ~\n. + « a os\negw 1 ١\n5 ‏يي‎ 7\n- e =\nacl © ey List ‏اليؤم:‎\n‎. ١ ٠. 7 ‏ل‎ 5 | :ةعاسلا :خيراتلا ص11:50 20Z/3/1 ءاثالثلا مويلا | 52 الس | 00 - ‎٠ ١‏\n‎١‏ | 0 | . ——\nوجوو التاردخ - الساعة: | ةعاسلا خيراتلا | 5 ia dv Ne\n26 - ah ‏ا‎ NN 0 6 ‏ال‎\n‎0 ‏لس‎ an AT yee 1 ‏الم 3 ذا دك‎ ogee tae ett : ‏خم‎ a 1\n1 ‏ا‎ BT ‏و وار‎ REIS os 2 eh BEM\n0 LS +f 14 = ” ‏نل يه‎ ro) oy 4 ‏نا يت‎ ee 0 0 eas ae 3 ar\na Ae - : 8 - 9 ‏اه‎ 0 3 ety y a LS TON ES np oe. :\na ~ 1 = = ath : 8 ‏ما الوه ب لدو ع‎ we eRe ME! OTe ee, Ge Ok 9\n: ١ 1 GEEZ 0 ‏م‎ ١ ‏م‎ 3 . woo cue 8 aa pry JP eee ra ns .\nReSsesse NANO aye hn nr co ae Mi ‏ا‎ i See BT on.\n١ Es Oey: CONST POA wee ‏لا اي تيد د د‎ Molec gp ‏ا‎ Se gs 3\n~~ a Cite 8 a o nes - OOP ae a 0 ‏ا‎ 35\n3 + ‏التاريخ:‎ GS saa\ny 0 0 ./ =~) ' e 7 4 —\n‏ان 2 الشضاعة:. 10 لاص‎ 2 | ص1150 :ةعاسلا 2026/S/3 خيراتلا ءاثالاالا مويلا | Pe\noan a 8 8 1 Pay 1 0 ‏هه‎\n‎Key 2 00 . ce 0 ‏اه ا‎ ott 8\n‏فخ ا‎ SP Se: ee v ‏يد‎ rn, 4 ‏لدي‎ 0 tai ‏ا رت‎ . 0\n‏ليه ين‎ wr 28 ers ts ‏ل ا الس 0ن‎ : 3\n“MOK 3 ‏ملكا َه‎ 1\nTAQ: ‏اس‎ 0 Swe .\n; OE aa : — PERE ‏ا‎\n‎ne 4 ‏أت‎ 7 CSET ey aS he\na Loe ‏م‎ = er 0 ? St ‘-) - © | ner ane 7 ‏له‎ . af lo a af Sek aA\nRe a say A: =) K a ber 79 ~ fom ‘e baw ‏هذ‎ a eS te ‏ا ا‎ 8\nRea ‏مر ره بالعفاكيةه‎ [43 /2-| | | ا خيراتلا Az/s/",
-      "date_region_text": "- 2 . | 2 4 0 1 1",
-      "time_region_text": "‎a .‏ , . م | م 1",
-      "day_region_text": "ظ | 8 ل 2 ;",
-      "date_inferred_from_day": false
+      "header_general_text": "Sy ‏ور‎ tf ‏برت‎ ee ee \" “e ra 24\n- 2 ‘ . ¢\n‏ب مسن © له‎ * © . or . 5 .\n. - 1 3 7 . oe é .\n’ : . : ‘ 1\n‏مو ون‎ 7 :\n- > ‏يا‎ 5 a 2 <\n\"> ee — ' é\n‏و‎ a —\n- e -\n-e)eie) ٠هعاسلا‎ . | yy. val\n‏إع له “هيج‎ © e ٠. ‘ ‏م‎ .« | :ةعاسلا م2:30 2026 /3/S1 :خيراتلا ءاثالثلا مويلا | ‎oT, a “‏ ا\n‎Pr ose e ere eres :‏\n‎br eet‏ له ‎oF‏ _\n‎ee |‏\n.4 زح 1 ‎o ٠‏\n‎a 7 |‏ 04 التا 5 | ‎cata sacl‏ 7\n‎٠ ٠. ّ ue e 3‏ 000 00 7 ,7 | ةعاسلا :خيراتلا | Thee ‏\"ماكلا صمب انه حصي لت ا‎ |\n172 Bee ‏تسر الى‎ yon =; SS oe Pee ‏يرن‎ a. Len ees\n. Fst & ‏تم رك دش“ >4 و\" ير ا عن 2 اك‎ 5 wo beg. Bey PP Ez enn Star CET ae we meg eee: Me ay i ass ee ;\nHS; af ESP prans ad J i Qs ‏ا‎ BG Sheen 5O%, ae 0 ee 3 30 5\nOO ‏ا‎ EEE? ‏ا‎ a ie Nee Re Teg. AR SMES ete. Ne\nrd : ‏ل سي ف‎ EN ‏الم 83 اس‎ ah ‏ا ا‎ eR TRS. Ps ee ee OL\n: ‏يو‎ <s= Soe aS <a a ‏اه 0 م‎ a 26 ms ‘ Po.\" j is? 5 es See me 3 2 SB ١\nNos oS Se 2 REE MS ae fyeka ‏يي‎ BER ‏ف‎ ope OF ne.\n: 37 et : ‏قله كرام‎ may ee 0 ne) Lane e\nSe EE OOL aE aoa UE aie sce pe ;\n. . . al ore . nc 3 feo ‏و1‎\n‎= 7 « :0 ‏هه‎ Lo, ١ ‏لما‎ my ‘tA a\n1 0 sachs ageygayery sel > ‏الجالاواء..‎ ose gall\n. : ‏سر‎ . . a LOK ‏ارام‎ A a): ts : | 0 “al ‏ضار‎ ee © ‏م‎ :\nOat ‏مر‎ . e | 7 f% 7 024 : : yA)\nis 5 0 7 ‏ل‎ sow Re 7 ZA 7246 a) 3227 4 | 0 :ةعاشلا Z0Z6/B/SJ خيراتلا نانالاعلا موتلا | Bp ‏ا‎ TP ‏وي‎ eo ; a ore\nyt 0 50: 1 1 + . fone! 1 . oye 5 oe\n‏دح نين‎ 7” we ‏امي ات‎ ee\nSx@irraa ey 1 . 7 sot 35 a : * 00 ١ 1 0\n0 22 ‏ل‎ ~\n- 7 ma\n‏م‎ ee, ‏جه‎ . 4... @ ee ELS apap ts as ay ye\n. ‏ةفع فم ده‎ - ti! ty oy ‏لاوا مم‎ 5 egal 44: ‏ع‎\n‎9 ee? ‏هونم‎ 2 f, oA mT ee In ‏حب ل لك‎ > ٠ | a ve ths 3 es ١ ‏ص‎ Re\n347 ١ ‏يج‎ ow eee ‏رع بر[ )ير‎ -1/- 01 SOLO US ELL ty ee Se Ae\n* Rh: 24 ‏وا 0 55 م‎ hs a Di 6 ‘., a ‏رد (ر‎ A va = '. ‏تسيب “لس سبحا بسي‎ re gn ‏يتم |0 مم‎ | تاا خيراتلا XOo/s/e",
+      "date_region_text": "- - 5 1 / 1 3 | 2 4 0 1 1",
+      "time_region_text": "م‎ , a | 1 . 0 | 1 0م",
+      "day_region_text": ": | aie 1 : : 9 3 | ee an",
+      "date_inferred_from_day": true
     },
     "rows": [
       {
-        "y_avg": 0.6012622641509434,
+        "y_avg": 0.6099245283018868,
         "values": [
-          3.0,
-          4128.0,
-          0.0,
-          7.0,
-          1128.0,
-          1.0,
-          128.0,
-          8.0,
+          71108.5,
           0.0,
           1.0,
-          131.0,
-          1.0,
-          15800.0,
-          16150.0,
-          0.0,
+          12.0,
+          127.0,
+          1277.0,
           0.0,
           1.0,
+          130.0,
+          5.0,
           0.0,
-          4.0,
-          1.0
+          15700.0,
+          1.0,
+          16050.0,
+          1.0,
+          0.0,
+          4.0
         ],
         "texts": [
-          "3",
-          "“4128",
-          "٠.",
-          "7",
-          "1128",
-          "|",
-          "128",
-          "8",
-          "Con",
-          "|",
-          "131",
-          "|",
-          "15800",
-          "16150",
-          "0",
+          "71108.50",
           "0",
           "|",
+          "12",
+          "127",
+          "1277",
           "0",
-          "4",
-          "١"
+          "|",
+          "130",
+          "Ps‏",
+          "ou‏",
+          "15700",
+          "1 5700",
+          "16050",
+          "1 6050",
+          "ow",
+          "4"
         ],
         "usd": [
-          128.0,
-          131.0
+          127.0,
+          130.0
         ],
         "syp": [
-          15800.0,
-          16150.0
+          15700.0,
+          16050.0
         ],
         "score": 16
       },
       {
-        "y_avg": 0.705233671988389,
+        "y_avg": 0.7162803234501347,
         "values": [
-          109.0,
-          515109.0,
-          1.0,
-          20.0,
-          109.0,
-          2.0,
-          112.0,
-          13500.0,
-          1.0,
-          13850.0,
+          1108.5,
           0.0,
-          1.0,
-          9.0
-        ],
-        "texts": [
-          "“f-109",
-          "515109",
-          "|",
-          "20",
-          "109",
-          "2",
-          "112",
-          "13500",
-          "1 3500",
-          "13850",
-          "0",
-          "1 3850",
-          "9"
-        ],
-        "usd": [
-          109.0,
-          109.0,
-          112.0
-        ],
-        "syp": [
-          13500.0,
-          13850.0
-        ],
-        "score": 20
-      },
-      {
-        "y_avg": 0.8015094339622643,
-        "values": [
-          7.0,
+          1850.0,
+          108.5,
+          150.0,
+          11.5,
+          111.5,
+          13400.0,
+          0.0,
+          1870.0,
+          13750.0,
+          90.0,
           0.0,
           1.0
         ],
         "texts": [
-          "7",
-          "on",
-          "ttl"
+          "1108.50“",
+          "{om‏",
+          "1850",
+          "108.50",
+          "150",
+          "11.50",
+          "111.50",
+          "13400",
+          "0",
+          "1870",
+          "13750",
+          "90",
+          "0",
+          "1"
         ],
-        "usd": [],
-        "syp": [],
-        "score": 0
+        "usd": [
+          108.5,
+          150.0,
+          111.5,
+          90.0
+        ],
+        "syp": [
+          13400.0,
+          13750.0
+        ],
+        "score": 24
       }
     ]
   },
-  "should_notify": false,
+  "should_notify": true,
   "change_summary": {
-    "changed": false,
-    "count": 0,
-    "fields": {}
+    "changed": true,
+    "count": 8,
+    "fields": {
+      "k21_ss": {
+        "old": 16150,
+        "new": 16050
+      },
+      "k21_sb": {
+        "old": 15800,
+        "new": 15700
+      },
+      "k21_us": {
+        "old": 131.0,
+        "new": 130.0
+      },
+      "k21_ub": {
+        "old": 128.0,
+        "new": 127.0
+      },
+      "k18_ss": {
+        "old": 13850,
+        "new": 13750
+      },
+      "k18_sb": {
+        "old": 13500,
+        "new": 13400
+      },
+      "k18_us": {
+        "old": 112.0,
+        "new": 111.5
+      },
+      "k18_ub": {
+        "old": 109.0,
+        "new": 108.5
+      }
+    }
   },
-  "change_key": "2026/03/31|11:50|16150|15800|131.0|128.0|13850|13500|112.0|109.0",
+  "change_key": "2026/03/31|02:30|16050|15700|130.0|127.0|13750|13400|111.5|108.5",
   "previous_values": {
     "k21_ss": 16150,
     "k21_sb": 15800,
