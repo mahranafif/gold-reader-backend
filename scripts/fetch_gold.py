@@ -633,26 +633,37 @@ def parse_date_safely(text: str) -> str:
 
 
 def parse_time_safely(text: str) -> str:
+    if not text:
+        return "00:00"
+
+    # Detect Arabic/English AM-PM markers before numeric cleanup.
+    normalized = normalize_text(text)
+    lower_norm = normalized.lower()
+    is_pm = "م" in normalized or "pm" in lower_norm
+    is_am = "ص" in normalized or "am" in lower_norm
+
     text = normalize_digits(text)
     text = text.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
     text = text.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
+
     m = re.search(r"(\d{1,2})[:](\d{2})", text)
     if not m:
         m = re.search(r"(\d{1,2})(\d{2})", text)
         if not m:
             return "00:00"
+
     hour = int(m.group(1))
     minute = int(m.group(2))
-    is_pm = "م" in text or "pm" in text.lower()
-    is_am = "ص" in text or "am" in text.lower()
-    if is_pm and hour < 12:
-        hour += 12
-    if is_am and hour == 12:
-        hour = 0
+
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return "00:00"
-    return f"{hour:02d}:{minute:02d}"
 
+    if is_pm and hour < 12:
+        hour += 12
+    elif is_am and hour == 12:
+        hour = 0
+
+    return f"{hour:02d}:{minute:02d}"
 
 def extract_day_safely(text: str) -> str:
     text = normalize_text(text)
