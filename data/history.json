@@ -616,6 +616,200 @@
   {
     "ok": true,
     "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
+    "date": "2026/03/31",
+    "time": "11:50",
+    "day": "الثلاثاء",
+    "k21_ss": 16150,
+    "k21_sb": 15800,
+    "k21_us": 131.0,
+    "k21_ub": 128.0,
+    "k18_ss": 13850,
+    "k18_sb": 13500,
+    "k18_us": 112.0,
+    "k18_ub": 109.0,
+    "raw_ocr_preview": "جد 3# عبد التسعيره اليوميه لبيع الذهب 220 207 6 الصادره عن ‎A) 9003207 1‏ 36 ‎3p ga11‏ التاريخ: 0 الساعه: . العيار سعر الغرام ل.س 1 سعرالقرام 8 1 ‎00 -‏ شراء مييع شراء 31 21 0 15800 1 131 01128 18 0 13500 1 112 1-109“ ملاخظه : الالنزام بوضع التسعيره علي الواجه",
+    "source_w": 780,
+    "source_h": 780,
+    "byte_length": 67456,
+    "updated_at_utc": "2026-03-31T10:15:58.116653+00:00",
+    "display_timezone": "Asia/Dubai",
+    "ocr_engine": "paddle+tesseract",
+    "extraction_method": "smart_full_ocr_v3_final_datefix",
+    "confidence": 1.0,
+    "warnings": [],
+    "debug": {
+      "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
+      "image_width": 780,
+      "image_height": 780,
+      "display_timezone": "Asia/Dubai",
+      "opencv_available": true,
+      "paddle_enabled": true,
+      "paddle_failure_reason": null,
+      "image_sha256": "b3741ed0e7a430a8b566fba49892aa480f2fc8c6d307aaf538fd4ed060e4e211",
+      "cache_hit": false,
+      "header": {
+        "header_general_text": "Ey 7 tf er ee eee : = t 24\n‏أ‎ ‘ . ¢\n‏ب —_ له‎ eke A ty a . 5 .\n: . a 1 , > RM og\n‏د 0 = يد لم‎ : ‘\note, ie le Bd : 5 ~\n. + « a os\negw 1 ١\n5 ‏يي‎ 7\n- e =\nacl © ey List ‏اليؤم:‎\n‎. ١ ٠. 7 ‏ل‎ 5 | :ةعاسلا :خيراتلا ص11:50 20Z/3/1 ءاثالثلا مويلا | 52 الس | 00 - ‎٠ ١‏\n‎١‏ | 0 | . ——\nوجوو التاردخ - الساعة: | ةعاسلا خيراتلا | 5 ia dv Ne\n26 - ah ‏ا‎ NN 0 6 ‏ال‎\n‎0 ‏لس‎ an AT yee 1 ‏الم 3 ذا دك‎ ogee tae ett : ‏خم‎ a 1\n1 ‏ا‎ BT ‏و وار‎ REIS os 2 eh BEM\n0 LS +f 14 = ” ‏نل يه‎ ro) oy 4 ‏نا يت‎ ee 0 0 eas ae 3 ar\na Ae - : 8 - 9 ‏اه‎ 0 3 ety y a LS TON ES np oe. :\na ~ 1 = = ath : 8 ‏ما الوه ب لدو ع‎ we eRe ME! OTe ee, Ge Ok 9\n: ١ 1 GEEZ 0 ‏م‎ ١ ‏م‎ 3 . woo cue 8 aa pry JP eee ra ns .\nReSsesse NANO aye hn nr co ae Mi ‏ا‎ i See BT on.\n١ Es Oey: CONST POA wee ‏لا اي تيد د د‎ Molec gp ‏ا‎ Se gs 3\n~~ a Cite 8 a o nes - OOP ae a 0 ‏ا‎ 35\n3 + ‏التاريخ:‎ GS saa\ny 0 0 ./ =~) ' e 7 4 —\n‏ان 2 الشضاعة:. 10 لاص‎ 2 | ص1150 :ةعاسلا 2026/S/3 خيراتلا ءاثالاالا مويلا | Pe\noan a 8 8 1 Pay 1 0 ‏هه‎\n‎Key 2 00 . ce 0 ‏اه ا‎ ott 8\n‏فخ ا‎ SP Se: ee v ‏يد‎ rn, 4 ‏لدي‎ 0 tai ‏ا رت‎ . 0\n‏ليه ين‎ wr 28 ers ts ‏ل ا الس 0ن‎ : 3\n“MOK 3 ‏ملكا َه‎ 1\nTAQ: ‏اس‎ 0 Swe .\n; OE aa : — PERE ‏ا‎\n‎ne 4 ‏أت‎ 7 CSET ey aS he\na Loe ‏م‎ = er 0 ? St ‘-) - © | ner ane 7 ‏له‎ . af lo a af Sek aA\nRe a say A: =) K a ber 79 ~ fom ‘e baw ‏هذ‎ a eS te ‏ا ا‎ 8\nRea ‏مر ره بالعفاكيةه‎ [43 /2-| | | ا خيراتلا Az/s/",
+        "date_region_text": "- 2 . | 2 4 0 1 1",
+        "time_region_text": "‎a .‏ , . م | م 1",
+        "day_region_text": "ظ | 8 ل 2 ;",
+        "date_inferred_from_day": false
+      },
+      "rows": [
+        {
+          "y_avg": 0.6012622641509434,
+          "values": [
+            3.0,
+            4128.0,
+            0.0,
+            7.0,
+            1128.0,
+            1.0,
+            128.0,
+            8.0,
+            0.0,
+            1.0,
+            131.0,
+            1.0,
+            15800.0,
+            16150.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            4.0,
+            1.0
+          ],
+          "texts": [
+            "3",
+            "“4128",
+            "٠.",
+            "7",
+            "1128",
+            "|",
+            "128",
+            "8",
+            "Con",
+            "|",
+            "131",
+            "|",
+            "15800",
+            "16150",
+            "0",
+            "0",
+            "|",
+            "0",
+            "4",
+            "١"
+          ],
+          "usd": [
+            128.0,
+            131.0
+          ],
+          "syp": [
+            15800.0,
+            16150.0
+          ],
+          "score": 16
+        },
+        {
+          "y_avg": 0.705233671988389,
+          "values": [
+            109.0,
+            515109.0,
+            1.0,
+            20.0,
+            109.0,
+            2.0,
+            112.0,
+            13500.0,
+            1.0,
+            13850.0,
+            0.0,
+            1.0,
+            9.0
+          ],
+          "texts": [
+            "“f-109",
+            "515109",
+            "|",
+            "20",
+            "109",
+            "2",
+            "112",
+            "13500",
+            "1 3500",
+            "13850",
+            "0",
+            "1 3850",
+            "9"
+          ],
+          "usd": [
+            109.0,
+            109.0,
+            112.0
+          ],
+          "syp": [
+            13500.0,
+            13850.0
+          ],
+          "score": 20
+        },
+        {
+          "y_avg": 0.8015094339622643,
+          "values": [
+            7.0,
+            0.0,
+            1.0
+          ],
+          "texts": [
+            "7",
+            "on",
+            "ttl"
+          ],
+          "usd": [],
+          "syp": [],
+          "score": 0
+        }
+      ]
+    },
+    "should_notify": true,
+    "change_summary": {
+      "changed": true,
+      "count": 4,
+      "fields": {
+        "k21_ss": {
+          "old": 16250,
+          "new": 16150
+        },
+        "k21_sb": {
+          "old": 15900,
+          "new": 15800
+        },
+        "k18_ss": {
+          "old": 13900,
+          "new": 13850
+        },
+        "k18_sb": {
+          "old": 13550,
+          "new": 13500
+        }
+      }
+    },
+    "change_key": "2026/03/31|11:50|16150|15800|131.0|128.0|13850|13500|112.0|109.0",
+    "previous_values": {
+      "k21_ss": 16250,
+      "k21_sb": 15900,
+      "k21_us": 131.0,
+      "k21_ub": 128.0,
+      "k18_ss": 13900,
+      "k18_sb": 13550,
+      "k18_us": 112.0,
+      "k18_ub": 109.0
+    }
+  },
+  {
+    "ok": true,
+    "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "date": "0000/00/00",
     "time": "10:56",
     "day": "",
