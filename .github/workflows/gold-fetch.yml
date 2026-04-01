@@ -165,6 +165,9 @@ jobs:
           echo "latest.json:"
           cat data/latest.json || true
           echo
+          echo "price_history.json:"
+          cat data/price_history.json || true
+          echo
           echo "tmp_fb_images:"
           ls -la data/tmp_fb_images || true
           echo
@@ -187,6 +190,7 @@ jobs:
           path: |
             data/facebook_latest_image.json
             data/latest.json
+            data/price_history.json
             data/facebook_ocr_failures.json
             data/facebook_page_debug.png
           if-no-files-found: ignore
@@ -197,12 +201,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            data/latest.json \
-            data/history.json \
-            data/facebook_latest_image.json \
-            data/facebook_ocr_failures.json \
-            data/tmp_fb_images || true
+          git add             data/latest.json             data/history.json             data/price_history.json             data/facebook_latest_image.json             data/facebook_ocr_failures.json             data/tmp_fb_images || true
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
