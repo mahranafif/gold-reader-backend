@@ -3,7 +3,7 @@
   "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
   "date": "2026/04/01",
   "time": "10:32",
-  "day": "",
+  "day": "الاربعاء",
   "k21_ss": 16700,
   "k21_sb": 16350,
   "k21_us": 135.0,
@@ -16,14 +16,12 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67878,
-  "updated_at_utc": "2026-04-01T11:59:22.824403+00:00",
+  "updated_at_utc": "2026-04-01T12:48:38.439969+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
   "confidence": 1.0,
-  "warnings": [
-    "header_day_failed"
-  ],
+  "warnings": [],
   "debug": {
     "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "image_width": 780,
