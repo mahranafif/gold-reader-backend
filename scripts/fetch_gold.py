@@ -639,10 +639,10 @@ def parse_time_safely(text: str) -> str:
     normalized = normalize_text(text)
     lowered = normalized.lower()
 
-    # Strong patterns only: AM/PM marker adjacent to HH:MM.
+    # Determine AM/PM from the matched fragment only.
     patterns = [
-        r"[مص]\s*(\d{1,2})[:](\d{2})",
-        r"(\d{1,2})[:](\d{2})\s*[مص]",
+        r"([مص])\s*(\d{1,2})[:](\d{2})",
+        r"(\d{1,2})[:](\d{2})\s*([مص])",
         r"(am|pm)\s*(\d{1,2})[:](\d{2})",
         r"(\d{1,2})[:](\d{2})\s*(am|pm)",
     ]
@@ -651,18 +651,30 @@ def parse_time_safely(text: str) -> str:
         mm = re.search(pattern, lowered)
         if not mm:
             continue
-        nums = [g for g in mm.groups() if g and g.isdigit()]
-        if len(nums) < 2:
-            continue
 
-        hour = int(nums[0])
-        minute = int(nums[1])
+        marker = ""
+        hour = None
+        minute = None
+
+        for g in mm.groups():
+            if not g:
+                continue
+            if g in {"ص", "م", "am", "pm"}:
+                marker = g
+            elif g.isdigit():
+                if hour is None:
+                    hour = int(g)
+                elif minute is None:
+                    minute = int(g)
+
+        if hour is None or minute is None:
+            continue
 
         if not (0 <= hour <= 12 and 0 <= minute <= 59):
             continue
 
-        is_pm = ("م" in normalized) or ("pm" in lowered)
-        is_am = ("ص" in normalized) or ("am" in lowered)
+        is_pm = marker in {"م", "pm"}
+        is_am = marker in {"ص", "am"}
 
         if is_pm and hour < 12:
             hour += 12
@@ -671,7 +683,6 @@ def parse_time_safely(text: str) -> str:
 
         return f"{hour:02d}:{minute:02d}"
 
-    # Plain HH:MM fallback only when no marker is present.
     clean = normalize_digits(text)
     clean = clean.replace("O", "0").replace("o", "0").replace("I", "1").replace("l", "1")
     clean = clean.replace("٫", ":").replace("؛", ":").replace(";", ":").replace(",", ":").replace(".", ":")
