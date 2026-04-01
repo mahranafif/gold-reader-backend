@@ -707,7 +707,7 @@ def extract_day_safely(text: str) -> str:
         "الاحد": ["الاحد", "احد", "دحالا"],
         "الاثنين": ["الاثنين", "اثنين", "نينثالا"],
         "الثلاثاء": ["الثلاثاء", "ثلاثاء", "ءاثالثلا"],
-        "الاربعاء": ["الاربعاء", "اربعاء", "ءاعبرالا"],
+        "الاربعاء": ["الاربعاء", "اربعاء", "ءاعبرالا", "ءاعيرالا", "الاربعاع", "الاريعاء"],
         "الخميس": ["الخميس", "خميس", "سيمخلا"],
         "الجمعة": ["الجمعة", "جمعه", "جمعة", "ةعمجلا"],
     }
@@ -716,7 +716,6 @@ def extract_day_safely(text: str) -> str:
             if v in text or v in reversed_text:
                 return full
     return ""
-
 
 def infer_date_from_day(day_name: str, reference_dt: Optional[datetime] = None) -> str:
     if not day_name:
@@ -741,6 +740,28 @@ def infer_date_from_day(day_name: str, reference_dt: Optional[datetime] = None) 
     if (ref - inferred).days > 30:
         return "0000/00/00"
     return inferred.strftime("%Y/%m/%d")
+
+
+def infer_day_from_date(date_str: str) -> str:
+    if not date_str or date_str == "0000/00/00":
+        return ""
+
+    try:
+        y, m, d = [int(x) for x in date_str.split("/")]
+        dt = datetime(y, m, d)
+    except Exception:
+        return ""
+
+    names = {
+        0: "الاثنين",
+        1: "الثلاثاء",
+        2: "الاربعاء",
+        3: "الخميس",
+        4: "الجمعة",
+        5: "السبت",
+        6: "الاحد",
+    }
+    return names.get(dt.weekday(), "")
 
 
 def crop_box(img: Image.Image, x1: float, y1: float, x2: float, y2: float) -> Image.Image:
@@ -847,6 +868,9 @@ def extract_header(img: Image.Image):
         time = parse_time_safely(time_combined)
     if not day:
         day = extract_day_safely(full_text)
+
+    if not day and date != "0000/00/00":
+        day = infer_day_from_date(date)
 
     if date == "0000/00/00" and day:
         date = infer_date_from_day(day)
