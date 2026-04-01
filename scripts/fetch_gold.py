@@ -36,6 +36,7 @@ OCR_CACHE_FILE = CACHE_DIR / "ocr_smart_v3.json"
 
 LATEST_FILE = DATA_DIR / "latest.json"
 HISTORY_FILE = DATA_DIR / "history.json"
+PRICE_HISTORY_FILE = DATA_DIR / "price_history.json"
 
 APP_MODE = os.getenv("APP_MODE", "cli").strip().lower()
 APP_TIMEZONE_NAME = os.getenv("APP_TIMEZONE", "Asia/Dubai").strip() or "Asia/Dubai"
@@ -1203,6 +1204,66 @@ def snapshot_identity_key(snapshot: dict) -> str:
     return "|".join(str(snapshot.get(k, "")) for k in keys)
 
 
+def price_history_identity_key(item: dict) -> str:
+    keys = [
+        "date",
+        "time",
+        "k21_ss",
+        "k21_sb",
+        "k21_us",
+        "k21_ub",
+        "k18_ss",
+        "k18_sb",
+        "k18_us",
+        "k18_ub",
+    ]
+    return "|".join(str(item.get(k, "")) for k in keys)
+
+
+def append_price_history(latest_snapshot: dict) -> None:
+    history = load_json(PRICE_HISTORY_FILE, [])
+    if not isinstance(history, list):
+        history = []
+
+    entry = {
+        "date": latest_snapshot.get("date", ""),
+        "time": latest_snapshot.get("time", ""),
+        "day": latest_snapshot.get("day", ""),
+        "k21_ss": latest_snapshot.get("k21_ss"),
+        "k21_sb": latest_snapshot.get("k21_sb"),
+        "k21_us": latest_snapshot.get("k21_us"),
+        "k21_ub": latest_snapshot.get("k21_ub"),
+        "k18_ss": latest_snapshot.get("k18_ss"),
+        "k18_sb": latest_snapshot.get("k18_sb"),
+        "k18_us": latest_snapshot.get("k18_us"),
+        "k18_ub": latest_snapshot.get("k18_ub"),
+        "source": latest_snapshot.get("source", ""),
+        "updated_at_utc": latest_snapshot.get("updated_at_utc", ""),
+        "confidence": latest_snapshot.get("confidence", 0.0),
+    }
+
+    new_key = price_history_identity_key(entry)
+    existing_keys = {
+        price_history_identity_key(item)
+        for item in history
+        if isinstance(item, dict)
+    }
+
+    if new_key in existing_keys:
+        return
+
+    history.append(entry)
+    history.sort(
+        key=lambda item: parse_to_datetime(
+            item.get("date", "0000/00/00"),
+            item.get("time", "00:00"),
+            item.get("updated_at_utc", ""),
+        ),
+        reverse=True,
+    )
+    save_json(PRICE_HISTORY_FILE, history)
+
+
 def summarize_price_changes(previous: dict, current: dict) -> dict:
     keys = ["k21_ss", "k21_sb", "k21_us", "k21_ub", "k18_ss", "k18_sb", "k18_us", "k18_ub"]
     fields = {}
@@ -1427,6 +1488,7 @@ def main():
     image_bytes, final_source = resolve_input_image()
     snapshot = build_snapshot_from_image(image_bytes, final_source)
     save_snapshot_into_history(snapshot)
+    append_price_history(snapshot)
     print(json.dumps(sanitize_for_json(snapshot), ensure_ascii=False, indent=2))
 
 
