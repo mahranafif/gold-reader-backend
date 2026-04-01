@@ -1,18 +1,1 @@
-[
-  {
-    "date": "2026/04/01",
-    "time": "10:32",
-    "day": "",
-    "k21_ss": 16700,
-    "k21_sb": 16350,
-    "k21_us": 135.0,
-    "k21_ub": 132.0,
-    "k18_ss": 14350,
-    "k18_sb": 14000,
-    "k18_us": 116.0,
-    "k18_ub": 113.0,
-    "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
-    "updated_at_utc": "2026-04-01T11:50:48.685470+00:00",
-    "confidence": 1.0
-  }
-]
+
