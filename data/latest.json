@@ -16,7 +16,7 @@
   "source_w": 780,
   "source_h": 780,
   "byte_length": 67878,
-  "updated_at_utc": "2026-04-01T08:24:31.899832+00:00",
+  "updated_at_utc": "2026-04-01T09:49:27.982990+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
@@ -194,54 +194,21 @@
       }
     ]
   },
-  "should_notify": true,
+  "should_notify": false,
   "change_summary": {
-    "changed": true,
-    "count": 8,
-    "fields": {
-      "k21_ss": {
-        "old": 16050,
-        "new": 16700
-      },
-      "k21_sb": {
-        "old": 15700,
-        "new": 16350
-      },
-      "k21_us": {
-        "old": 130.0,
-        "new": 135.0
-      },
-      "k21_ub": {
-        "old": 127.0,
-        "new": 132.0
-      },
-      "k18_ss": {
-        "old": 13750,
-        "new": 14350
-      },
-      "k18_sb": {
-        "old": 13400,
-        "new": 14000
-      },
-      "k18_us": {
-        "old": 111.5,
-        "new": 116.0
-      },
-      "k18_ub": {
-        "old": 108.5,
-        "new": 113.0
-      }
-    }
+    "changed": false,
+    "count": 0,
+    "fields": {}
   },
   "change_key": "2026/04/01|22:32|16700|16350|135.0|132.0|14350|14000|116.0|113.0",
   "previous_values": {
-    "k21_ss": 16050,
-    "k21_sb": 15700,
-    "k21_us": 130.0,
-    "k21_ub": 127.0,
-    "k18_ss": 13750,
-    "k18_sb": 13400,
-    "k18_us": 111.5,
-    "k18_ub": 108.5
+    "k21_ss": 16700,
+    "k21_sb": 16350,
+    "k21_us": 135.0,
+    "k21_ub": 132.0,
+    "k18_ss": 14350,
+    "k18_sb": 14000,
+    "k18_us": 116.0,
+    "k18_ub": 113.0
   }
 }
