@@ -616,6 +616,253 @@
   {
     "ok": true,
     "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
+    "date": "2026/04/01",
+    "time": "22:32",
+    "day": "",
+    "k21_ss": 16700,
+    "k21_sb": 16350,
+    "k21_us": 135.0,
+    "k21_ub": 132.0,
+    "k18_ss": 14350,
+    "k18_sb": 14000,
+    "k18_us": 116.0,
+    "k18_ub": 113.0,
+    "raw_ocr_preview": "5 عد * 2 التسعيره اليوميه لبيع الذهب 202 ‎gee‏ * :-... الصادره ‎MN Bc‏ )\\ اليؤم: التاريخ: الساعه: 10:32 العنا سعر الغرام ل.س 1 سعرالقرام 8 0 ) ‎he‏ مبيع 1 شراء 1 مييع 1 شرام 10 21 0 16350 1 135 1132 18 0 14000 1 116 535113 ملاحظه : الالنزام بوضع التسعيره علي ا",
+    "source_w": 780,
+    "source_h": 780,
+    "byte_length": 67878,
+    "updated_at_utc": "2026-04-01T08:24:31.899832+00:00",
+    "display_timezone": "Asia/Dubai",
+    "ocr_engine": "paddle+tesseract",
+    "extraction_method": "smart_full_ocr_v3_final_datefix",
+    "confidence": 1.0,
+    "warnings": [
+      "header_day_failed"
+    ],
+    "debug": {
+      "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
+      "image_width": 780,
+      "image_height": 780,
+      "display_timezone": "Asia/Dubai",
+      "opencv_available": true,
+      "paddle_enabled": true,
+      "paddle_failure_reason": null,
+      "image_sha256": "21144aff8a7270a66e3f2377bf250c911f056408a4cd9e53625ab7a8845bc40a",
+      "cache_hit": false,
+      "header": {
+        "header_general_text": "Bee » «i 4 2 9 00\ney op tPF ‏بعت‎ ie oe - anes\n٠ Ta ? y - . ‏ا‎\n‎—— eee . ‏مي‎ 2 tb ‏ام م‎\n: = a % be hn 7 5\n0 , ? ‘ ° >\n. Ps _\n4S ١ 1٠ ;\n5 2 ‏ل 05 و‎ ١ On J 2\né ‏وى‎ 3 : a? -\nos\nSS ‏اسرا‎\n‎i 1 rt . -\n: \"Aas . ea\ny- ¥ 46 e « | :ةعاسلا ص10:32 2026/4/1 :خيراتلا ءاعيرالا مويلا | ‎a 1‏ ات ال\n‎٠ a , © 8 ¥ 1 : .‏\nيكال ما ‎eae‏ لمات جر 1\n‎Cow .‏ شه 2 ‎Rh ic‏ .\n‎Be.‏ 1 | | 0 | | .\n‎e - | ١‏ 0 || 74 © | 0000 3 31 13 -_\n‎me‏ إى | ‎٠‏ عه: < ‎ee‏ تل | :ةعاسلا :خيراتلا موتلا | BY EPP ER\nBP ALS Jt ‏م‎ IAL S § ff 2\n1 0 0 we Pe a ‏تسا‎ Y 8 ia\nee ay) o oO ‏لل‎ Lines tae Ate Se att tae\ni 57 hy 3 Sy bt ‏,كه‎ Nos ae te “Mua PRE en\nABE ne cae BL ‏اوري‎ Boyne ee Br) eC cet Thaa ESR AA\nSISOS 0s SRE Ss Sy eo rans! oe SAS AE Ry HOR ‏ا ا‎ fet ‏اي‎\n‎5 See ‏ا‎ Ss Cyt ak BEER 2 IN TR Os x eed ‏ع ا‎\n1 OKs COVEN ‏ال‎ ١ 2 ‏ا ال‎ CSCS ‏د‎ Pye a Aa)\n- 12 ‏دج‎ oy an ‏ساسم‎ 00 gs a ol . AS 2 HE ‏و‎ 6 2, .\n١ 2 avery wn ob a ١ \"00 os wy ne 8 3 3 ae oe 2 tga - 3 Bag we 7 20 me\nFL 3 A \"eq\" Bote Oe ROS Et ON a 3\n. ‏ل‎ BY) “dels nya aye ; 5 . Oe ee ‏ل م‎ ْ\nof ‏نهذ‎ e. ‏في‎ 07 1 re. rr « 4 1 3 *. mr oo fae 5\nPAU ‏اا‎ || ٠ ‏يسح‎\n‎5 ‏ذل\" مره‎ nd . 3 wo ‏عات‎ al 95 ee 7\n. . og ee - 8 . ١ 5\nolga saga) | ص?108ص :ةعاشلا 2026/4/1 خيزاتلا موثلا | Sy Wee” to Be 7 a | ‏د لساك‎\nFoF ‏ل له اي ا ا‎ er ‏هال‎\n‎9 ae x - 7 ‏ددن 3 2 3 و‎ ee “as 1 8 0000 :\nKR . a ‏ااا‎ a ‏ال‎ ao 1 82\n‏ااا 0 5 ف‎ eS . : 8\n‏الك نوق‎ ee . ١ 1 00 are 5 ‏كمه‎ 1\n‏د حي‎ “OS ~ 0 . 00 ١\n0 ‏اسورد . ا‎ . mo, -\n‏بعد كاك‎ 7 appa 5 3\n0 a ee\nae orn eo 1\nPep ven | #4. - ٠ ‏اال‎\n‎os 3 > 2 ١ ‏امب‎ oo oh fp nee ae a\n- ‏نه‎ if ee i) Say ‏يا الك د‎ yp “ens vies ٠. ‏م 5-9 } 0 للحي التا‎ a\" ts\nA 0 07 A) 6. 7 rae 0 ae ek ‏ل لاض\"‎ © re? Weare om: Ve ec ae eee. Fas\n‏لغ ا ب سس مسي ب مسب وح ا نه‎ eee A fa = ee cS I.) De rece vy al | خيراتلا ألا",
+        "date_region_text": "7 1 9 3 7 0 8 0 1 8 | 3 1 . 5 0 0",
+        "time_region_text": "1 1 : a | 0 a a",
+        "day_region_text": ": oe : : 0 | a | ْ١ 0 :, a | |",
+        "date_inferred_from_day": false
+      },
+      "rows": [
+        {
+          "y_avg": 0.5441037735849057,
+          "values": [
+            1132.0,
+            1.0,
+            8.0,
+            5.0,
+            6.0,
+            1.0,
+            0.0,
+            8.0
+          ],
+          "texts": [
+            "01132",
+            "|",
+            "8",
+            "5",
+            "Gate‏",
+            "plyall",
+            "0",
+            "8"
+          ],
+          "usd": [],
+          "syp": [],
+          "score": 0
+        },
+        {
+          "y_avg": 0.6413815513626835,
+          "values": [
+            2.0,
+            413.0,
+            1.0,
+            3.0,
+            132.0,
+            16.0,
+            135.0,
+            15.0,
+            11.0,
+            1.0,
+            16350.0,
+            16359.0,
+            1.0,
+            1700.0,
+            16700.0,
+            0.0,
+            1.0,
+            2.0
+          ],
+          "texts": [
+            "2",
+            "413-116",
+            "|",
+            "3",
+            "132",
+            "16",
+            "135",
+            "0015",
+            "||",
+            "|",
+            "16350",
+            "16359",
+            "|",
+            "1700",
+            "16700",
+            "0",
+            "|",
+            "(2"
+          ],
+          "usd": [
+            132.0,
+            135.0
+          ],
+          "syp": [
+            16350.0,
+            16359.0,
+            16700.0
+          ],
+          "score": 20
+        },
+        {
+          "y_avg": 0.7159419448476053,
+          "values": [
+            1.0,
+            51113.0,
+            1113.0,
+            1.0,
+            113.0,
+            116.0,
+            14000.0,
+            1.0,
+            14350.0,
+            1.0,
+            0.0,
+            90.0,
+            0.0
+          ],
+          "texts": [
+            "|",
+            "51113",
+            "“1113",
+            "1",
+            "113",
+            "116",
+            "14000",
+            "1 4000",
+            "14350",
+            "1 4350",
+            "0",
+            "90",
+            "0"
+          ],
+          "usd": [
+            113.0,
+            116.0,
+            90.0
+          ],
+          "syp": [
+            14000.0,
+            14350.0
+          ],
+          "score": 20
+        },
+        {
+          "y_avg": 0.7995849056603775,
+          "values": [
+            1.0,
+            16.0,
+            2.0,
+            615.0,
+            7.0,
+            0.0,
+            1.0,
+            0.0,
+            50.0
+          ],
+          "texts": [
+            "١",
+            "16.%,",
+            "Zaatall",
+            "REGIS,",
+            "7",
+            "oy",
+            "tl",
+            "ok",
+            "50"
+          ],
+          "usd": [],
+          "syp": [],
+          "score": 0
+        }
+      ]
+    },
+    "should_notify": true,
+    "change_summary": {
+      "changed": true,
+      "count": 8,
+      "fields": {
+        "k21_ss": {
+          "old": 16050,
+          "new": 16700
+        },
+        "k21_sb": {
+          "old": 15700,
+          "new": 16350
+        },
+        "k21_us": {
+          "old": 130.0,
+          "new": 135.0
+        },
+        "k21_ub": {
+          "old": 127.0,
+          "new": 132.0
+        },
+        "k18_ss": {
+          "old": 13750,
+          "new": 14350
+        },
+        "k18_sb": {
+          "old": 13400,
+          "new": 14000
+        },
+        "k18_us": {
+          "old": 111.5,
+          "new": 116.0
+        },
+        "k18_ub": {
+          "old": 108.5,
+          "new": 113.0
+        }
+      }
+    },
+    "change_key": "2026/04/01|22:32|16700|16350|135.0|132.0|14350|14000|116.0|113.0",
+    "previous_values": {
+      "k21_ss": 16050,
+      "k21_sb": 15700,
+      "k21_us": 130.0,
+      "k21_ub": 127.0,
+      "k18_ss": 13750,
+      "k18_sb": 13400,
+      "k18_us": 111.5,
+      "k18_ub": 108.5
+    }
+  },
+  {
+    "ok": true,
+    "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "date": "2026/03/31",
     "time": "15:47",
     "day": "الثلاثاء",

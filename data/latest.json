@@ -1,27 +1,29 @@
 {
   "ok": true,
   "source": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
-  "date": "2026/03/31",
-  "time": "14:30",
-  "day": "الثلاثاء",
-  "k21_ss": 16050,
-  "k21_sb": 15700,
-  "k21_us": 130.0,
-  "k21_ub": 127.0,
-  "k18_ss": 13750,
-  "k18_sb": 13400,
-  "k18_us": 111.5,
-  "k18_ub": 108.5,
-  "raw_ocr_preview": "5 جد 3# عبد ل التسعيره اليوميه لبيع الذهب 20 ‎ai,‏ * ‎c5‏ الصادره عنا ‎yy Bee‏ 6 < 1 9 م الصاغه : . ¢ : ‎1‏ 7 ! / رداك ‎L 1‏ ‎“ega1‏ التاريخ: الساعه: ‎Vii)‏ ‏العنا سعر الفرام ل.س 1 سعرالفرام 8ش 0 ‎e5‏ مييع شراء ‎eee‏ شراء ‏ 10 21 0 15700 1 130 127 1 18 90 1340",
+  "date": "2026/04/01",
+  "time": "22:32",
+  "day": "",
+  "k21_ss": 16700,
+  "k21_sb": 16350,
+  "k21_us": 135.0,
+  "k21_ub": 132.0,
+  "k18_ss": 14350,
+  "k18_sb": 14000,
+  "k18_us": 116.0,
+  "k18_ub": 113.0,
+  "raw_ocr_preview": "5 عد * 2 التسعيره اليوميه لبيع الذهب 202 ‎gee‏ * :-... الصادره ‎MN Bc‏ )\\ اليؤم: التاريخ: الساعه: 10:32 العنا سعر الغرام ل.س 1 سعرالقرام 8 0 ) ‎he‏ مبيع 1 شراء 1 مييع 1 شرام 10 21 0 16350 1 135 1132 18 0 14000 1 116 535113 ملاحظه : الالنزام بوضع التسعيره علي ا",
   "source_w": 780,
   "source_h": 780,
-  "byte_length": 67496,
-  "updated_at_utc": "2026-04-01T07:03:15.450743+00:00",
+  "byte_length": 67878,
+  "updated_at_utc": "2026-04-01T08:24:31.899832+00:00",
   "display_timezone": "Asia/Dubai",
   "ocr_engine": "paddle+tesseract",
   "extraction_method": "smart_full_ocr_v3_final_datefix",
   "confidence": 1.0,
-  "warnings": [],
+  "warnings": [
+    "header_day_failed"
+  ],
   "debug": {
     "source_url": "file:///home/runner/work/gold-reader-backend/gold-reader-backend/data/tmp_fb_images/candidate_2.jpg",
     "image_width": 780,
@@ -30,121 +32,208 @@
     "opencv_available": true,
     "paddle_enabled": true,
     "paddle_failure_reason": null,
-    "image_sha256": "bb58f18c33b5be3f8c3734cbb6acfa3b427302c7a4316c0cb2bf09fbfdae241d",
+    "image_sha256": "21144aff8a7270a66e3f2377bf250c911f056408a4cd9e53625ab7a8845bc40a",
     "cache_hit": false,
     "header": {
-      "header_general_text": "Sy ‏ور‎ tf ‏برت‎ ee ee \" “e ra 24\n- 2 ‘ . ¢\n‏ب مسن © له‎ * © . or . 5 .\n. - 1 3 7 . oe é .\n’ : . : ‘ 1\n‏مو ون‎ 7 :\n- > ‏يا‎ 5 a 2 <\n\"> ee — ' é\n‏و‎ a —\n- e -\n-e)eie) ٠هعاسلا‎ . | yy. val\n‏إع له “هيج‎ © e ٠. ‘ ‏م‎ .« | :ةعاسلا م2:30 2026 /3/S1 :خيراتلا ءاثالثلا مويلا | ‎oT, a “‏ ا\n‎Pr ose e ere eres :‏\n‎br eet‏ له ‎oF‏ _\n‎ee |‏\n.4 زح 1 ‎o ٠‏\n‎a 7 |‏ 04 التا 5 | ‎cata sacl‏ 7\n‎٠ ٠. ّ ue e 3‏ 000 00 7 ,7 | ةعاسلا :خيراتلا | | \"ماكلا صمب انه حصي لت ا ولوك\n‎a. Len ees‏ يرن ‎yon =; SS oe Pee‏ تسر الى ‎Bee‏ 172\n‎wo beg. Bey PP Ez enn Star CET ae we meg eee: Me ay i ass ee ;‏ 5 تم رك دش“ >4 و\" ير ا عن 2 اك & ‎Fst‏ .\n‎BG Sheen 5O%, ae 0 ee 3 30 5‏ ا ‎HS; af ESP prans ad J i Qs‏\n‎a ie Nee Re Teg. AR SMES ete. Ne‏ ا ‎EEE?‏ ا ‎OO‏\n‎eR TRS. Ps ee ee OL‏ ا ا ‎ah‏ الم 83 اس ‎EN‏ ل سي ف : ‎rd‏\n‎a 26 ms ‘ Po.\" j is? 5 es See me 3 2 SB ١‏ اه 0 م ‎<s= Soe aS <a a‏ يو :\n‎ope OF ne.‏ ف ‎BER‏ يي ‎Nos oS Se 2 REE MS ae fyeka‏\n‎may ee 0 ne) Lane e‏ قله كرام : ‎et‏ 37 :\n‎Se EE OOL aE aoa UE aie sce pe ;‏\nو1 ‎al ore . nc 3 feo‏ . . .\n‎my ‘tA a‏ لما ‎Lo, ١‏ هه 0: « 7 =\n‎ose gall‏ الجالاواء.. > ‎sachs ageygayery sel‏ 0 1\n: م © ‎ee‏ ضار ‎A a): ts : | 0 “al‏ ارام ‎a LOK‏ . . سر : .\n‎e | 7 f% 7 024 : : yA)‏ . مر ‎Oat‏\n‎sow Re 7 ZA 7246 a) 3227 4‏ ل 7 0 5 ‎is‏ | 0 :ةعاشلا Z0Z6/B/SJ خيراتلا نانالاعلا موتلا | Bp ‏ا‎ TP ‏وي‎ eo ; a ore\nyt 0 50: 1 1 + . fone! 1 . oye 5 oe\n‏دح نين‎ 7” we ‏امي ات‎ ee\nSx@irraa ey 1 . 7 sot 35 a : * 00 ١ 1 0\n0 22 ‏ل‎ ~\n- 7 ma\n‏م‎ ee, ‏جه‎ . 4... @ ee ELS apap ts as ay ye\n. ‏ةفع فم ده‎ - ti! ty oy ‏لاوا مم‎ 5 egal 44: ‏ع‎\n‎9 ee? ‏هونم‎ 2 f, oA mT ee In ‏حب ل لك‎ > ٠ | a ve ths 3 es ١ ‏ص‎ Re\n347 ١ ‏يج‎ ow eee ‏رع بر[ )ير‎ -1/- 01 SOLO US ELL ty ee Se Ae\n* Rh: 24 ‏وا 0 55 م‎ hs a Di 6 ‘., a ‏رد (ر‎ A va = '. ‏تسيب “لس سبحا بسي‎ re gn ‏يتم |0 مم‎ | تاا خيراتلا XOo/s/e",
-      "date_region_text": "- - 5 1 / 1 3 | 2 4 0 1 1",
-      "time_region_text": "م‎ , a | 1 . 0 | 1 0م",
-      "day_region_text": ": | aie 1 : : 9 3 | ee an",
-      "date_inferred_from_day": true
+      "header_general_text": "Bee » «i 4 2 9 00\ney op tPF ‏بعت‎ ie oe - anes\n٠ Ta ? y - . ‏ا‎\n‎—— eee . ‏مي‎ 2 tb ‏ام م‎\n: = a % be hn 7 5\n0 , ? ‘ ° >\n. Ps _\n4S ١ 1٠ ;\n5 2 ‏ل 05 و‎ ١ On J 2\né ‏وى‎ 3 : a? -\nos\nSS ‏اسرا‎\n‎i 1 rt . -\n: \"Aas . ea\ny- ¥ 46 e « | :ةعاسلا ص10:32 2026/4/1 :خيراتلا ءاعيرالا مويلا | ‎a 1‏ ات ال\n‎٠ a , © 8 ¥ 1 : .‏\nيكال ما ‎eae‏ لمات جر 1\n‎Cow .‏ شه 2 ‎Rh ic‏ .\n‎Be.‏ 1 | | 0 | | .\n‎e - | ١‏ 0 || 74 © | 0000 3 31 13 -_\n‎me‏ إى | ‎٠‏ عه: < ‎ee‏ تل | :ةعاسلا :خيراتلا موتلا | BY EPP ER\nBP ALS Jt ‏م‎ IAL S § ff 2\n1 0 0 we Pe a ‏تسا‎ Y 8 ia\nee ay) o oO ‏لل‎ Lines tae Ate Se att tae\ni 57 hy 3 Sy bt ‏,كه‎ Nos ae te “Mua PRE en\nABE ne cae BL ‏اوري‎ Boyne ee Br) eC cet Thaa ESR AA\nSISOS 0s SRE Ss Sy eo rans! oe SAS AE Ry HOR ‏ا ا‎ fet ‏اي‎\n‎5 See ‏ا‎ Ss Cyt ak BEER 2 IN TR Os x eed ‏ع ا‎\n1 OKs COVEN ‏ال‎ ١ 2 ‏ا ال‎ CSCS ‏د‎ Pye a Aa)\n- 12 ‏دج‎ oy an ‏ساسم‎ 00 gs a ol . AS 2 HE ‏و‎ 6 2, .\n١ 2 avery wn ob a ١ \"00 os wy ne 8 3 3 ae oe 2 tga - 3 Bag we 7 20 me\nFL 3 A \"eq\" Bote Oe ROS Et ON a 3\n. ‏ل‎ BY) “dels nya aye ; 5 . Oe ee ‏ل م‎ ْ\nof ‏نهذ‎ e. ‏في‎ 07 1 re. rr « 4 1 3 *. mr oo fae 5\nPAU ‏اا‎ || ٠ ‏يسح‎\n‎5 ‏ذل\" مره‎ nd . 3 wo ‏عات‎ al 95 ee 7\n. . og ee - 8 . ١ 5\nolga saga) | ص?108ص :ةعاشلا 2026/4/1 خيزاتلا موثلا | Sy Wee” to Be 7 a | ‏د لساك‎\nFoF ‏ل له اي ا ا‎ er ‏هال‎\n‎9 ae x - 7 ‏ددن 3 2 3 و‎ ee “as 1 8 0000 :\nKR . a ‏ااا‎ a ‏ال‎ ao 1 82\n‏ااا 0 5 ف‎ eS . : 8\n‏الك نوق‎ ee . ١ 1 00 are 5 ‏كمه‎ 1\n‏د حي‎ “OS ~ 0 . 00 ١\n0 ‏اسورد . ا‎ . mo, -\n‏بعد كاك‎ 7 appa 5 3\n0 a ee\nae orn eo 1\nPep ven | #4. - ٠ ‏اال‎\n‎os 3 > 2 ١ ‏امب‎ oo oh fp nee ae a\n- ‏نه‎ if ee i) Say ‏يا الك د‎ yp “ens vies ٠. ‏م 5-9 } 0 للحي التا‎ a\" ts\nA 0 07 A) 6. 7 rae 0 ae ek ‏ل لاض\"‎ © re? Weare om: Ve ec ae eee. Fas\n‏لغ ا ب سس مسي ب مسب وح ا نه‎ eee A fa = ee cS I.) De rece vy al | خيراتلا ألا",
+      "date_region_text": "7 1 9 3 7 0 8 0 1 8 | 3 1 . 5 0 0",
+      "time_region_text": "1 1 : a | 0 a a",
+      "day_region_text": ": oe : : 0 | a | ْ١ 0 :, a | |",
+      "date_inferred_from_day": false
     },
     "rows": [
       {
-        "y_avg": 0.6099245283018868,
+        "y_avg": 0.5441037735849057,
         "values": [
-          71108.5,
-          0.0,
+          1132.0,
           1.0,
-          12.0,
-          127.0,
-          1277.0,
-          0.0,
-          1.0,
-          130.0,
+          8.0,
           5.0,
-          0.0,
-          15700.0,
-          1.0,
-          16050.0,
+          6.0,
           1.0,
           0.0,
-          4.0
+          8.0
         ],
         "texts": [
-          "71108.50",
-          "0",
+          "01132",
           "|",
-          "12",
-          "127",
-          "1277",
+          "8",
+          "5",
+          "Gate‏",
+          "plyall",
           "0",
-          "|",
-          "130",
-          "Ps‏",
-          "ou‏",
-          "15700",
-          "1 5700",
-          "16050",
-          "1 6050",
-          "ow",
-          "4"
+          "8"
         ],
-        "usd": [
-          127.0,
-          130.0
-        ],
-        "syp": [
-          15700.0,
-          16050.0
-        ],
-        "score": 16
+        "usd": [],
+        "syp": [],
+        "score": 0
       },
       {
-        "y_avg": 0.7162803234501347,
+        "y_avg": 0.6413815513626835,
         "values": [
-          1108.5,
+          2.0,
+          413.0,
+          1.0,
+          3.0,
+          132.0,
+          16.0,
+          135.0,
+          15.0,
+          11.0,
+          1.0,
+          16350.0,
+          16359.0,
+          1.0,
+          1700.0,
+          16700.0,
           0.0,
-          1850.0,
-          108.5,
-          150.0,
-          11.5,
-          111.5,
-          13400.0,
-          0.0,
-          1870.0,
-          13750.0,
-          90.0,
-          0.0,
-          1.0
+          1.0,
+          2.0
         ],
         "texts": [
-          "1108.50“",
-          "{om‏",
-          "1850",
-          "108.50",
-          "150",
-          "11.50",
-          "111.50",
-          "13400",
+          "2",
+          "413-116",
+          "|",
+          "3",
+          "132",
+          "16",
+          "135",
+          "0015",
+          "||",
+          "|",
+          "16350",
+          "16359",
+          "|",
+          "1700",
+          "16700",
           "0",
-          "1870",
-          "13750",
-          "90",
-          "0",
-          "1"
+          "|",
+          "(2"
         ],
         "usd": [
-          108.5,
-          150.0,
-          111.5,
+          132.0,
+          135.0
+        ],
+        "syp": [
+          16350.0,
+          16359.0,
+          16700.0
+        ],
+        "score": 20
+      },
+      {
+        "y_avg": 0.7159419448476053,
+        "values": [
+          1.0,
+          51113.0,
+          1113.0,
+          1.0,
+          113.0,
+          116.0,
+          14000.0,
+          1.0,
+          14350.0,
+          1.0,
+          0.0,
+          90.0,
+          0.0
+        ],
+        "texts": [
+          "|",
+          "51113",
+          "“1113",
+          "1",
+          "113",
+          "116",
+          "14000",
+          "1 4000",
+          "14350",
+          "1 4350",
+          "0",
+          "90",
+          "0"
+        ],
+        "usd": [
+          113.0,
+          116.0,
           90.0
         ],
         "syp": [
-          13400.0,
-          13750.0
+          14000.0,
+          14350.0
         ],
-        "score": 24
+        "score": 20
+      },
+      {
+        "y_avg": 0.7995849056603775,
+        "values": [
+          1.0,
+          16.0,
+          2.0,
+          615.0,
+          7.0,
+          0.0,
+          1.0,
+          0.0,
+          50.0
+        ],
+        "texts": [
+          "١",
+          "16.%,",
+          "Zaatall",
+          "REGIS,",
+          "7",
+          "oy",
+          "tl",
+          "ok",
+          "50"
+        ],
+        "usd": [],
+        "syp": [],
+        "score": 0
       }
     ]
   },
-  "should_notify": false,
+  "should_notify": true,
   "change_summary": {
-    "changed": false,
-    "count": 0,
-    "fields": {}
+    "changed": true,
+    "count": 8,
+    "fields": {
+      "k21_ss": {
+        "old": 16050,
+        "new": 16700
+      },
+      "k21_sb": {
+        "old": 15700,
+        "new": 16350
+      },
+      "k21_us": {
+        "old": 130.0,
+        "new": 135.0
+      },
+      "k21_ub": {
+        "old": 127.0,
+        "new": 132.0
+      },
+      "k18_ss": {
+        "old": 13750,
+        "new": 14350
+      },
+      "k18_sb": {
+        "old": 13400,
+        "new": 14000
+      },
+      "k18_us": {
+        "old": 111.5,
+        "new": 116.0
+      },
+      "k18_ub": {
+        "old": 108.5,
+        "new": 113.0
+      }
+    }
   },
-  "change_key": "2026/03/31|14:30|16050|15700|130.0|127.0|13750|13400|111.5|108.5",
+  "change_key": "2026/04/01|22:32|16700|16350|135.0|132.0|14350|14000|116.0|113.0",
   "previous_values": {
     "k21_ss": 16050,
     "k21_sb": 15700,
