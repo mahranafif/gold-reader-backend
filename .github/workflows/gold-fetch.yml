@@ -1,9 +1,5 @@
 name: Fetch Gold OCR From Facebook Public Page
 
-on:
-  schedule:
-    - cron: "*/30 * * * *"
-  workflow_dispatch:
 
 permissions:
   contents: write
